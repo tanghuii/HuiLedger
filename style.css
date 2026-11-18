@@ -76,4 +76,4 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .err { color: var(--expense); font-size: 13px; }
 .fab { position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--primary); color: var(--on-primary); font-size: 30px; line-height: 1; cursor: pointer; box-shadow: 0 8px 22px rgba(60, 40, 160, .35); }
 .ok { color: var(--income); font-size: 14px; font-weight: 600; margin: 0; }
-.open-app { text-align: center; text-decoration: none; display: block; }
+.open-app { color: var(--text); text-align: center; text-decoration: none; display: block; }
