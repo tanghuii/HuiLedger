@@ -1,7 +1,7 @@
 /* 辉记账本网页版。配色跟手机端的"液态玻璃"外观一致，随系统深浅色切换。 */
 :root {
-  --bg: #edf0fb; --blob1: #b9a7ff; --blob2: #8fd3ff; --blob3: #ffc2dd;
-  --card: rgba(255, 255, 255, .62); --stroke: rgba(255, 255, 255, .9);
+  --bg: #e4e8fb; --blob1: #9e88ff; --blob2: #63c2ff; --blob3: #ff9ccb;
+  --card: rgba(255, 255, 255, .34); --stroke: rgba(255, 255, 255, .9);
   --text: #1b1f33; --muted: #5d6480; --primary: #6c5ce7; --on-primary: #fff;
   --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: rgba(255, 255, 255, .7); --line: #d6daea;
   --edge1: rgba(255, 255, 255, .95); --edge2: rgba(255, 255, 255, .2); --edge3: rgba(255, 255, 255, .6); --shine: rgba(255, 255, 255, .7); --shine2: rgba(255, 255, 255, .22);
@@ -129,3 +129,10 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .quick .send:disabled { opacity: .5; }
 .bubble.me { align-self: flex-end; justify-self: end; max-width: 80%; background: var(--primary); color: var(--on-primary); padding: 10px 16px; border-radius: 20px; }
 .seg { flex-wrap: wrap; }
+
+/* 浅色下的磨砂：卡片更透，上面撒一层极细的颗粒；深色不变 */
+@media (prefers-color-scheme: light) {
+  .card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .5; mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E"); }
+  .modal .card { background: linear-gradient(rgba(244, 245, 253, .92), rgba(244, 245, 253, .92)) padding-box, linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box; }
+}
