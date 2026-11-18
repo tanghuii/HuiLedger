@@ -4,6 +4,8 @@
 'use strict';
 
 const KIND = { EXPENSE: 0, INCOME: 1, TRANSFER: 2 };
+// 邮件里的链接点开后回到这个页面
+const HERE = encodeURIComponent(location.origin + location.pathname);
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const store = {
   get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
@@ -438,7 +440,7 @@ app.addEventListener('click', async (ev) => {
         if (mode !== 'forgot' && pass.length < 6) throw new Error('密码至少 6 位。');
         if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error('两次输入的密码不一样。');
         if (mode === 'forgot') {
-          await api('POST', '/auth/v1/recover', { email }, { auth: false });
+          await api('POST', '/auth/v1/recover?redirect_to=' + HERE, { email }, { auth: false });
           state.loading = false; state.authMode = 'login'; state.notice = '重设密码的邮件已发出，请查收。'; render(); break;
         }
         if (mode === 'reset') {
@@ -448,7 +450,7 @@ app.addEventListener('click', async (ev) => {
           state.recoverToken = null; state.loading = false; state.authMode = 'login'; state.notice = '密码已改好，请用新密码登录。'; render(); break;
         }
         const o = mode === 'register'
-          ? await api('POST', '/auth/v1/signup', { email, password: pass }, { auth: false })
+          ? await api('POST', '/auth/v1/signup?redirect_to=' + HERE, { email, password: pass }, { auth: false })
           : await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
         // 开着邮箱验证时，注册不会直接给登录凭证
         if (!o.access_token) { state.loading = false; state.authMode = 'login'; state.notice = '注册成功，请到邮箱点确认链接，然后回来登录。'; render(); break; }
