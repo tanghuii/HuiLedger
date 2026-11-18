@@ -4,6 +4,7 @@
   --card: rgba(255, 255, 255, .62); --stroke: rgba(255, 255, 255, .9);
   --text: #1b1f33; --muted: #5d6480; --primary: #6c5ce7; --on-primary: #fff;
   --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: rgba(255, 255, 255, .7); --line: #d6daea;
+  --edge1: rgba(255, 255, 255, .95); --edge2: rgba(255, 255, 255, .2); --edge3: rgba(255, 255, 255, .6); --shine: rgba(255, 255, 255, .7); --shine2: rgba(255, 255, 255, .22);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -11,6 +12,7 @@
     --card: rgba(255, 255, 255, .08); --stroke: rgba(255, 255, 255, .14);
     --text: #f1f2f8; --muted: #a6abc4; --primary: #a394ff; --on-primary: #14102e;
     --income: #3ddc97; --expense: #ff7b80; --amber: #f0a93a; --field: rgba(255, 255, 255, .06); --line: #34384f;
+    --edge1: rgba(255, 255, 255, .34); --edge2: rgba(255, 255, 255, .05); --edge3: rgba(255, 255, 255, .18); --shine: rgba(255, 255, 255, .16); --shine2: rgba(255, 255, 255, .05);
   }
 }
 * { box-sizing: border-box; }
@@ -30,7 +32,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); border: 1px solid var(--stroke); }
 .tabs button { border: 0; background: none; padding: 7px 16px; border-radius: 999px; cursor: pointer; color: var(--muted); }
 .tabs button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
-.card { background: var(--card); border: 1px solid var(--stroke); border-radius: 22px; padding: 18px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+/* 液态玻璃：半透明的面、一圈由亮到暗再到亮的边、上沿一道反光，背后的颜色被模糊并提亮 */
+.card {
+  position: relative; border-radius: 24px; padding: 18px; border: 1px solid transparent;
+  background: linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box;
+  backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--shine), 0 10px 30px -12px rgba(40, 30, 110, .28);
+  transition: transform .25s cubic-bezier(.2, .9, .3, 1.3), box-shadow .25s;
+}
+.card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, var(--shine2), transparent 42%); }
+.card > * { position: relative; }
+.card.click { cursor: pointer; }
+.card.click:hover { transform: translateY(-3px) scale(1.01); box-shadow: inset 0 1px 0 var(--shine), 0 18px 40px -14px rgba(40, 30, 110, .4); }
 .grid { display: grid; gap: 14px; }
 .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 860px) { .cols { grid-template-columns: 320px minmax(0, 1fr); align-items: start; } .sticky { position: sticky; top: 16px; } }
@@ -77,3 +91,30 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .fab { position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--primary); color: var(--on-primary); font-size: 30px; line-height: 1; cursor: pointer; box-shadow: 0 8px 22px rgba(60, 40, 160, .35); }
 .ok { color: var(--income); font-size: 14px; font-weight: 600; margin: 0; }
 .open-app { color: var(--text); text-align: center; text-decoration: none; display: block; }
+
+/* 背景的三团光慢慢游动，玻璃后面的颜色一直在变 */
+body::before, body::after { content: ""; position: fixed; z-index: -1; width: 60vmax; height: 60vmax; border-radius: 50%; filter: blur(70px); opacity: .55; pointer-events: none; }
+body::before { left: -20vmax; top: -22vmax; background: var(--blob1); animation: drift1 28s ease-in-out infinite alternate; }
+body::after { right: -24vmax; bottom: -26vmax; background: var(--blob2); animation: drift2 34s ease-in-out infinite alternate; }
+@keyframes drift1 { to { transform: translate(18vmax, 12vmax) scale(1.15); } }
+@keyframes drift2 { to { transform: translate(-16vmax, -14vmax) scale(.9); } }
+@media (prefers-reduced-motion: reduce) { body::before, body::after { animation: none; } .card { transition: none; } }
+.tabs { backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 1px 0 var(--shine); flex-wrap: wrap; }
+.tabs button { transition: background .25s, color .25s, transform .25s cubic-bezier(.2, .9, .3, 1.4); }
+.tabs button:active, .btn:active, .seg button:active { transform: scale(.94); }
+.btn, .seg button { transition: transform .2s cubic-bezier(.2, .9, .3, 1.4), background .2s; }
+.search { width: 190px; border-radius: 999px; padding: 8px 14px; }
+.kv { display: grid; grid-template-columns: 76px 1fr; gap: 10px; padding: 6px 0; font-size: 14px; }
+.kv span:last-child { white-space: pre-wrap; word-break: break-word; user-select: text; }
+.indent { padding-left: 14px; } .indent2 { padding-left: 28px; }
+.row.indent { padding: 5px 8px 5px 14px; margin: 0; }
+.three { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+@media (min-width: 860px) { .cols.wide { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.calgrid.head i { font-style: normal; text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0; }
+.cal { border: 1px solid transparent; background: none; border-radius: 12px; min-height: 58px; padding: 5px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--text); font-size: 10px; line-height: 1.25; }
+.cal b { font-size: 14px; font-weight: 500; }
+.cal:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.cal.on { background: color-mix(in srgb, var(--primary) 18%, transparent); } .cal.on b { color: var(--primary); font-weight: 700; }
+.cal.today { border-color: color-mix(in srgb, var(--primary) 70%, transparent); }
+select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999px; }

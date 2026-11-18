@@ -22,6 +22,9 @@ const state = {
   month: monthOf(new Date()),
   ledgerId: store.get('hl.ledger', 0),
   loading: false, error: '', editing: null, statsIncome: false, openTop: null,
+  // 以下是和手机端对齐的那些页面用的
+  view: null, q: '', period: 'm', section: 'overview', line: false, openSub: null, openTag: null, openLeftOut: false,
+  calDay: null, rmode: 'projects', project: null, accountId: null, openKey: null, addingRule: false,
 };
 
 // ---------------------------------------------------------------- 小工具
@@ -178,22 +181,24 @@ const app = document.getElementById('app');
 
 function render() {
   if (!state.session) { app.innerHTML = loginView(); return; }
-  const tabs = [['ledger', '明细'], ['stats', '统计'], ['accounts', '账户']];
+  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '账户'], ['reimburse', '报销'], ['subsidy', '补贴'], ['recurring', '周期']];
   const ledgers = [...state.data.ledger.values()];
   app.innerHTML = `<div class="wrap">
     <div class="top">
       <h1>辉记账本</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${n}</button>`).join('')}</div>
+      <input id="q" class="search" type="search" placeholder="搜索全部账单" value="${h(state.q)}" autocomplete="off">
       <label class="btn" style="cursor:pointer">导入修正文件<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
+      <button class="btn" data-act="export">导出</button>
       <button class="btn" data-act="reload">刷新</button>
       <button class="btn" data-act="signout">退出</button>
     </div>
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    ${state.loading ? '<p class="muted">正在读取…</p>' : state.tab === 'ledger' ? ledgerView() : state.tab === 'stats' ? statsView() : accountsView()}
+    ${state.loading ? '<p class="muted">正在读取…</p>' : state.q.trim() ? searchView() : pageView()}
   </div>
   ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
-  ${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+  ${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
 }
 
 function loginView() {
@@ -223,7 +228,7 @@ function monthBar() {
   return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="上个月">‹</button><b>${y}年${m}月</b><button class="round" data-act="month" data-v="1" aria-label="下个月">›</button></div>`;
 }
 
-function txRow(t, L) {
+function txRow(t, L, showDate = false) {
   const cat = state.data.category, acc = state.data.account;
   const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), from = acc.get(t.accountId), to = acc.get(t.toAccountId);
   const transfer = t.kind === KIND.TRANSFER;
@@ -235,14 +240,14 @@ function txRow(t, L) {
   const sign = over ? '+' : t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : '';
   const amount = offset > 0 && !foreign ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : money(t.amountCents);
   const cls = over || t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : '';
-  const details = [t.note, transfer ? '' : from?.name, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
+  const details = [showDate ? dayISO(t.date) : '', t.note, transfer ? '' : from?.name, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
   const targets = L.parts(t);
   const extra = [
     offset > 0 ? `原 ${money(t.amountCents)} · 抵 ${money(offset)}` : '',
     foreign ? `≈ ${money(t.amountCents)}` : '',
     targets.length ? `抵扣 ${targets.length > 1 ? targets.length + ' 笔支出' : h(cat.get(state.data.tx.get(targets[0][0])?.categoryId)?.name ?? '')}` : '',
   ].filter(Boolean).join(' · ');
-  return `<div class="row click" data-act="edit" data-v="${t.id}">
+  return `<div class="row click" data-act="view" data-v="${t.id}">
     ${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}
     <div class="main"><div class="title">${title}${t.excluded ? '<span class="badge gray">不计</span>' : ''}${t.reimburse === 1 ? '<span class="badge">待报销</span>' : t.reimburse === 2 ? '<span class="badge gray">已报销</span>' : ''}</div>
       ${details ? `<div class="sub">${details}</div>` : ''}</div>
@@ -319,6 +324,7 @@ function effect(account, t) {
 }
 
 function accountsView() {
+  if (state.accountId != null && state.data.account.has(state.accountId)) return accountDetailView();
   const accounts = [...state.data.account.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   const txs = [...state.data.tx.values()];
   // 外币账户的初始余额是按它自己的币种记的；网页版暂时没有汇率，这类账户的余额只算账单部分并标出来
@@ -330,7 +336,7 @@ function accountsView() {
     const g = accounts.filter((a) => a.type === type);
     if (!g.length) return '';
     return `<div class="card"><div class="dayhead"><span>${label}</span><span>${money(g.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
-      ${g.map((a) => `<div class="row">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div>${a.currency && a.currency !== HOME ? `<div class="sub">${h(a.currency)} 账户，这里按欧元显示，不含初始余额</div>` : ''}</div><div class="num ${bal.get(a.id) < 0 ? 'out' : ''}">${money(bal.get(a.id))}</div></div>`).join('')}</div>`;
+      ${g.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div>${a.currency && a.currency !== HOME ? `<div class="sub">${h(a.currency)} 账户，这里按欧元显示，不含初始余额</div>` : ''}</div><div class="num ${bal.get(a.id) < 0 ? 'out' : ''}">${money(bal.get(a.id))}</div></div>`).join('')}</div>`;
   }).join('');
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
@@ -345,7 +351,7 @@ function startEdit(t) {
   state.editing = t ? { ...t, _amount: (t.amountCents / 100).toFixed(2), _isNew: false } : {
     id: newId(), kind: KIND.EXPENSE, amountCents: 0, categoryId: 0, accountId: store.get('hl.lastAccount', accounts[0]?.id ?? 0), toAccountId: 0,
     ledgerId: state.ledgerId, date: epochDay(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()), note: '', tags: '',
-    reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '', _amount: '', _isNew: true,
+    reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '', project: '', fund: '', _amount: '', _isNew: true,
   };
   render();
 }
@@ -380,6 +386,9 @@ function editorView() {
       <label class="f">收支统计<select id="e-excluded"><option value="0" ${!e.excluded ? 'selected' : ''}>计入收支</option><option value="1" ${e.excluded ? 'selected' : ''}>不计入收支</option></select></label></div>`}
     <label class="f">备注<textarea id="e-note">${h(e.note)}</textarea></label>
     <label class="f">标签（空格分隔）<input id="e-tags" value="${h(e.tags)}"></label>
+    ${transfer ? '' : `<div class="two">
+      <label class="f">报销项目<input id="e-project" list="dl-project" value="${h(e.project ?? '')}"><datalist id="dl-project">${projectNames().map((n) => `<option value="${h(n)}">`).join('')}</datalist></label>
+      <label class="f">资金来源<input id="e-fund" list="dl-fund" value="${h(e.fund ?? '')}"><datalist id="dl-fund">${fundNames().map((n) => `<option value="${h(n)}">`).join('')}</datalist></label></div>`}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
     <div class="between"><button class="btn" data-act="close">取消</button><button class="btn primary" data-act="save">保存</button></div>
   </div></div>`;
@@ -395,6 +404,8 @@ function collect() {
   if (v('e-top')) { const sub = Number(v('e-sub') ?? 0); const top = Number(v('e-top')); e.categoryId = sub && state.data.category.get(sub)?.parentId === top ? sub : top; }
   if (v('e-reimburse') != null) e.reimburse = Number(v('e-reimburse'));
   if (v('e-excluded') != null) e.excluded = v('e-excluded') === '1';
+  if (v('e-project') != null) e.project = v('e-project').trim();
+  if (v('e-fund') != null) e.fund = v('e-fund').trim();
   e.note = v('e-note') ?? e.note;
   e.tags = (v('e-tags') ?? e.tags).split(/[\s#,，]+/).filter(Boolean).join(' ');
 }
@@ -413,6 +424,8 @@ async function saveEditing() {
   try {
     await saveRecord('tx', t);
     store.set('hl.lastAccount', t.accountId);
+    if (t.project) rememberName('hl.projects', t.project);
+    if (t.fund) rememberName('hl.funds', t.fund);
     state.editing = null; state.error = '';
   } catch (err) { state.error = err.message; }
   render();
@@ -572,9 +585,10 @@ app.addEventListener('click', async (ev) => {
       try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = '没有写完，可以再点一次：' + e.message; }
       state.loading = false; render(); break;
     case 'signout': signOut(); break;
+    default: if (await moreAction(act, v, el)) break;
     case 'reload': await loadAll(); break;
-    case 'tab': state.tab = v; render(); break;
-    case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); render(); break; }
+    case 'tab': state.tab = v; state.q = ''; state.accountId = null; state.project = null; state.openKey = null; render(); break;
+    case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); state.calDay = null; render(); break; }
     case 'stats-kind': state.statsIncome = v === '1'; state.openTop = null; render(); break;
     case 'open-top': state.openTop = state.openTop === Number(v) ? null : Number(v); render(); break;
     case 'new': state.error = ''; startEdit(null); break;
@@ -583,11 +597,18 @@ app.addEventListener('click', async (ev) => {
     case 'close': case 'close-backdrop': state.editing = null; state.error = ''; render(); break;
     case 'save': await saveEditing(); break;
     case 'delete':
-      if (confirm('删除这笔账单？')) { try { await deleteRecord('tx', state.editing.id); state.editing = null; } catch (e) { state.error = e.message; } render(); }
+      if (confirm('删除这笔账单？')) { try { await deleteRecord('tx', state.editing.id); state.editing = null; state.view = null; } catch (e) { state.error = e.message; } render(); }
       break;
   }
 });
+app.addEventListener('input', (ev) => {
+  // 搜索框：边打字边搜；重画之后把光标放回去
+  if (ev.target.id !== 'q') return;
+  state.q = ev.target.value; render();
+  const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+});
 app.addEventListener('change', async (ev) => {
+  if (await moreChange(ev)) return;
   if (ev.target.id === 'patch-file' && ev.target.files[0]) {
     try { state.patch = readPatch(await ev.target.files[0].text()); state.error = ''; } catch (e) { state.error = e.message; }
     render(); return;
