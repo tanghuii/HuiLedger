@@ -142,7 +142,7 @@ function computeLookup() {
   const rest = (t) => Math.max(0, t.amountCents - parts(t).reduce((s, p) => s + p[1], 0));
   const net = (t) => (t.kind === KIND.EXPENSE ? t.amountCents - (offsets.get(t.id) ?? 0) : t.kind === KIND.INCOME ? rest(t) : t.amountCents);
   const isReimburse = (t) => (t.kind === KIND.EXPENSE ? t.reimburse !== 0 : t.kind === KIND.INCOME && top(t.categoryId)?.name === '报销');
-  const isRefund = (t) => t.kind === KIND.INCOME && top(t.categoryId)?.name === '退款';
+  const isRefund = (t) => t.kind === KIND.INCOME && ['退款', '代付收回', '代付退还'].includes(top(t.categoryId)?.name);
   const isOffset = (t) => parts(t).length > 0;
   const counts = (t) => !t.excluded && !isReimburse(t) && !isRefund(t) && (!isOffset(t) || rest(t) > 0);
   const totals = (list) => {
