@@ -194,17 +194,23 @@ function render() {
 }
 
 function loginView() {
-  const c = state.cfg;
+  const c = state.cfg, mode = state.authMode || 'login', dis = state.loading ? 'disabled' : '';
+  const pass = (id, label) => `<label class="f">${label}<input id="${id}" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>`;
+  const title = { login: '登录', register: '注册', forgot: '发送重设邮件', reset: '保存新密码' }[mode];
   return `<div class="wrap"><div class="card login grid">
     <h1 style="margin:0">辉记账本</h1>
     ${state.notice ? `<p class="ok">${h(state.notice)}</p>` : ''}
     ${CLOUD.url ? '' : `<label class="f">Supabase 项目地址<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
     <label class="f">公开密钥（anon / publishable）<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
-    <label class="f">邮箱<input id="l-email" type="email" autocomplete="username"></label>
-    <label class="f">密码<input id="l-pass" type="password" autocomplete="current-password"></label>
+    ${mode === 'reset' ? '' : `<label class="f">邮箱<input id="l-email" type="email" autocomplete="username" value="${h(state.authEmail || '')}"></label>`}
+    ${mode === 'forgot' ? '' : pass('l-pass', mode === 'reset' ? '新密码（至少 6 位）' : mode === 'register' ? '密码（至少 6 位）' : '密码')}
+    ${mode === 'register' || mode === 'reset' ? pass('l-pass2', '再输一遍密码') : ''}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <button class="btn primary" data-act="login" ${state.loading ? 'disabled' : ''}>${state.loading ? '请稍候…' : '登录'}</button>
-    <button class="btn link" data-act="register" ${state.loading ? 'disabled' : ''}>还没有账号？注册</button>
+    <button class="btn primary" data-act="auth" ${dis}>${state.loading ? '请稍候…' : title}</button>
+    <div class="between" style="justify-content:center">
+      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>还没有账号？注册</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>忘记密码</button>`
+        : `<button class="btn link" data-act="mode" data-v="login" ${dis}>返回登录</button>`}
+    </div>
     ${IS_ANDROID ? '<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">在 App 中打开</a>' : ''}
   </div></div>`;
 }
@@ -417,20 +423,36 @@ app.addEventListener('click', async (ev) => {
   const act = el.dataset.act, v = el.dataset.v;
   if (act === 'close-backdrop' && ev.target !== el) return;
   switch (act) {
-    case 'login': case 'register': {
+    case 'mode': state.authEmail = document.getElementById('l-email')?.value.trim() || state.authEmail; state.authMode = v; state.error = ''; state.notice = ''; render(); break;
+    case 'auth': {
+      const mode = state.authMode || 'login', val = (id) => document.getElementById(id)?.value ?? '';
       if (!CLOUD.url) {
-        state.cfg = { url: document.getElementById('l-url').value.trim(), key: document.getElementById('l-key').value.trim() };
+        state.cfg = { url: val('l-url').trim(), key: val('l-key').trim() };
         store.set('hl.cfg', state.cfg);
       }
-      state.loading = true; state.error = ''; const email = document.getElementById('l-email').value.trim(), pass = document.getElementById('l-pass').value; render();
+      const email = val('l-email').trim(), pass = val('l-pass'), pass2 = val('l-pass2');
+      if (mode !== 'reset') state.authEmail = email;
+      state.loading = true; state.error = ''; state.notice = ''; render();
       try {
-        if (pass.length < 6) throw new Error('密码至少 6 位。');
-        const o = act === 'register'
+        if (mode !== 'reset' && !email.includes('@')) throw new Error('请填写邮箱。');
+        if (mode !== 'forgot' && pass.length < 6) throw new Error('密码至少 6 位。');
+        if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error('两次输入的密码不一样。');
+        if (mode === 'forgot') {
+          await api('POST', '/auth/v1/recover', { email }, { auth: false });
+          state.loading = false; state.authMode = 'login'; state.notice = '重设密码的邮件已发出，请查收。'; render(); break;
+        }
+        if (mode === 'reset') {
+          // 邮件链接带来的临时凭证只用来改这一次密码，不保存
+          const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recoverToken}` }, body: JSON.stringify({ password: pass }) });
+          if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? '新密码不能和旧密码一样。' : res.status === 401 || res.status === 403 ? '链接已失效，请重新点"忘记密码"。' : `没改成（${res.status}）：${j.msg || ''}`); }
+          state.recoverToken = null; state.loading = false; state.authMode = 'login'; state.notice = '密码已改好，请用新密码登录。'; render(); break;
+        }
+        const o = mode === 'register'
           ? await api('POST', '/auth/v1/signup', { email, password: pass }, { auth: false })
           : await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
         // 开着邮箱验证时，注册不会直接给登录凭证
-        if (!o.access_token) throw new Error('注册成功，请到邮箱点确认链接，然后回来登录。');
-        saveSession(o); state.loading = false; await loadAll();
+        if (!o.access_token) { state.loading = false; state.authMode = 'login'; state.notice = '注册成功，请到邮箱点确认链接，然后回来登录。'; render(); break; }
+        saveSession(o); state.loading = false; state.authMode = 'login'; await loadAll();
       } catch (e) { state.loading = false; state.error = e.message; render(); }
       break;
     }
@@ -461,7 +483,8 @@ app.addEventListener('change', (ev) => {
 (() => {
   const p = new URLSearchParams(location.hash.slice(1));
   if (p.get('error_description')) state.error = /expired|invalid/i.test(p.get('error_description')) ? '确认链接已失效，请重新注册或直接登录试试。' : p.get('error_description');
-  else if (p.get('access_token')) state.notice = p.get('type') === 'recovery' ? '' : '邮箱已确认，可以登录了。';
+  else if (p.get('type') === 'recovery' && p.get('access_token')) { state.session = null; state.recoverToken = p.get('access_token'); state.authMode = 'reset'; }
+  else if (p.get('access_token')) state.notice = '邮箱已确认，可以登录了。';
   if (location.hash) history.replaceState(null, '', location.pathname);
 })();
 render();
