@@ -116,7 +116,7 @@ related 给出最相关的账单的行号，最多 8 个，没有就给空数组
   "净额"一列已经是扣掉补贴、退款抵扣之后的数。
 - 数据只有当前账本最近 24 个月的。问到更早的，说明这一点。
 
-各账户现在的余额：${accounts.map((a) => `${a.name} ${money((a.initialCents ?? 0) + txs.reduce((s, t) => s + effect(a, t), 0))}`).join('；')}
+各账户现在的余额：${accounts.map((a) => `${a.name} ${money(balanceOf(a, txs), acctCur(a))}`).join('；')}
 
 账本数据（一行一笔）：
 ${data.text}`;
@@ -183,8 +183,9 @@ function netWorthSeries() {
   const out = [];
   for (let y = first.getUTCFullYear(), m = first.getUTCMonth() + 1; y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1); m === 12 ? (y++, m = 1) : m++) {
     const end = epochDay(y, m + 1, 0);
-    // 外币账户的初始余额不是欧元，网页版没有汇率，这里和账户页一样先不算它
-    const total = accounts.reduce((s, a) => s + (a.currency && a.currency !== HOME ? 0 : a.initialCents ?? 0), 0) + txs.filter((t) => t.date <= end).reduce((s, t) => s + accounts.reduce((x, a) => x + effect(a, t), 0), 0);
+    // 每个账户按自己的币种算到月末的余额，再按现在的汇率折成主货币（和手机端一样）
+    const upTo = txs.filter((t) => t.date <= end);
+    const total = accounts.reduce((s, a) => s + toHome(a, balanceOf(a, upTo)), 0);
     out.push({ label: `${y}年${m}月`, cents: total });
   }
   return out;
@@ -209,7 +210,7 @@ function netWorthCard() {
 async function fixBalance(accountId) {
   const a = state.data.account.get(accountId);
   const flows = allTxs().reduce((s, t) => s + effect(a, t), 0), current = (a.initialCents ?? 0) + flows;
-  const input = prompt(`「${a.name}」现在实际有多少？（${a.currency || HOME}）\n账本里现在是 ${(current / 100).toFixed(2)}，差额会记到初始余额里，账单不动。`, (current / 100).toFixed(2));
+  const input = prompt(`「${a.name}」现在实际有多少？（${acctCur(a)}）\n账本里现在是 ${(current / 100).toFixed(2)}，差额会记到初始余额里，账单不动。`, (current / 100).toFixed(2));
   if (input == null) return;
   const v = Number(String(input).trim().replace(',', '.'));
   if (!Number.isFinite(v)) { state.error = '请输入数字。'; return; }

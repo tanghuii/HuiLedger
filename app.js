@@ -319,21 +319,46 @@ function statsView() {
   </div>`;
 }
 
-/** 账单对账户余额的影响（主货币，流入为正）。 */
-function effect(account, t) {
-  if (t.kind === KIND.INCOME && t.accountId === account.id) return t.amountCents;
-  if (t.kind === KIND.EXPENSE && t.accountId === account.id) return -t.amountCents;
-  if (t.kind === KIND.TRANSFER && t.toAccountId === account.id) return t.amountCents;
-  if (t.kind === KIND.TRANSFER && t.accountId === account.id) return -t.amountCents;
-  return 0;
+// ---- 汇率：和手机端同一个来源（欧洲央行每日参考汇率，以欧元为基准），存在浏览器里，打开页面时更新一次
+const fx = { rates: store.get('hl.rates', {}), date: store.get('hl.ratesDate', '') };
+async function refreshRates() {
+  try {
+    const r = await (await fetch('https://api.frankfurter.dev/v1/latest?base=EUR')).json();
+    if (r?.rates) { fx.rates = r.rates; fx.date = r.date; store.set('hl.rates', r.rates); store.set('hl.ratesDate', r.date); if (state.session) render(); }
+  } catch { /* 取不到就用上次存的 */ }
 }
+/** 把金额从一种货币折成另一种；没有汇率时返回 null。 */
+function convert(cents, from, to) {
+  if (from === to) return cents;
+  const a = from === 'EUR' ? 1 : fx.rates[from], b = to === 'EUR' ? 1 : fx.rates[to];
+  return a && b ? Math.round(cents * b / a) : null;
+}
+const acctCur = (a) => a.currency || HOME;
+/** 账户币种的金额折合主货币（取不到汇率就按 1:1，和手机端一样）。 */
+const toHome = (a, cents) => convert(cents, acctCur(a), HOME) ?? cents;
+
+/**
+ * 一笔账单让这个账户的钱变了多少：按账户自己的币种算，流入为正；和这个账户无关时是 0。
+ * 和手机端同一套规则：账单本来就是用账户币种付的，用原金额；否则把主货币金额按汇率折成账户币种。
+ */
+function effect(account, t) {
+  const sign = t.kind === KIND.INCOME && t.accountId === account.id ? 1 : t.kind === KIND.EXPENSE && t.accountId === account.id ? -1
+    : t.kind === KIND.TRANSFER && t.toAccountId === account.id ? 1 : t.kind === KIND.TRANSFER && t.accountId === account.id ? -1 : 0;
+  if (!sign) return 0;
+  const cur = acctCur(account);
+  const amount = cur === HOME ? t.amountCents : t.currency === cur && t.origCents > 0 ? t.origCents : convert(t.amountCents, HOME, cur) ?? t.amountCents;
+  return sign * amount;
+}
+/** 账户余额（账户币种）= 初始余额 + 所有账单的影响。 */
+const balanceOf = (a, txs) => (a.initialCents ?? 0) + txs.reduce((s, t) => s + effect(a, t), 0);
 
 function accountsView() {
   if (state.accountId != null && state.data.account.has(state.accountId)) return accountDetailView();
   const accounts = [...state.data.account.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   const txs = [...state.data.tx.values()];
-  // 外币账户的初始余额是按它自己的币种记的；网页版暂时没有汇率，这类账户的余额只算账单部分并标出来
-  const bal = new Map(accounts.map((a) => [a.id, (a.currency && a.currency !== HOME ? 0 : a.initialCents ?? 0) + txs.reduce((s, t) => s + effect(a, t), 0)]));
+  // 每个账户按自己的币种算余额，合计时再折成主货币（和手机端一样）
+  const own = new Map(accounts.map((a) => [a.id, balanceOf(a, txs)]));
+  const bal = new Map(accounts.map((a) => [a.id, toHome(a, own.get(a.id))]));
   const assets = [...bal.values()].filter((v) => v > 0).reduce((s, v) => s + v, 0);
   const debts = -[...bal.values()].filter((v) => v < 0).reduce((s, v) => s + v, 0);
   const types = [[0, '储蓄账户'], [1, '投资账户'], [2, '信用账户'], [3, '现金账户']];
@@ -341,7 +366,7 @@ function accountsView() {
     const g = accounts.filter((a) => a.type === type);
     if (!g.length) return '';
     return `<div class="card"><div class="dayhead"><span>${label}</span><span>${money(g.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
-      ${g.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div>${a.currency && a.currency !== HOME ? `<div class="sub">${h(a.currency)} 账户，这里按欧元显示，不含初始余额</div>` : ''}</div><div class="num ${bal.get(a.id) < 0 ? 'out' : ''}">${money(bal.get(a.id))}</div></div>`).join('')}</div>`;
+      ${g.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div></div><div class="right"><div class="num ${own.get(a.id) < 0 ? 'out' : ''}">${money(own.get(a.id), acctCur(a))}</div>${acctCur(a) !== HOME ? `<div class="small muted">≈ ${money(bal.get(a.id))}</div>` : ''}</div></div>`).join('')}</div>`;
   }).join('');
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
@@ -640,4 +665,5 @@ app.addEventListener('change', async (ev) => {
   if (location.hash) history.replaceState(null, '', location.pathname);
 })();
 render();
+refreshRates();
 if (state.session) loadAll();

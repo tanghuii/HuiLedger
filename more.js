@@ -196,16 +196,17 @@ function statsView2() {
 // ---------------------------------------------------------------- 账户明细
 
 function accountDetailView() {
-  const a = state.data.account.get(state.accountId), L = computeLookup();
+  const a = state.data.account.get(state.accountId), L = computeLookup(), cur = acctCur(a);
   const list = allTxs().filter((t) => t.accountId === a.id || t.toAccountId === a.id).sort(byNewest);
-  const flow = sum(list, (t) => effect(a, t));
+  const balance = balanceOf(a, list);
   const months = new Map();
   for (const t of list) { const d = dayToDate(t.date), k = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`; if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
   return `<div class="cols">
     <div class="card sticky grid"><div class="between"><button class="btn" data-act="account-back">‹ 全部账户</button><button class="btn" data-act="fix-balance" data-v="${a.id}">修正当前余额</button></div>
-      <div class="row" style="padding:0">${accountTile(a)}<div class="main"><div class="title" style="font-size:17px">${h(a.name)}</div><div class="sub">${list.length} 笔</div></div></div>
-      <div><div class="muted small">余额${a.currency && a.currency !== HOME ? '（按欧元，不含初始余额）' : ''}</div><div class="big num ${flow + (a.initialCents ?? 0) < 0 ? 'out' : ''}">${money((a.currency && a.currency !== HOME ? 0 : a.initialCents ?? 0) + flow)}</div></div></div>
-    <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)))}</span></div>${rowsOf(l, L)}</div>`).join('') || '<div class="card muted">这个账户还没有账单</div>'}</div></div>`;
+      <div class="row" style="padding:0">${accountTile(a)}<div class="main"><div class="title" style="font-size:17px">${h(a.name)}</div><div class="sub">${cur} · ${list.length} 笔</div></div></div>
+      <div><div class="muted small">余额</div><div class="big num ${balance < 0 ? 'out' : ''}">${money(balance, cur)}</div>${cur !== HOME ? `<div class="muted small">≈ ${money(toHome(a, balance))}</div>` : ''}
+        <div class="muted small" style="margin-top:6px">初始余额 ${money(a.initialCents ?? 0, cur)}</div></div></div>
+    <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)), cur)}</span></div>${rowsOf(l, L)}</div>`).join('') || '<div class="card muted">这个账户还没有账单</div>'}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 报销：按项目看
