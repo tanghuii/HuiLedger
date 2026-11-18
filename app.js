@@ -11,7 +11,8 @@ const store = {
 };
 
 const state = {
-  cfg: store.get('hl.cfg', { url: '', key: '' }),
+  // 网页里内置了云端地址（config.js）时就用它，登录页只要邮箱和密码
+  cfg: CLOUD.url ? CLOUD : store.get('hl.cfg', { url: '', key: '' }),
   session: store.get('hl.session', null),
   data: { tx: new Map(), category: new Map(), account: new Map(), ledger: new Map() },
   tab: 'ledger',
@@ -195,13 +196,13 @@ function loginView() {
   const c = state.cfg;
   return `<div class="wrap"><div class="card login grid">
     <h1 style="margin:0">辉记账本</h1>
-    <label class="f">Supabase 项目地址<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
-    <label class="f">公开密钥（anon / publishable）<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>
+    ${CLOUD.url ? '' : `<label class="f">Supabase 项目地址<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
+    <label class="f">公开密钥（anon / publishable）<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
     <label class="f">邮箱<input id="l-email" type="email" autocomplete="username"></label>
     <label class="f">密码<input id="l-pass" type="password" autocomplete="current-password"></label>
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <button class="btn primary" data-act="login" ${state.loading ? 'disabled' : ''}>${state.loading ? '正在登录…' : '登录'}</button>
-    <p class="muted small" style="margin:0">项目地址和密钥只保存在这个浏览器里。账号在手机端的"设置 → 云端同步"里注册。</p>
+    <button class="btn primary" data-act="login" ${state.loading ? 'disabled' : ''}>${state.loading ? '请稍候…' : '登录'}</button>
+    <button class="btn link" data-act="register" ${state.loading ? 'disabled' : ''}>还没有账号？注册</button>
   </div></div>`;
 }
 
@@ -413,12 +414,21 @@ app.addEventListener('click', async (ev) => {
   const act = el.dataset.act, v = el.dataset.v;
   if (act === 'close-backdrop' && ev.target !== el) return;
   switch (act) {
-    case 'login': {
-      state.cfg = { url: document.getElementById('l-url').value.trim(), key: document.getElementById('l-key').value.trim() };
-      store.set('hl.cfg', state.cfg);
+    case 'login': case 'register': {
+      if (!CLOUD.url) {
+        state.cfg = { url: document.getElementById('l-url').value.trim(), key: document.getElementById('l-key').value.trim() };
+        store.set('hl.cfg', state.cfg);
+      }
       state.loading = true; state.error = ''; const email = document.getElementById('l-email').value.trim(), pass = document.getElementById('l-pass').value; render();
-      try { saveSession(await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false })); state.loading = false; await loadAll(); }
-      catch (e) { state.loading = false; state.error = e.message; render(); }
+      try {
+        if (pass.length < 6) throw new Error('密码至少 6 位。');
+        const o = act === 'register'
+          ? await api('POST', '/auth/v1/signup', { email, password: pass }, { auth: false })
+          : await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
+        // 开着邮箱验证时，注册不会直接给登录凭证
+        if (!o.access_token) throw new Error('注册成功，请到邮箱点确认链接，然后回来登录。');
+        saveSession(o); state.loading = false; await loadAll();
+      } catch (e) { state.loading = false; state.error = e.message; render(); }
       break;
     }
     case 'signout': signOut(); break;
