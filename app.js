@@ -359,8 +359,12 @@ function accountsView() {
   // 每个账户按自己的币种算余额，合计时再折成主货币（和手机端一样）
   const own = new Map(accounts.map((a) => [a.id, balanceOf(a, txs)]));
   const bal = new Map(accounts.map((a) => [a.id, toHome(a, own.get(a.id))]));
-  const assets = [...bal.values()].filter((v) => v > 0).reduce((s, v) => s + v, 0);
+  // 垫出去还没报销回来的钱是应收款，也算资产（和手机端一样）
+  const pending = pendingReimburse(txs);
+  const assets = [...bal.values()].filter((v) => v > 0).reduce((s, v) => s + v, 0) + pending;
   const debts = -[...bal.values()].filter((v) => v < 0).reduce((s, v) => s + v, 0);
+  const receivable = pending > 0 ? `<div class="card"><div class="dayhead"><span>应收</span><span>${money(pending)}</span></div>
+      <div class="row click" data-act="asset-tab" data-v="reimburse">${iconTile('receipt')}<div class="main"><div class="title">待报销</div></div><div class="right"><div class="num">${money(pending)}</div></div></div></div>` : '';
   const types = [[0, '储蓄账户'], [1, '投资账户'], [2, '信用账户'], [3, '现金账户']];
   const groups = types.map(([type, label]) => {
     const g = accounts.filter((a) => a.type === type);
@@ -371,8 +375,10 @@ function accountsView() {
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
       <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div></div>
-    <div class="grid">${netWorthCard()}${groups}</div></div>`;
+    <div class="grid">${netWorthCard()}${receivable}${groups}</div></div>`;
 }
+
+function pendingReimburse(txs, upTo = Infinity) { return txs.filter((t) => t.reimburse === 1 && t.date <= upTo).reduce((s, t) => s + t.amountCents, 0); }
 
 // ---------------------------------------------------------------- 记账 / 修改
 

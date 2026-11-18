@@ -185,7 +185,7 @@ function netWorthSeries() {
     const end = epochDay(y, m + 1, 0);
     // 每个账户按自己的币种算到月末的余额，再按现在的汇率折成主货币（和手机端一样）
     const upTo = txs.filter((t) => t.date <= end);
-    const total = accounts.reduce((s, a) => s + toHome(a, balanceOf(a, upTo)), 0);
+    const total = accounts.reduce((s, a) => s + toHome(a, balanceOf(a, upTo)), 0) + pendingReimburse(upTo);
     out.push({ label: `${y}年${m}月`, cents: total });
   }
   return out;
