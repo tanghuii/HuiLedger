@@ -25,6 +25,9 @@ const state = {
   // 以下是和手机端对齐的那些页面用的
   view: null, q: '', period: 'm', section: 'overview', line: false, openSub: null, openTag: null, openLeftOut: false,
   calDay: null, rmode: 'projects', project: null, accountId: null, openKey: null, addingRule: false,
+  // AI 和资产页
+  chat: [], asking: false, aiSettings: false, worthAll: false, assetTab: 'accounts', reviewText: {}, reviewBusy: false,
+  rec: { accountId: 0, busy: false, done: 0, total: 1, error: '', result: null, showSame: false },
 };
 
 // ---------------------------------------------------------------- 小工具
@@ -181,7 +184,8 @@ const app = document.getElementById('app');
 
 function render() {
   if (!state.session) { app.innerHTML = loginView(); return; }
-  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '账户'], ['reimburse', '报销'], ['subsidy', '补贴'], ['recurring', '周期']];
+  // 和手机端一样的分法：报销、补贴、周期性收支、对账都收在资产里
+  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '资产'], ['ask', '问账本']];
   const ledgers = [...state.data.ledger.values()];
   app.innerHTML = `<div class="wrap">
     <div class="top">
@@ -190,6 +194,7 @@ function render() {
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${n}</button>`).join('')}</div>
       <input id="q" class="search" type="search" placeholder="搜索全部账单" value="${h(state.q)}" autocomplete="off">
       <label class="btn" style="cursor:pointer">导入修正文件<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
+      <button class="btn" data-act="ai-settings">AI 设置</button>
       <button class="btn" data-act="export">导出</button>
       <button class="btn" data-act="reload">刷新</button>
       <button class="btn" data-act="signout">退出</button>
@@ -198,7 +203,7 @@ function render() {
     ${state.loading ? '<p class="muted">正在读取…</p>' : state.q.trim() ? searchView() : pageView()}
   </div>
   ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
-  ${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+  ${state.aiSettings ? aiSettingsView() : ''}${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
 }
 
 function loginView() {
@@ -278,7 +283,7 @@ function ledgerView() {
     const head = [d.income > 0 ? `收 ${money(d.income)}` : '', d.expense > 0 ? `支 ${money(d.expense)}` : ''].filter(Boolean).join('  ');
     return `<div class="card"><div class="dayhead"><span>${dayLabel(day)}</span><span>${head}</span></div>${items.map((t) => txRow(t, L)).join('')}</div>`;
   }).join('');
-  return `<div class="cols">${summaryCard(totals)}<div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
+  return `<div class="cols"><div class="grid sticky">${summaryCard(totals).replace('card sticky', 'card')}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
 }
 
 function statsView() {
@@ -341,7 +346,7 @@ function accountsView() {
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
       <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div></div>
-    <div class="grid">${groups}</div></div>`;
+    <div class="grid">${netWorthCard()}${groups}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 记账 / 修改
@@ -585,7 +590,7 @@ app.addEventListener('click', async (ev) => {
       try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = '没有写完，可以再点一次：' + e.message; }
       state.loading = false; render(); break;
     case 'signout': signOut(); break;
-    default: if (await moreAction(act, v, el)) break;
+    default: if (await aiAction(act, v) || await moreAction(act, v, el)) break;
     case 'reload': await loadAll(); break;
     case 'tab': state.tab = v; state.q = ''; state.accountId = null; state.project = null; state.openKey = null; render(); break;
     case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); state.calDay = null; render(); break; }
@@ -601,6 +606,13 @@ app.addEventListener('click', async (ev) => {
       break;
   }
 });
+// 一句话记账的输入条：回车或点箭头就发出去
+app.addEventListener('submit', (ev) => {
+  if (ev.target.dataset.form !== 'ask') return;
+  ev.preventDefault();
+  const input = ev.target.querySelector('input'); const text = input.value; input.value = '';
+  sendAsk(text);
+});
 app.addEventListener('input', (ev) => {
   // 搜索框：边打字边搜；重画之后把光标放回去
   if (ev.target.id !== 'q') return;
@@ -608,7 +620,7 @@ app.addEventListener('input', (ev) => {
   const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
 });
 app.addEventListener('change', async (ev) => {
-  if (await moreChange(ev)) return;
+  if (await aiChange(ev) || await moreChange(ev)) return;
   if (ev.target.id === 'patch-file' && ev.target.files[0]) {
     try { state.patch = readPatch(await ev.target.files[0].text()); state.error = ''; } catch (e) { state.error = e.message; }
     render(); return;

@@ -22,12 +22,17 @@ function pageView() {
   switch (state.tab) {
     case 'calendar': return calendarView();
     case 'stats': return statsView2();
-    case 'accounts': return accountsView();
-    case 'reimburse': return reimburseView();
-    case 'subsidy': return subsidyView();
-    case 'recurring': return recurringView();
+    case 'accounts': return assetsView();
+    case 'ask': return askView();
     default: return ledgerView();
   }
+}
+
+/** 资产页：账户，加上对账、报销、补贴、周期性收支这几个和钱有关的专题。 */
+function assetsView() {
+  const tab = state.assetTab;
+  const bar = `<div class="card" style="padding:8px">${seg('asset-tab', [['accounts', '账户'], ['reconcile', '对账'], ['reimburse', '报销'], ['subsidy', '补贴'], ['recurring', '周期性']], tab)}</div>`;
+  return `<div class="grid">${bar}${tab === 'reconcile' ? reconcileView() : tab === 'reimburse' ? reimburseView() : tab === 'subsidy' ? subsidyView() : tab === 'recurring' ? recurringView() : accountsView()}</div>`;
 }
 
 // ---------------------------------------------------------------- 账单详情：先看，再决定改不改
@@ -140,11 +145,12 @@ function statsView2() {
     ${seg('period', [['m', '月'], ['y', '年'], ['a', '全部']], state.period)}
     ${state.period === 'a' ? '' : `<div class="month"><button class="round" data-act="month" data-v="${-step}" aria-label="上一段">‹</button><b>${state.period === 'y' ? y + '年' : y + '年' + m + '月'}</b><button class="round" data-act="month" data-v="${step}" aria-label="下一段">›</button></div>`}
     ${seg('stats-kind', [[0, '支出'], [1, '收入']], state.statsIncome ? 1 : 0)}
-    ${seg('section', [['overview', '总览'], ['category', '分类'], ['tag', '标签']], state.section)}
+    ${seg('section', [['overview', '总览'], ['category', '分类'], ['tag', '标签'], ['review', '复盘']], state.section)}
     <div><div class="muted small">${state.statsIncome ? '总收入' : '总支出'}</div><div class="big num">${money(total)}</div></div>
   </div>`;
   let main;
-  if (state.section === 'overview') {
+  if (state.section === 'review') main = state.period === 'm' ? reviewView() : '<div class="card muted">复盘按月看，先把上面切到"月"。</div>';
+  else if (state.section === 'overview') {
     const leftOut = inRange.filter((t) => L.isReimburse(t) || L.isRefund(t) || t.excluded);
     main = `<div class="card"><div class="between">
         <div><div class="muted small">支出</div><div class="num out" style="font-size:19px">${money(totals.expense)}</div></div>
@@ -196,7 +202,7 @@ function accountDetailView() {
   const months = new Map();
   for (const t of list) { const d = dayToDate(t.date), k = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`; if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
   return `<div class="cols">
-    <div class="card sticky grid"><button class="btn" data-act="account-back">‹ 全部账户</button>
+    <div class="card sticky grid"><div class="between"><button class="btn" data-act="account-back">‹ 全部账户</button><button class="btn" data-act="fix-balance" data-v="${a.id}">修正当前余额</button></div>
       <div class="row" style="padding:0">${accountTile(a)}<div class="main"><div class="title" style="font-size:17px">${h(a.name)}</div><div class="sub">${list.length} 笔</div></div></div>
       <div><div class="muted small">余额${a.currency && a.currency !== HOME ? '（按欧元，不含初始余额）' : ''}</div><div class="big num ${flow + (a.initialCents ?? 0) < 0 ? 'out' : ''}">${money((a.currency && a.currency !== HOME ? 0 : a.initialCents ?? 0) + flow)}</div></div></div>
     <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)))}</span></div>${rowsOf(l, L)}</div>`).join('') || '<div class="card muted">这个账户还没有账单</div>'}</div></div>`;

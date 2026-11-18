@@ -118,3 +118,14 @@ body::after { right: -24vmax; bottom: -26vmax; background: var(--blob2); animati
 .cal.on { background: color-mix(in srgb, var(--primary) 18%, transparent); } .cal.on b { color: var(--primary); font-weight: 700; }
 .cal.today { border-color: color-mix(in srgb, var(--primary) 70%, transparent); }
 select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999px; }
+
+/* 一句话记账的输入条和对话气泡 */
+.quick { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 16px; border-radius: 999px; border: 1px solid transparent;
+  background: linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box;
+  backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%); box-shadow: inset 0 1px 0 var(--shine); }
+.quick input { flex: 1; border: 0; background: none; padding: 6px 0; outline: none !important; }
+.quick .spark { color: var(--primary); }
+.quick .send { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--primary); color: var(--on-primary); font-size: 20px; line-height: 1; cursor: pointer; }
+.quick .send:disabled { opacity: .5; }
+.bubble.me { align-self: flex-end; justify-self: end; max-width: 80%; background: var(--primary); color: var(--on-primary); padding: 10px 16px; border-radius: 20px; }
+.seg { flex-wrap: wrap; }
