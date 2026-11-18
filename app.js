@@ -4,6 +4,7 @@
 'use strict';
 
 const KIND = { EXPENSE: 0, INCOME: 1, TRANSFER: 2 };
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
 const store = {
   get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 隐私模式下存不了就算了 */ } },
@@ -196,6 +197,7 @@ function loginView() {
   const c = state.cfg;
   return `<div class="wrap"><div class="card login grid">
     <h1 style="margin:0">辉记账本</h1>
+    ${state.notice ? `<p class="ok">${h(state.notice)}</p>` : ''}
     ${CLOUD.url ? '' : `<label class="f">Supabase 项目地址<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
     <label class="f">公开密钥（anon / publishable）<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
     <label class="f">邮箱<input id="l-email" type="email" autocomplete="username"></label>
@@ -203,6 +205,7 @@ function loginView() {
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
     <button class="btn primary" data-act="login" ${state.loading ? 'disabled' : ''}>${state.loading ? '请稍候…' : '登录'}</button>
     <button class="btn link" data-act="register" ${state.loading ? 'disabled' : ''}>还没有账号？注册</button>
+    ${IS_ANDROID ? '<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">在 App 中打开</a>' : ''}
   </div></div>`;
 }
 
@@ -454,5 +457,12 @@ app.addEventListener('change', (ev) => {
   if (ev.target.id === 'e-account' && state.editing?.kind === KIND.TRANSFER) { collect(); render(); }
 });
 
+// 点了确认邮件里的链接会带着一串参数跳到这里：给个提示，并把地址栏里的参数抹掉
+(() => {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get('error_description')) state.error = /expired|invalid/i.test(p.get('error_description')) ? '确认链接已失效，请重新注册或直接登录试试。' : p.get('error_description');
+  else if (p.get('access_token')) state.notice = p.get('type') === 'recovery' ? '' : '邮箱已确认，可以登录了。';
+  if (location.hash) history.replaceState(null, '', location.pathname);
+})();
 render();
 if (state.session) loadAll();
