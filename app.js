@@ -445,17 +445,17 @@ function readPatch(text) {
   const accountByName = new Map([...state.data.account.values()].map((a) => [a.name, a]));
   const used = new Set();
   const all = [...state.data.tx.values()];
-  const patch = { deletes: [], adds: [], notes: [], lost: 0, bad: 0 };
+  const patch = { deletes: [], adds: [], notes: [], moves: [], lost: 0, bad: 0 };
   for (const r of rows.slice(1)) {
     const op = col(r, '操作');
-    if (!['删除', '新增', '改备注'].includes(op)) continue;
+    if (!['删除', '新增', '改备注', '改账户'].includes(op)) continue;
     const cents = Math.round(Math.abs(Number(col(r, '金额').replace(/,/g, ''))) * 100);
     const iso = col(r, '时间');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !Number.isFinite(cents)) { patch.bad++; continue; }
     const kind = col(r, '类型') === '收入' ? KIND.INCOME : col(r, '类型') === '转账' ? KIND.TRANSFER : KIND.EXPENSE;
     const row = {
       op, date: isoToDay(iso), iso, kind, cents, category: kind === KIND.TRANSFER ? '' : col(r, '分类'), sub: col(r, '二级分类'), ledger: col(r, '账本'),
-      account: col(r, '转出账户'), toAccount: col(r, '转入账户'), note: col(r, '备注'), newNote: col(r, '新备注'),
+      account: col(r, '转出账户'), toAccount: col(r, '转入账户'), note: col(r, '备注'), newNote: col(r, '新备注'), newAccount: col(r, '新账户'),
       tags: col(r, '标签').split(' ').map((x) => x.trim().replace(/^#/, '')).filter(Boolean).join(' '),
       reimburse: col(r, '报销') === '待报销' ? 1 : col(r, '报销') === '已报销' ? 2 : 0,
     };
@@ -464,12 +464,13 @@ function readPatch(text) {
       if (!accountByName.has(row.account) || kind === KIND.TRANSFER && !accountByName.has(row.toAccount)) { patch.bad++; continue; }
       patch.adds.push(row); continue;
     }
+    if (op === '改账户' && !accountByName.has(row.newAccount)) { patch.bad++; continue; }
     const name = (id) => state.data.account.get(id)?.name ?? '';
     const tx = all.find((t) => !used.has(t.id) && t.date === row.date && t.kind === kind && t.amountCents === cents && name(t.accountId) === row.account &&
       (kind !== KIND.TRANSFER || name(t.toAccountId) === row.toAccount) && (t.note ?? '').trim() === row.note);
     if (!tx) { patch.lost++; continue; }
     used.add(tx.id);
-    if (op === '删除') patch.deletes.push({ row, tx }); else patch.notes.push({ tx, note: row.newNote });
+    if (op === '删除') patch.deletes.push({ row, tx }); else if (op === '改账户') patch.moves.push({ tx, account: accountByName.get(row.newAccount) }); else patch.notes.push({ tx, note: row.newNote });
   }
   return patch;
 }
@@ -479,12 +480,13 @@ function patchView() {
   const line = (r) => `<div class="between small"><span>${r.iso} ${r.kind === KIND.TRANSFER ? h(r.account) + ' → ' + h(r.toAccount) : h([r.category, r.sub].filter(Boolean).join(' · ')) + ' ' + h(r.account)} <span class="muted">${h(r.note.slice(0, 40))}</span></span><span class="num">${money(r.cents)}</span></div>`;
   return `<div class="modal"><div class="card grid">
     <h2 style="margin:0">修正文件</h2>
-    <p class="muted" style="margin:0">删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔${p.lost ? `，${p.lost} 笔没找到` : ''}${p.bad ? `，${p.bad} 行无效（日期、金额或账户不对）` : ''}</p>
+    <p class="muted" style="margin:0">删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔，改账户 ${p.moves.length} 笔${p.lost ? `，${p.lost} 笔没找到` : ''}${p.bad ? `，${p.bad} 行无效（日期、金额或账户不对）` : ''}</p>
     ${p.deletes.length ? `<div><b class="out">删除</b>${p.deletes.map((d) => line(d.row)).join('')}</div>` : ''}
     ${p.adds.length ? `<div><b class="in">新增</b>${p.adds.map(line).join('')}</div>` : ''}
+    ${p.moves.length ? `<div><b>改账户</b>${p.moves.slice(0, 40).map((m) => `<div class="small">${dayISO(m.tx.date)} ${money(m.tx.amountCents)} → ${h(m.account.name)} <span class="muted">${h((m.tx.note ?? '').slice(0, 50))}</span></div>`).join('')}</div>` : ''}
     ${p.notes.length ? `<div><b>改备注</b>${p.notes.slice(0, 20).map((n) => `<div class="small">${dayISO(n.tx.date)} ${money(n.tx.amountCents)} <span class="muted">${h(n.note.slice(0, 70))}</span></div>`).join('')}${p.notes.length > 20 ? '<div class="muted">…</div>' : ''}</div>` : ''}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="patch-cancel">取消</button><button class="btn primary" data-act="patch-apply" ${state.loading || !(p.deletes.length + p.adds.length + p.notes.length) ? 'disabled' : ''}>${state.loading ? '正在写入…' : '应用修正'}</button></div>
+    <div class="between"><button class="btn" data-act="patch-cancel">取消</button><button class="btn primary" data-act="patch-apply" ${state.loading || !(p.deletes.length + p.adds.length + p.notes.length + p.moves.length) ? 'disabled' : ''}>${state.loading ? '正在写入…' : '应用修正'}</button></div>
   </div></div>`;
 }
 
@@ -506,6 +508,7 @@ async function applyPatch() {
   const ledger = (name) => [...state.data.ledger.values()].find((l) => l.name === name)?.id ?? state.ledgerId;
   for (const d of p.deletes) records.push({ user_id: user, kind: 'tx', id: d.tx.id, data: {}, deleted: true });
   for (const n of p.notes) if ((n.tx.note ?? '') !== n.note) records.push({ user_id: user, kind: 'tx', id: n.tx.id, data: { ...n.tx, note: n.note }, deleted: false });
+  for (const m of p.moves) if (m.tx.accountId !== m.account.id && m.tx.toAccountId !== m.account.id) records.push({ user_id: user, kind: 'tx', id: m.tx.id, data: { ...m.tx, accountId: m.account.id }, deleted: false });
   for (const r of p.adds) {
     const transfer = r.kind === KIND.TRANSFER;
     const t = {
