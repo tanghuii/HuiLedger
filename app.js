@@ -185,6 +185,7 @@ function render() {
       <h1>辉记账本</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${n}</button>`).join('')}</div>
+      <label class="btn" style="cursor:pointer">导入修正文件<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
       <button class="btn" data-act="reload">刷新</button>
       <button class="btn" data-act="signout">退出</button>
     </div>
@@ -192,7 +193,7 @@ function render() {
     ${state.loading ? '<p class="muted">正在读取…</p>' : state.tab === 'ledger' ? ledgerView() : state.tab === 'stats' ? statsView() : accountsView()}
   </div>
   ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
-  ${state.editing ? editorView() : ''}`;
+  ${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
 }
 
 function loginView() {
@@ -417,6 +418,110 @@ async function saveEditing() {
   render();
 }
 
+// ---------------------------------------------------------------- 修正文件（和手机端同一种格式）
+// 表头：操作,时间,类型,分类,二级分类,金额,账本,转出账户,转入账户,备注,报销,标签,币种,原币金额[,新备注]；操作是 删除 / 新增 / 改备注
+
+function parseCsv(text) {
+  const rows = []; let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted && c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+    else if (c === '"') quoted = !quoted;
+    else if (!quoted && c === ',') { row.push(cell); cell = ''; }
+    else if (!quoted && (c === '\n' || c === '\r')) {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = ''; if (row.some((x) => x !== '')) rows.push(row); row = [];
+    } else cell += c;
+  }
+  row.push(cell); if (row.some((x) => x !== '')) rows.push(row);
+  return rows;
+}
+
+function readPatch(text) {
+  const rows = parseCsv(text.replace(/^﻿/, ''));
+  const head = (rows[0] ?? []).map((x) => x.trim());
+  if (head[0] !== '操作') throw new Error('这不是修正文件：第一列应该是"操作"。');
+  const col = (r, name) => (r[head.indexOf(name)] ?? '').trim();
+  const accountByName = new Map([...state.data.account.values()].map((a) => [a.name, a]));
+  const used = new Set();
+  const all = [...state.data.tx.values()];
+  const patch = { deletes: [], adds: [], notes: [], lost: 0, bad: 0 };
+  for (const r of rows.slice(1)) {
+    const op = col(r, '操作');
+    if (!['删除', '新增', '改备注'].includes(op)) continue;
+    const cents = Math.round(Math.abs(Number(col(r, '金额').replace(/,/g, ''))) * 100);
+    const iso = col(r, '时间');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !Number.isFinite(cents)) { patch.bad++; continue; }
+    const kind = col(r, '类型') === '收入' ? KIND.INCOME : col(r, '类型') === '转账' ? KIND.TRANSFER : KIND.EXPENSE;
+    const row = {
+      op, date: isoToDay(iso), iso, kind, cents, category: kind === KIND.TRANSFER ? '' : col(r, '分类'), sub: col(r, '二级分类'), ledger: col(r, '账本'),
+      account: col(r, '转出账户'), toAccount: col(r, '转入账户'), note: col(r, '备注'), newNote: col(r, '新备注'),
+      tags: col(r, '标签').split(' ').map((x) => x.trim().replace(/^#/, '')).filter(Boolean).join(' '),
+      reimburse: col(r, '报销') === '待报销' ? 1 : col(r, '报销') === '已报销' ? 2 : 0,
+    };
+    if (op === '新增') {
+      // 账户必须是已有的，免得打错名字凭空多出一个账户
+      if (!accountByName.has(row.account) || kind === KIND.TRANSFER && !accountByName.has(row.toAccount)) { patch.bad++; continue; }
+      patch.adds.push(row); continue;
+    }
+    const name = (id) => state.data.account.get(id)?.name ?? '';
+    const tx = all.find((t) => !used.has(t.id) && t.date === row.date && t.kind === kind && t.amountCents === cents && name(t.accountId) === row.account &&
+      (kind !== KIND.TRANSFER || name(t.toAccountId) === row.toAccount) && (t.note ?? '').trim() === row.note);
+    if (!tx) { patch.lost++; continue; }
+    used.add(tx.id);
+    if (op === '删除') patch.deletes.push({ row, tx }); else patch.notes.push({ tx, note: row.newNote });
+  }
+  return patch;
+}
+
+function patchView() {
+  const p = state.patch;
+  const line = (r) => `<div class="between small"><span>${r.iso} ${r.kind === KIND.TRANSFER ? h(r.account) + ' → ' + h(r.toAccount) : h([r.category, r.sub].filter(Boolean).join(' · ')) + ' ' + h(r.account)} <span class="muted">${h(r.note.slice(0, 40))}</span></span><span class="num">${money(r.cents)}</span></div>`;
+  return `<div class="modal"><div class="card grid">
+    <h2 style="margin:0">修正文件</h2>
+    <p class="muted" style="margin:0">删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔${p.lost ? `，${p.lost} 笔没找到` : ''}${p.bad ? `，${p.bad} 行无效（日期、金额或账户不对）` : ''}</p>
+    ${p.deletes.length ? `<div><b class="out">删除</b>${p.deletes.map((d) => line(d.row)).join('')}</div>` : ''}
+    ${p.adds.length ? `<div><b class="in">新增</b>${p.adds.map(line).join('')}</div>` : ''}
+    ${p.notes.length ? `<div><b>改备注</b>${p.notes.slice(0, 20).map((n) => `<div class="small">${dayISO(n.tx.date)} ${money(n.tx.amountCents)} <span class="muted">${h(n.note.slice(0, 70))}</span></div>`).join('')}${p.notes.length > 20 ? '<div class="muted">…</div>' : ''}</div>` : ''}
+    ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
+    <div class="between"><button class="btn" data-act="patch-cancel">取消</button><button class="btn primary" data-act="patch-apply" ${state.loading || !(p.deletes.length + p.adds.length + p.notes.length) ? 'disabled' : ''}>${state.loading ? '正在写入…' : '应用修正'}</button></div>
+  </div></div>`;
+}
+
+async function applyPatch() {
+  const p = state.patch, user = state.session.user, records = [];
+  const cats = [...state.data.category.values()];
+  let seq = 0;
+  // 分类按名字找，没有就新建（和手机端导入表格时一样）
+  const category = (name, sub, income) => {
+    name = name || '其他';
+    let top = cats.find((c) => !c.parentId && !!c.isIncome === income && c.name === name);
+    if (!top) { top = { id: newId() + seq++, name, icon: iconKey(name), isIncome: income, sortOrder: cats.length, parentId: 0 }; cats.push(top); records.push({ user_id: user, kind: 'category', id: top.id, data: top, deleted: false }); }
+    if (!sub || sub === name) return top.id;
+    let leaf = cats.find((c) => c.parentId === top.id && c.name === sub);
+    if (!leaf) { const icon = iconKey(sub); leaf = { id: newId() + seq++, name: sub, icon: icon === 'tag' ? top.icon : icon, isIncome: income, sortOrder: cats.length, parentId: top.id }; cats.push(leaf); records.push({ user_id: user, kind: 'category', id: leaf.id, data: leaf, deleted: false }); }
+    return leaf.id;
+  };
+  const account = (name) => [...state.data.account.values()].find((a) => a.name === name)?.id ?? 0;
+  const ledger = (name) => [...state.data.ledger.values()].find((l) => l.name === name)?.id ?? state.ledgerId;
+  for (const d of p.deletes) records.push({ user_id: user, kind: 'tx', id: d.tx.id, data: {}, deleted: true });
+  for (const n of p.notes) if ((n.tx.note ?? '') !== n.note) records.push({ user_id: user, kind: 'tx', id: n.tx.id, data: { ...n.tx, note: n.note }, deleted: false });
+  for (const r of p.adds) {
+    const transfer = r.kind === KIND.TRANSFER;
+    const t = {
+      id: newId() + seq++, amountCents: r.cents, kind: r.kind, categoryId: transfer ? 0 : category(r.category, r.sub, r.kind === KIND.INCOME),
+      accountId: account(r.account), toAccountId: transfer ? account(r.toAccount) : 0, ledgerId: ledger(r.ledger), date: r.date, note: r.note, tags: r.tags,
+      reimburse: r.kind === KIND.EXPENSE ? r.reimburse : 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '',
+    };
+    records.push({ user_id: user, kind: 'tx', id: t.id, data: t, deleted: false });
+  }
+  // 一次写两百行，全部成功后再更新页面上的数据
+  for (let i = 0; i < records.length; i += 200) {
+    await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', records.slice(i, i + 200), { prefer: 'resolution=merge-duplicates,return=minimal' });
+  }
+  for (const r of records) { if (r.deleted) state.data[r.kind].delete(r.id); else state.data[r.kind].set(r.id, r.data); }
+}
+
 // ---------------------------------------------------------------- 事件
 
 app.addEventListener('click', async (ev) => {
@@ -458,6 +563,11 @@ app.addEventListener('click', async (ev) => {
       } catch (e) { state.loading = false; state.error = e.message; render(); }
       break;
     }
+    case 'patch-cancel': state.patch = null; state.error = ''; render(); break;
+    case 'patch-apply':
+      state.loading = true; state.error = ''; render();
+      try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = '没有写完，可以再点一次：' + e.message; }
+      state.loading = false; render(); break;
     case 'signout': signOut(); break;
     case 'reload': await loadAll(); break;
     case 'tab': state.tab = v; render(); break;
@@ -474,7 +584,11 @@ app.addEventListener('click', async (ev) => {
       break;
   }
 });
-app.addEventListener('change', (ev) => {
+app.addEventListener('change', async (ev) => {
+  if (ev.target.id === 'patch-file' && ev.target.files[0]) {
+    try { state.patch = readPatch(await ev.target.files[0].text()); state.error = ''; } catch (e) { state.error = e.message; }
+    render(); return;
+  }
   if (ev.target.dataset.act === 'ledger') { state.ledgerId = Number(ev.target.value); store.set('hl.ledger', state.ledgerId); render(); }
   // 换了一级分类，子分类的下拉要跟着换
   if (ev.target.id === 'e-top') { collect(); state.editing.categoryId = Number(ev.target.value); render(); }
