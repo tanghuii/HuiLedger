@@ -168,7 +168,7 @@ function txRowStatic(t, L) { return txRow(t, L, true).replace('data-act="view"',
 async function sendAsk(text) {
   const q = text.trim();
   if (!q || state.asking) return;
-  state.tab = 'ask'; state.q = ''; state.chat.push({ kind: 'q', text: q }); state.asking = true; render();
+  state.tab = 'ask'; state.q = ''; state.searching = false; state.chat.push({ kind: 'q', text: q }); state.asking = true; render();
   try { state.chat.push(await askLedger(q)); } catch (e) { state.chat.push({ kind: 'error', text: e instanceof AiError ? e.message : '出错了：' + e.message }); }
   state.asking = false; render();
   document.getElementById('quick')?.focus();

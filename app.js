@@ -23,7 +23,7 @@ const state = {
   ledgerId: store.get('hl.ledger', 0),
   loading: false, error: '', editing: null, statsIncome: false, openTop: null,
   // 以下是和手机端对齐的那些页面用的
-  view: null, q: '', period: 'm', section: 'overview', line: false, openSub: null, openTag: null, openLeftOut: false,
+  view: null, q: '', searching: false, period: 'm', section: 'overview', line: false, openSub: null, openTag: null, openLeftOut: false,
   calDay: null, rmode: 'projects', project: null, accountId: null, openKey: null, addingRule: false,
   // AI 和资产页
   chat: [], asking: false, aiSettings: false, worthAll: false, assetTab: 'accounts', reviewText: {}, reviewBusy: false,
@@ -55,15 +55,57 @@ function iconTile(key, cls = '') {
   const def = ICONS[key] ?? ICONS.tag;
   return `<span class="tile ${cls}" style="background:${def.c}"><svg viewBox="0 0 24 24"><path d="${def.d}"/></svg></span>`;
 }
-/** 账户的标志：认得出银行就用它的 logo，否则用通用图标。规则和手机端一样：三个字母以内的英文缩写要是独立的词。 */
+/** 品牌底色和前景色（和手机端 BankLogos.kt 一致），按 logo 名查。 */
+const BRAND_COLORS = {
+  logo_boc: ['#B5122B'], logo_icbc: ['#C4161C'], logo_abc: ['#00907A'], logo_cmbc: ['#1B60AE'], logo_citic: ['#C8102E'], logo_alipay: ['#1677FF'],
+  logo_wechat: ['#07C160'], logo_ing: ['#FF6200'], logo_revolut: ['#FFFFFF'], logo_paypal: ['#003087'], logo_bunq: ['#1A1A1A'], logo_asn: ['#FFFFFF'],
+  logo_kraken: ['#7132F5'], logo_wise: ['#9FE870', '#163300'], logo_abn: ['#FFFFFF', '#FFD200'], logo_n26: ['#202020'], logo_traderepublic: ['#FFFFFF'],
+  logo_trading212: ['#000000'], logo_bitvavo: ['#0033FF'], logo_coinbase: ['#0052FF'], logo_rabobank: ['#000099'], logo_pingan: ['#FF3300'],
+  logo_guilin: ['#FFFFFF'], logo_zhongtai: ['#E60012'], logo_scalable: ['#101214'], logo_lemfi: ['#C5F57A'], logo_robinhood: ['#00C805'], logo_finst: ['#10162F'],
+};
+/** 手机端那几家没有原图的：品牌色加一个字标。 */
+const TEXT_BRANDS = [
+  [['建设银行', '建行', 'ccb'], '#0066B3', '#FFFFFF', '建'], [['招商', '招行', 'cmb'], '#C8152D', '#FFFFFF', '招'], [['交通银行', '交行', 'bocom'], '#1D3F8F', '#FFFFFF', '交'],
+  [['邮储', '邮政'], '#007F3E', '#FFFFFF', '邮'], [['degiro'], '#009FDF', '#FFFFFF', 'DG'], [['binance', '币安'], '#1E2026', '#F0B90B', 'B'],
+];
+/** 按账户名找品牌。规则和手机端一样：三个字母以内的英文缩写要是独立的词。 */
+function brandOf(account) {
+  if (!account) return null;
+  const n = account.name.toLowerCase(), words = new Set(n.split(/[^a-z0-9]+/));
+  const hit = (keys) => keys.some((k) => (k.length <= 3 && /^[\x00-\x7f]+$/.test(k) ? words.has(k) : n.includes(k)));
+  const img = BRANDS.find(([keys]) => hit(keys));
+  if (img) { const [bg, fg = '#FFFFFF'] = BRAND_COLORS[img[1]] ?? ['#4A5068']; return { logo: img[1], bg, fg }; }
+  const text = TEXT_BRANDS.find(([keys]) => hit(keys));
+  return text ? { bg: text[1], fg: text[2], text: text[3] } : null;
+}
+function genericIcon(account) {
+  const n = (account?.name ?? '').toLowerCase();
+  if (!account) return 'wallet';
+  return n.includes('押金') ? 'key' : n.includes('借') ? 'people' : (n.includes('现金') || n.includes('cash')) ? 'coins' : ['bank', 'chart', 'card', 'wallet'][account.type] ?? 'wallet';
+}
+/** 账户的标志：认得出银行就用它的 logo，否则用通用图标。 */
 function accountTile(account, cls = '') {
-  if (!account) return iconTile('wallet', cls);
-  const n = account.name.toLowerCase();
-  const words = new Set(n.split(/[^a-z0-9]+/));
-  const brand = BRANDS.find(([keys]) => keys.some((k) => (k.length <= 3 && /^[\x00-\x7f]+$/.test(k) ? words.has(k) : n.includes(k))));
-  if (brand) return `<span class="tile ${cls}"><img src="logos/${brand[1]}.png" alt=""></span>`;
-  const generic = n.includes('押金') ? 'key' : n.includes('借') ? 'people' : (n.includes('现金') || n.includes('cash')) ? 'coins' : ['bank', 'chart', 'card', 'wallet'][account.type] ?? 'wallet';
-  return iconTile(generic, cls);
+  const brand = brandOf(account);
+  if (brand?.logo) return `<span class="tile ${cls}"><img src="logos/${brand.logo}.png" alt=""></span>`;
+  if (brand) return `<span class="tile ${cls}" style="background:${brand.bg};color:${brand.fg}">${h(brand.text)}</span>`;
+  return iconTile(genericIcon(account), cls);
+}
+const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+const lumOf = (hex) => { const [r, g, b] = rgbOf(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const mixHex = (hex, to, f) => '#' + rgbOf(hex).map((c, i) => Math.round((c + (rgbOf(to)[i] - c) * f) * 255).toString(16).padStart(2, '0')).join('');
+/** 彩色卡片的底色：太白的换成前景色或深灰，太亮的压暗三成，免得白字看不清（和手机端 accountFaceColor 一样）。 */
+function cardColor(base, fg) {
+  const l = lumOf(base);
+  if (l > 0.85) return fg && lumOf(fg) < 0.6 ? fg : '#4A5068';
+  return l > 0.62 ? mixHex(base, '#000000', 0.3) : base;
+}
+/** 账户卡面的颜色：有品牌的用品牌色，没有的用它图标的颜色。 */
+function accountFace(account) { const b = brandOf(account); return cardColor(b?.bg ?? (ICONS[genericIcon(account)] ?? ICONS.wallet).c, b?.fg); }
+/** 币种的国旗（表情字符）。只给认得的法币，其余不显示。 */
+function flagOf(cur) {
+  if (cur !== 'EUR' && !(cur in SYMBOL) && !(cur in fx.rates)) return '';
+  const cc = cur === 'EUR' ? 'EU' : cur.slice(0, 2);
+  return /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65)) : '';
 }
 
 // ---------------------------------------------------------------- 云端
@@ -192,7 +234,7 @@ function render() {
       <h1>辉记账本</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${n}</button>`).join('')}</div>
-      <input id="q" class="search" type="search" placeholder="搜索全部账单" value="${h(state.q)}" autocomplete="off">
+      <button class="search" data-act="search-open">${SEARCH_SVG}<span>搜索全部账单</span></button>
       <label class="btn" style="cursor:pointer">导入修正文件<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
       <button class="btn" data-act="ai-settings">AI 设置</button>
       <button class="btn" data-act="export">导出</button>
@@ -200,7 +242,7 @@ function render() {
       <button class="btn" data-act="signout">退出</button>
     </div>
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    ${state.loading ? '<p class="muted">正在读取…</p>' : state.q.trim() ? searchView() : pageView()}
+    ${state.loading ? '<p class="muted">正在读取…</p>' : state.searching || state.q.trim() ? searchView() : pageView()}
   </div>
   ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
   ${state.aiSettings ? aiSettingsView() : ''}${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
@@ -261,7 +303,7 @@ function txRow(t, L, showDate = false) {
 }
 
 function summaryCard(t) {
-  return `<div class="card sticky">
+  return `<div class="card cc">
     ${monthBar()}
     <div class="muted small" style="margin-top:14px">本月结余</div>
     <div class="big num">${money(t.income - t.expense)}</div>
@@ -283,7 +325,7 @@ function ledgerView() {
     const head = [d.income > 0 ? `收 ${money(d.income)}` : '', d.expense > 0 ? `支 ${money(d.expense)}` : ''].filter(Boolean).join('  ');
     return `<div class="card"><div class="dayhead"><span>${dayLabel(day)}</span><span>${head}</span></div>${items.map((t) => txRow(t, L)).join('')}</div>`;
   }).join('');
-  return `<div class="cols"><div class="grid sticky">${summaryCard(totals).replace('card sticky', 'card')}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
+  return `<div class="cols"><div class="grid sticky">${summaryCard(totals)}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
 }
 
 function statsView() {
@@ -366,11 +408,17 @@ function accountsView() {
   const receivable = pending > 0 ? `<div class="card"><div class="dayhead"><span>应收</span><span>${money(pending)}</span></div>
       <div class="row click" data-act="asset-tab" data-v="reimburse">${iconTile('receipt')}<div class="main"><div class="title">待报销</div></div><div class="right"><div class="num">${money(pending)}</div></div></div></div>` : '';
   const types = [[0, '储蓄账户'], [1, '投资账户'], [2, '信用账户'], [3, '现金账户']];
+  // 每个账户一张迷你卡面，颜色取自银行品牌色；列表里不放币种和国旗，详情页再看
+  const face = (a) => {
+    const b = own.get(a.id), notes = [acctCur(a) !== HOME ? `≈ ${money(bal.get(a.id))}` : '', b < 0 ? '欠款' : ''].filter(Boolean).join(' · ');
+    return `<div class="face" style="--cc:${accountFace(a)}" data-act="account" data-v="${a.id}"><span class="logo-w">${accountTile(a)}</span><span class="name">${h(a.name)}</span>
+      <div class="right"><div class="num">${b < 0 ? '−' : ''}${money(Math.abs(b), acctCur(a))}</div>${notes ? `<div class="small">${notes}</div>` : ''}</div></div>`;
+  };
   const groups = types.map(([type, label]) => {
     const g = accounts.filter((a) => a.type === type && !a.archived);
     if (!g.length) return '';
     return `<div class="card"><div class="dayhead"><span>${label}</span><span>${money(g.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
-      ${g.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div></div><div class="right"><div class="num ${own.get(a.id) < 0 ? 'out' : ''}">${money(own.get(a.id), acctCur(a))}</div>${acctCur(a) !== HOME ? `<div class="small muted">≈ ${money(bal.get(a.id))}</div>` : ''}</div></div>`).join('')}</div>`;
+      <div class="faces">${g.map(face).join('')}</div></div>`;
   }).join('');
   // 归档的账户收在最下面（余额照样算进净资产）
   const old = accounts.filter((a) => a.archived);
@@ -378,7 +426,9 @@ function accountsView() {
       ${old.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title muted">${h(a.name)}</div></div><div class="right"><div class="num muted">${money(own.get(a.id), acctCur(a))}</div></div></div>`).join('')}</div>` : '';
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
-      <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div></div>
+      <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div>
+      ${assets + debts > 0 ? `<div class="ratio">${assets > 0 ? `<i style="flex:${assets};background:var(--income)"></i>` : ''}${debts > 0 ? `<i style="flex:${debts};background:var(--expense)"></i>` : ''}</div>
+      <div class="small muted" style="margin-top:4px">负债率 ${Math.round(debts * 100 / Math.max(assets, 1))}%</div>` : ''}</div>
     <div class="grid">${netWorthCard()}${receivable}${groups}${archivedCard}</div></div>`;
 }
 
@@ -630,7 +680,7 @@ app.addEventListener('click', async (ev) => {
     case 'signout': signOut(); break;
     default: if (await aiAction(act, v) || await moreAction(act, v, el)) break;
     case 'reload': await loadAll(); break;
-    case 'tab': state.tab = v; state.q = ''; state.accountId = null; state.project = null; state.openKey = null; render(); break;
+    case 'tab': state.tab = v; state.q = ''; state.searching = false; state.accountId = null; state.project = null; state.openKey = null; render(); break;
     case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); state.calDay = null; render(); break; }
     case 'stats-kind': state.statsIncome = v === '1'; state.openTop = null; render(); break;
     case 'open-top': state.openTop = state.openTop === Number(v) ? null : Number(v); render(); break;
@@ -653,9 +703,21 @@ app.addEventListener('submit', (ev) => {
 });
 app.addEventListener('input', (ev) => {
   // 搜索框：边打字边搜；重画之后把光标放回去
-  if (ev.target.id !== 'q') return;
+  // 用拼音输入法打字时，选字之前不重画，不然字会被打断
+  if (ev.target.id !== 'q' || ev.isComposing) return;
   state.q = ev.target.value; render();
   const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+});
+app.addEventListener('compositionend', (ev) => {
+  if (ev.target.id !== 'q' || ev.target.value === state.q) return;
+  state.q = ev.target.value; render();
+  const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+});
+// 搜索框：回车记进"最近搜索"，Esc 关掉搜索页
+app.addEventListener('keydown', (ev) => {
+  if (ev.target.id !== 'q' || ev.isComposing) return;
+  if (ev.key === 'Enter') { rememberSearch(ev.target.value); ev.preventDefault(); }
+  else if (ev.key === 'Escape') { state.searching = false; state.q = ''; render(); }
 });
 app.addEventListener('change', async (ev) => {
   if (await aiChange(ev) || await moreChange(ev)) return;
