@@ -287,7 +287,10 @@ function txRow(t, L, showDate = false) {
   const sign = over ? '+' : t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : '';
   const amount = offset > 0 && !foreign ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : money(t.amountCents);
   const cls = over || t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : '';
-  const details = [showDate ? dayISO(t.date) : '', t.note, transfer ? '' : from?.name, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
+  const details = [showDate ? dayISO(t.date) : '', t.note, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
+  // 付款账户做成带小标志的彩色小签，放在备注前面
+  const face = !transfer && from ? accountFace(from) : null;
+  const payer = face ? `<span class="payer" style="--pc:${face}">${accountTile(from, 'mini')}${h(from.name)}</span>` : '';
   const targets = L.parts(t);
   const extra = [
     offset > 0 ? `原 ${money(t.amountCents)} · 抵 ${money(offset)}` : '',
@@ -297,7 +300,7 @@ function txRow(t, L, showDate = false) {
   return `<div class="row click" data-act="view" data-v="${t.id}">
     ${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}
     <div class="main"><div class="title">${title}${t.excluded ? '<span class="badge gray">不计</span>' : ''}${t.reimburse === 1 ? '<span class="badge">待报销</span>' : t.reimburse === 2 ? '<span class="badge gray">已报销</span>' : ''}</div>
-      ${details ? `<div class="sub">${details}</div>` : ''}</div>
+      ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
     <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra ? `<div class="small muted">${extra}</div>` : ''}</div>
   </div>`;
 }
