@@ -52,7 +52,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card > * { position: relative; }
 .card.click { cursor: pointer; }
 .card.click:hover { transform: translateY(-3px) scale(1.01); box-shadow: inset 0 1px 0 var(--shine), 0 18px 40px -14px rgba(40, 30, 110, .4); }
-.grid { display: grid; gap: 14px; }
+.grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+/* 网格里的每一块都不许被一行不换行的长文字撑宽，否则整列会冲出屏幕，金额被挤到外面 */
+.grid > *, .cols > * { min-width: 0; }
 .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 860px) { .cols { grid-template-columns: 320px minmax(0, 1fr); align-items: start; } .sticky { position: sticky; top: 16px; } }
 .btn { border: 1px solid var(--stroke); background: var(--card); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
