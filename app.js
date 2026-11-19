@@ -367,15 +367,19 @@ function accountsView() {
       <div class="row click" data-act="asset-tab" data-v="reimburse">${iconTile('receipt')}<div class="main"><div class="title">待报销</div></div><div class="right"><div class="num">${money(pending)}</div></div></div></div>` : '';
   const types = [[0, '储蓄账户'], [1, '投资账户'], [2, '信用账户'], [3, '现金账户']];
   const groups = types.map(([type, label]) => {
-    const g = accounts.filter((a) => a.type === type);
+    const g = accounts.filter((a) => a.type === type && !a.archived);
     if (!g.length) return '';
     return `<div class="card"><div class="dayhead"><span>${label}</span><span>${money(g.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
       ${g.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title">${h(a.name)}</div></div><div class="right"><div class="num ${own.get(a.id) < 0 ? 'out' : ''}">${money(own.get(a.id), acctCur(a))}</div>${acctCur(a) !== HOME ? `<div class="small muted">≈ ${money(bal.get(a.id))}</div>` : ''}</div></div>`).join('')}</div>`;
   }).join('');
+  // 归档的账户收在最下面（余额照样算进净资产）
+  const old = accounts.filter((a) => a.archived);
+  const archivedCard = old.length ? `<div class="card"><div class="dayhead"><span>已归档 ${old.length} 个</span><span>${money(old.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
+      ${old.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title muted">${h(a.name)}</div></div><div class="right"><div class="num muted">${money(own.get(a.id), acctCur(a))}</div></div></div>`).join('')}</div>` : '';
   return `<div class="cols">
     <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
       <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div></div>
-    <div class="grid">${netWorthCard()}${receivable}${groups}</div></div>`;
+    <div class="grid">${netWorthCard()}${receivable}${groups}${archivedCard}</div></div>`;
 }
 
 function pendingReimburse(txs, upTo = Infinity) { return txs.filter((t) => t.reimburse === 1 && t.date <= upTo).reduce((s, t) => s + t.amountCents, 0); }
@@ -402,7 +406,7 @@ function editorView() {
   const subs = cats.filter((c) => c.parentId === topId);
   const subId = chosen && chosen.parentId === topId ? chosen.id : 0;
   const accounts = [...state.data.account.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-  const accOpts = (sel, skip) => accounts.filter((a) => a.id !== skip).map((a) => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${h(a.name)}</option>`).join('');
+  const accOpts = (sel, skip) => accounts.filter((a) => a.id !== skip && (!a.archived || a.id === sel)).map((a) => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${h(a.name)}</option>`).join('');
   const transfer = e.kind === KIND.TRANSFER;
   const foreign = e.currency && e.origCents > 0 && e.currency !== HOME;
   return `<div class="modal" data-act="close-backdrop"><div class="card grid" role="dialog" aria-label="账单">
