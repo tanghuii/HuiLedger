@@ -17,7 +17,7 @@ const state = {
   // 网页里内置了云端地址（config.js）时就用它，登录页只要邮箱和密码
   cfg: CLOUD.url ? CLOUD : store.get('hl.cfg', { url: '', key: '' }),
   session: store.get('hl.session', null),
-  data: { tx: new Map(), category: new Map(), account: new Map(), ledger: new Map() },
+  data: { tx: new Map(), category: new Map(), account: new Map(), ledger: new Map(), setting: new Map() },
   tab: 'ledger',
   month: monthOf(new Date()),
   ledgerId: store.get('hl.ledger', 0),
@@ -117,7 +117,7 @@ async function api(method, path, body, { auth = true, prefer } = {}) {
   let res;
   try {
     res = await fetch(url.replace(/\/+$/, '') + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  } catch { throw new Error('连不上云端，请检查网络和项目地址。'); }
+  } catch { throw Object.assign(new Error('连不上云端，请检查网络和项目地址。'), { offline: true }); }
   const text = await res.text();
   const json = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
   if (!res.ok) {
@@ -144,16 +144,24 @@ async function accessToken() {
 function signOut() { state.session = null; store.del('hl.session'); for (const m of Object.values(state.data)) m.clear(); render(); }
 
 async function loadAll() {
-  state.loading = true; state.error = ''; render();
+  // 先把上次存在手机上的快照摆出来（秒开、断网也能看），再去云端拿最新的
+  const hadSnap = !state.data.tx.size && await loadSnapshot();
+  state.loading = !hadSnap && !state.data.tx.size; state.error = ''; render();
   try {
-    for (const m of Object.values(state.data)) m.clear();
+    await outbox.flush();
+    const fresh = { tx: new Map(), category: new Map(), account: new Map(), ledger: new Map(), setting: new Map() };
     let from = 0;
     for (;;) {
-      const rows = await api('GET', `/rest/v1/records?select=kind,id,data&deleted=is.false&kind=neq.setting&order=kind.asc,id.asc&offset=${from}&limit=1000`);
-      for (const r of rows) state.data[r.kind]?.set(Number(r.id), r.data);
+      const rows = await api('GET', `/rest/v1/records?select=kind,id,data&deleted=is.false&order=kind.asc,id.asc&offset=${from}&limit=1000`);
+      for (const r of rows) fresh[r.kind]?.set(Number(r.id), r.data);
       if (rows.length < 1000) break;
       from += 1000;
     }
+    // 还没传上去的修改盖在云端数据上面
+    for (const r of outbox.list()) { if (!fresh[r.kind]) continue; if (r.deleted) fresh[r.kind].delete(r.id); else fresh[r.kind].set(r.id, r.data); }
+    state.data = fresh;
+    saveSnapshot();
+    for (const f of MOD.onLoad) { try { await f(); } catch (e) { console.warn(e); } }
     const ledgers = [...state.data.ledger.values()];
     if (!state.data.ledger.has(state.ledgerId)) {
       // 默认打开账单最多的那个账本
@@ -161,18 +169,21 @@ async function loadAll() {
       for (const t of state.data.tx.values()) count.set(t.ledgerId, (count.get(t.ledgerId) ?? 0) + 1);
       state.ledgerId = ledgers.sort((a, b) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0))[0]?.id ?? 1;
     }
-  } catch (e) { state.error = e.message; }
+  } catch (e) { if (!(hadSnap && isNetworkError(e))) state.error = e.message; else state.notice = '离线中，显示的是上次的数据'; }
   state.loading = false; render();
 }
 
-async function saveRecord(kind, obj) {
-  await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', [{ user_id: state.session.user, kind, id: obj.id, data: obj, deleted: false }], { prefer: 'resolution=merge-duplicates,return=minimal' });
-  state.data[kind].set(obj.id, obj);
+// 写云端；断网时先改本地、排进队列，联网后自动补传
+async function putRow(row) {
+  try {
+    await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', [{ user_id: state.session.user, ...row }], { prefer: 'resolution=merge-duplicates,return=minimal' });
+  } catch (e) { if (!isNetworkError(e)) throw e; outbox.add(row); }
+  if (row.deleted) state.data[row.kind].delete(row.id); else state.data[row.kind].set(row.id, row.data);
+  clearTimeout(putRow.t); putRow.t = setTimeout(saveSnapshot, 1500);
 }
-async function deleteRecord(kind, id) {
-  await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', [{ user_id: state.session.user, kind, id, data: {}, deleted: true }], { prefer: 'resolution=merge-duplicates,return=minimal' });
-  state.data[kind].delete(id);
-}
+async function saveRecord(kind, obj) { await putRow({ kind, id: obj.id, data: obj, deleted: false }); }
+async function deleteRecord(kind, id) { await putRow({ kind, id, data: {}, deleted: true }); }
+addEventListener('online', () => outbox.flush());
 
 // ---------------------------------------------------------------- 统计口径（和手机端的 Lookup 一致）
 
@@ -227,7 +238,8 @@ const app = document.getElementById('app');
 function render() {
   if (!state.session) { app.innerHTML = loginView(); return; }
   // 和手机端一样的分法：报销、补贴、周期性收支、对账都收在资产里
-  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '资产'], ['ask', '问账本']];
+  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '资产'], ['ask', '问账本'], ['me', '我的']];
+  const navOn = (k) => (state.tab === k || (k === 'me' && !['ledger', 'stats', 'accounts'].includes(state.tab)) ? 'on' : '');
   const ledgers = [...state.data.ledger.values()];
   app.innerHTML = `<div class="wrap">
     <div class="top">
@@ -241,11 +253,42 @@ function render() {
       <button class="btn" data-act="reload">刷新</button>
       <button class="btn" data-act="signout">退出</button>
     </div>
-    ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
+    ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}${state.notice ? `<p class="ok small" data-act="notice-x">${h(state.notice)}</p>` : ''}
     ${state.loading ? '<p class="muted">正在读取…</p>' : state.searching || state.q.trim() ? searchView() : pageView()}
   </div>
   ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
+  <nav class="bottom-nav">
+    ${[['ledger', '明细', 'list'], ['stats', '统计', 'pie']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
+    <button class="nav-add" data-act="new" aria-label="记一笔">+</button>
+    ${[['accounts', '资产', 'wallet'], ['me', '我的', 'user']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
+  </nav>
   ${state.aiSettings ? aiSettingsView() : ''}${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+}
+
+const navIcon = (k) => `<svg viewBox="0 0 24 24"><path d="${(ICONS[k] ?? ICONS.tag).d}"/></svg>`;
+
+/** "我的"页：所有不在底栏上的功能都从这里进。模块用 MOD.me 登记自己的入口。 */
+function meView() {
+  const items = [
+    { key: 'calendar', name: '日历', icon: 'calendar', order: 1 },
+    { key: 'ask', name: '问账本', icon: 'sparkle', order: 2 },
+    ...MOD.me,
+    { act: 'ai-settings', name: 'AI 设置', icon: 'chip', order: 90 },
+    { act: 'export', name: '导出 CSV', icon: 'upload', order: 92 },
+    { file: true, name: '导入修正文件', icon: 'document', order: 91 },
+  ].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+  const tile = (it) => it.file
+    ? `<label class="me-item">${iconTile(it.icon)}<span>${h(it.name)}</span><input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>`
+    : `<button class="me-item" data-act="${it.act ?? 'tab'}" data-v="${h(it.key ?? '')}">${iconTile(it.icon)}<span>${h(it.name)}</span></button>`;
+  const install = STANDALONE ? '' : `<div class="card small muted">${IS_IOS ? '在 Safari 点 分享 → 添加到主屏幕，就能像 App 一样用' : '浏览器菜单里选"安装应用 / 添加到主屏幕"，就能像 App 一样用'}</div>`;
+  const pending = outbox.list().length;
+  return `<div class="grid">
+    <div class="card cc"><div class="between"><div><div style="font-size:20px;font-weight:700">辉记账本</div><div class="muted small">${pending ? `${pending} 条修改等联网后上传` : '已和云端同步'}</div></div>
+      <button class="pill" data-act="reload">刷新</button></div></div>
+    ${install}
+    <div class="card"><div class="me-grid">${items.map(tile).join('')}</div></div>
+    <button class="btn" data-act="signout">退出登录</button>
+  </div>`;
 }
 
 function loginView() {
@@ -275,35 +318,7 @@ function monthBar() {
   return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="上个月">‹</button><b>${y}年${m}月</b><button class="round" data-act="month" data-v="1" aria-label="下个月">›</button></div>`;
 }
 
-function txRow(t, L, showDate = false) {
-  const cat = state.data.category, acc = state.data.account;
-  const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), from = acc.get(t.accountId), to = acc.get(t.toAccountId);
-  const transfer = t.kind === KIND.TRANSFER;
-  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? '未分类' : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
-  const offset = t.kind === KIND.EXPENSE ? L.offsets.get(t.id) ?? 0 : 0;
-  const foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
-  const net = L.net(t);
-  const over = offset > 0 && net < 0;
-  const sign = over ? '+' : t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : '';
-  const amount = offset > 0 && !foreign ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : money(t.amountCents);
-  const cls = over || t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : '';
-  const details = [showDate ? dayISO(t.date) : '', t.note, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
-  // 付款账户做成带小标志的彩色小签，放在备注前面
-  const face = !transfer && from ? accountFace(from) : null;
-  const payer = face ? `<span class="payer" style="--pc:${face}">${accountTile(from, 'mini')}${h(from.name)}</span>` : '';
-  const targets = L.parts(t);
-  const extra = [
-    offset > 0 ? `原 ${money(t.amountCents)} · 抵 ${money(offset)}` : '',
-    foreign ? `≈ ${money(t.amountCents)}` : '',
-    targets.length ? `抵扣 ${targets.length > 1 ? targets.length + ' 笔支出' : h(cat.get(state.data.tx.get(targets[0][0])?.categoryId)?.name ?? '')}` : '',
-  ].filter(Boolean).join(' · ');
-  return `<div class="row click" data-act="view" data-v="${t.id}">
-    ${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}
-    <div class="main"><div class="title">${title}${t.excluded ? '<span class="badge gray">不计</span>' : ''}${t.reimburse === 1 ? '<span class="badge">待报销</span>' : t.reimburse === 2 ? '<span class="badge gray">已报销</span>' : ''}</div>
-      ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
-    <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra ? `<div class="small muted">${extra}</div>` : ''}</div>
-  </div>`;
-}
+// 账单行 txRow() 在 modules/editor.js（侧滑、多选都在那边）
 
 function summaryCard(t) {
   return `<div class="card cc">
@@ -328,7 +343,7 @@ function ledgerView() {
     const head = [d.income > 0 ? `收 ${money(d.income)}` : '', d.expense > 0 ? `支 ${money(d.expense)}` : ''].filter(Boolean).join('  ');
     return `<div class="card"><div class="dayhead"><span>${dayLabel(day)}</span><span>${head}</span></div>${items.map((t) => txRow(t, L)).join('')}</div>`;
   }).join('');
-  return `<div class="cols"><div class="grid sticky">${summaryCard(totals)}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
+  return `<div class="cols"><div class="grid sticky">${summaryCard(totals)}${MOD.homeCards.map((f) => f()).join('')}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
 }
 
 function statsView() {
@@ -438,94 +453,7 @@ function accountsView() {
 function pendingReimburse(txs, upTo = Infinity) { return txs.filter((t) => t.reimburse === 1 && t.date <= upTo).reduce((s, t) => s + t.amountCents, 0); }
 
 // ---------------------------------------------------------------- 记账 / 修改
-
-function startEdit(t) {
-  const accounts = [...state.data.account.values()];
-  state.editing = t ? { ...t, _amount: (t.amountCents / 100).toFixed(2), _isNew: false } : {
-    id: newId(), kind: KIND.EXPENSE, amountCents: 0, categoryId: 0, accountId: store.get('hl.lastAccount', accounts[0]?.id ?? 0), toAccountId: 0,
-    ledgerId: state.ledgerId, date: epochDay(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()), note: '', tags: '',
-    reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '', project: '', fund: '', _amount: '', _isNew: true,
-  };
-  render();
-}
-
-function editorView() {
-  const e = state.editing;
-  const cats = [...state.data.category.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-  const isIncome = e.kind === KIND.INCOME;
-  const tops = cats.filter((c) => !c.parentId && !!c.isIncome === isIncome);
-  const chosen = state.data.category.get(e.categoryId);
-  const topId = chosen && !!chosen.isIncome === isIncome ? (chosen.parentId || chosen.id) : tops[0]?.id ?? 0;
-  const subs = cats.filter((c) => c.parentId === topId);
-  const subId = chosen && chosen.parentId === topId ? chosen.id : 0;
-  const accounts = [...state.data.account.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-  const accOpts = (sel, skip) => accounts.filter((a) => a.id !== skip && (!a.archived || a.id === sel)).map((a) => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${h(a.name)}</option>`).join('');
-  const transfer = e.kind === KIND.TRANSFER;
-  const foreign = e.currency && e.origCents > 0 && e.currency !== HOME;
-  return `<div class="modal" data-act="close-backdrop"><div class="card grid" role="dialog" aria-label="账单">
-    <div class="between"><b style="font-size:18px">${e._isNew ? '记一笔' : '修改账单'}</b>${e._isNew ? '' : '<button class="btn link danger" data-act="delete">删除</button>'}</div>
-    <div class="seg">${['支出', '收入', '转账'].map((n, i) => `<button class="${e.kind === i ? 'on' : ''}" data-act="e-kind" data-v="${i}">${n}</button>`).join('')}</div>
-    <label class="f">金额（${e._isNew ? acctCur(state.data.account.get(e.accountId) ?? {}) : HOME}）<input id="e-amount" inputmode="decimal" value="${h(e._amount)}" placeholder="0.00" style="font-size:22px;font-weight:700"></label>
-    ${foreign ? `<p class="muted small" style="margin:0">这笔原本是 ${money(e.origCents, e.currency)}，这里改的是折合 ${HOME} 的金额。</p>` : ''}
-    ${transfer ? '' : `<div class="two">
-      <label class="f">分类<select id="e-top">${tops.map((c) => `<option value="${c.id}" ${c.id === topId ? 'selected' : ''}>${h(c.name)}</option>`).join('')}</select></label>
-      <label class="f">子分类<select id="e-sub"><option value="0">（不细分）</option>${subs.map((c) => `<option value="${c.id}" ${c.id === subId ? 'selected' : ''}>${h(c.name)}</option>`).join('')}</select></label></div>`}
-    <div class="two">
-      <label class="f">${transfer ? '转出账户' : '账户'}<select id="e-account">${accOpts(e.accountId)}</select></label>
-      ${transfer ? `<label class="f">转入账户<select id="e-to">${accOpts(e.toAccountId, e.accountId)}</select></label>` : `<label class="f">日期<input id="e-date" type="date" value="${dayISO(e.date)}"></label>`}
-    </div>
-    ${transfer ? `<label class="f">日期<input id="e-date" type="date" value="${dayISO(e.date)}"></label>` : `<div class="two">
-      ${e.kind === KIND.EXPENSE ? `<label class="f">报销<select id="e-reimburse">${['不报销', '待报销', '已报销'].map((n, i) => `<option value="${i}" ${e.reimburse === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : '<span></span>'}
-      <label class="f">收支统计<select id="e-excluded"><option value="0" ${!e.excluded ? 'selected' : ''}>计入收支</option><option value="1" ${e.excluded ? 'selected' : ''}>不计入收支</option></select></label></div>`}
-    <label class="f">备注<textarea id="e-note">${h(e.note)}</textarea></label>
-    <label class="f">标签（空格分隔）<input id="e-tags" value="${h(e.tags)}"></label>
-    ${transfer ? '' : `<div class="two">
-      <label class="f">报销项目<input id="e-project" list="dl-project" value="${h(e.project ?? '')}"><datalist id="dl-project">${projectNames().map((n) => `<option value="${h(n)}">`).join('')}</datalist></label>
-      <label class="f">资金来源<input id="e-fund" list="dl-fund" value="${h(e.fund ?? '')}"><datalist id="dl-fund">${fundNames().map((n) => `<option value="${h(n)}">`).join('')}</datalist></label></div>`}
-    ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="close">取消</button><button class="btn primary" data-act="save">保存</button></div>
-  </div></div>`;
-}
-
-/** 把表单里现在的内容收回到 state.editing（切换类型、换一级分类会重画表单，先收一下）。 */
-function collect() {
-  const e = state.editing, v = (id) => document.getElementById(id)?.value;
-  e._amount = v('e-amount') ?? e._amount;
-  if (v('e-date')) e.date = isoToDay(v('e-date'));
-  if (v('e-account')) e.accountId = Number(v('e-account'));
-  if (v('e-to')) e.toAccountId = Number(v('e-to'));
-  if (v('e-top')) { const sub = Number(v('e-sub') ?? 0); const top = Number(v('e-top')); e.categoryId = sub && state.data.category.get(sub)?.parentId === top ? sub : top; }
-  if (v('e-reimburse') != null) e.reimburse = Number(v('e-reimburse'));
-  if (v('e-excluded') != null) e.excluded = v('e-excluded') === '1';
-  if (v('e-project') != null) e.project = v('e-project').trim();
-  if (v('e-fund') != null) e.fund = v('e-fund').trim();
-  e.note = v('e-note') ?? e.note;
-  e.tags = (v('e-tags') ?? e.tags).split(/[\s#,，]+/).filter(Boolean).join(' ');
-}
-
-async function saveEditing() {
-  collect();
-  const e = state.editing, cents = parseCents(e._amount);
-  if (cents == null) { state.error = '请填写金额。'; return render(); }
-  const transfer = e.kind === KIND.TRANSFER;
-  if (transfer && (!e.toAccountId || e.toAccountId === e.accountId)) { state.error = '请选择两个不同的账户。'; return render(); }
-  const { _amount, _isNew, ...t } = e;
-  t.amountCents = cents;
-  // 新记的一笔按账户的币种填：外币账户存下原币金额，再折成主货币
-  const cur = acctCur(state.data.account.get(e.accountId) ?? {});
-  if (_isNew && cur !== HOME) { t.currency = cur; t.origCents = cents; t.amountCents = convert(cents, cur, HOME) ?? cents; }
-  if (transfer) { t.categoryId = 0; t.reimburse = 0; t.excluded = false; } else t.toAccountId = 0;
-  if (t.kind !== KIND.EXPENSE) t.reimburse = 0;
-  if (t.kind !== KIND.INCOME) { t.offsetOf = 0; t.offsetParts = ''; }
-  try {
-    await saveRecord('tx', t);
-    store.set('hl.lastAccount', t.accountId);
-    if (t.project) rememberName('hl.projects', t.project);
-    if (t.fund) rememberName('hl.funds', t.fund);
-    state.editing = null; state.error = '';
-  } catch (err) { state.error = err.message; }
-  render();
-}
+// startEdit、editorView、saveEditing 在 modules/editor.js（自带数字键盘，和手机端一样）
 
 // ---------------------------------------------------------------- 修正文件（和手机端同一种格式）
 // 表头：操作,时间,类型,分类,二级分类,金额,账本,转出账户,转入账户,备注,报销,标签,币种,原币金额[,新备注]；操作是 删除 / 新增 / 改备注
@@ -680,21 +608,22 @@ app.addEventListener('click', async (ev) => {
       state.loading = true; state.error = ''; render();
       try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = '没有写完，可以再点一次：' + e.message; }
       state.loading = false; render(); break;
-    case 'signout': signOut(); break;
+    case 'signout': if (confirm('退出登录？')) signOut(); break;
+    case 'notice-x': state.notice = ''; render(); break;
     default: if (await aiAction(act, v) || await moreAction(act, v, el)) break;
+      for (const f of MOD.actions) { if (await f(act, v, el)) break; }
+      break; // 没人认领的按钮什么也不做（以前会掉下去刷新全部数据）
     case 'reload': await loadAll(); break;
-    case 'tab': state.tab = v; state.q = ''; state.searching = false; state.accountId = null; state.project = null; state.openKey = null; render(); break;
+    case 'tab': state.tab = v; scrollTo(0, 0); state.q = ''; state.searching = false; state.accountId = null; state.project = null; state.openKey = null; render(); break;
     case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); state.calDay = null; render(); break; }
     case 'stats-kind': state.statsIncome = v === '1'; state.openTop = null; render(); break;
     case 'open-top': state.openTop = state.openTop === Number(v) ? null : Number(v); render(); break;
     case 'new': state.error = ''; startEdit(null); break;
     case 'edit': state.error = ''; startEdit(state.data.tx.get(Number(v))); break;
-    case 'e-kind': collect(); state.editing.kind = Number(v); state.editing.categoryId = 0; render(); break;
+    case 'e-kind': edKind(Number(v)); break;
     case 'close': case 'close-backdrop': state.editing = null; state.error = ''; render(); break;
     case 'save': await saveEditing(); break;
-    case 'delete':
-      if (confirm('删除这笔账单？')) { try { await deleteRecord('tx', state.editing.id); state.editing = null; state.view = null; } catch (e) { state.error = e.message; } render(); }
-      break;
+    case 'delete': await edDeleteEditing(); break;
   }
 });
 // 一句话记账的输入条：回车或点箭头就发出去
@@ -724,16 +653,12 @@ app.addEventListener('keydown', (ev) => {
 });
 app.addEventListener('change', async (ev) => {
   if (await aiChange(ev) || await moreChange(ev)) return;
+  for (const f of MOD.changes) if (await f(ev)) return;
   if (ev.target.id === 'patch-file' && ev.target.files[0]) {
     try { state.patch = readPatch(await ev.target.files[0].text()); state.error = ''; } catch (e) { state.error = e.message; }
     render(); return;
   }
   if (ev.target.dataset.act === 'ledger') { state.ledgerId = Number(ev.target.value); store.set('hl.ledger', state.ledgerId); render(); }
-  // 换了一级分类，子分类的下拉要跟着换
-  if (ev.target.id === 'e-top') { collect(); state.editing.categoryId = Number(ev.target.value); render(); }
-  // 换了账户，金额的币种跟着账户走
-  if (ev.target.id === 'e-account' && state.editing?._isNew) { collect(); render(); }
-  if (ev.target.id === 'e-account' && state.editing?.kind === KIND.TRANSFER) { collect(); render(); }
 });
 
 // 点了确认邮件里的链接会带着一串参数跳到这里：给个提示，并把地址栏里的参数抹掉
@@ -747,3 +672,5 @@ app.addEventListener('change', async (ev) => {
 render();
 refreshRates();
 if (state.session) loadAll();
+// 从后台切回来时顺手刷新一次（手机上改的账这边也能看到）
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.session && !state.editing && Date.now() - (loadAll.at ?? 0) > 60000) { loadAll.at = Date.now(); loadAll(); } });

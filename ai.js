@@ -367,7 +367,7 @@ async function aiAction(act, v) {
   const rec = state.rec;
   switch (act) {
     case 'ai-settings': state.aiSettings = true; break;
-    case 'ai-close': if (event?.target?.dataset?.act !== 'ai-close') return true; state.aiSettings = false; break;
+    case 'ai-close': if (lastClickTarget?.dataset?.act !== 'ai-close') return true; state.aiSettings = false; break;
     case 'ai-close-btn': state.aiSettings = false; break;
     case 'ai-clear': store.del('hl.apiKey'); state.aiSettings = false; break;
     case 'ai-save': { const k = document.getElementById('ai-key').value.trim(); if (k) store.set('hl.apiKey', k); store.set('hl.model', document.getElementById('ai-model').value.trim()); state.aiSettings = false; break; }

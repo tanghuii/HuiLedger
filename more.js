@@ -11,15 +11,28 @@ const rowsOf = (list, L, showDate = true) => list.map((t) => txRow(t, L, showDat
 const today = () => { const d = new Date(); return epochDay(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
 
 /** 名单（报销项目、资金来源）：存在浏览器里的，加上账单上用过的。 */
+// 名单和手机端共享（云端 setting），以前存在浏览器里的也带上
+const nameKey = (key) => (key === 'hl.projects' ? 'projects' : 'funds');
 function names(key, defaults, field) {
-  return [...new Set([...store.get(key, defaults), ...allTxs().map((t) => t[field] ?? '')].filter(Boolean))];
+  return [...new Set([...shared.get(nameKey(key), defaults), ...store.get(key, []), ...allTxs().map((t) => t[field] ?? '')].filter(Boolean))];
 }
 const projectNames = () => names('hl.projects', ['ITB', 'China2026', 'PKUvisit'], 'project');
 const fundNames = () => names('hl.funds', [], 'fund');
-function rememberName(key, name) { const list = store.get(key, key === 'hl.projects' ? ['ITB', 'China2026', 'PKUvisit'] : []); if (!list.includes(name)) store.set(key, [...list, name]); }
+function rememberName(key, name) {
+  const list = shared.get(nameKey(key), key === 'hl.projects' ? ['ITB', 'China2026', 'PKUvisit'] : []);
+  if (!list.includes(name)) shared.set(nameKey(key), [...list, name]).catch(() => {});
+}
 
 function pageView() {
+  // 从"我的"进去的页面：顶上一条返回栏
+  const sub = { calendar: '日历', ask: '问账本', ...Object.fromEntries(MOD.me.map((m) => [m.key, m.name])) }[state.tab];
+  const back = sub ? `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="返回">‹</button><b>${h(sub)}</b></div>` : '';
+  return back + pageBody();
+}
+function pageBody() {
+  if (MOD.pages[state.tab]) return MOD.pages[state.tab]();
   switch (state.tab) {
+    case 'me': return meView();
     case 'calendar': return calendarView();
     case 'stats': return statsView2();
     case 'accounts': return assetsView();
@@ -280,7 +293,7 @@ function accountDetailView() {
         <div class="big bal">${money(balance, cur)}</div>
         ${notes ? `<div class="small muted">${notes}</div>` : ''}
         <div class="stats3">${stat('初始余额', a.initialCents ?? 0)}${stat('累计流入', inflow)}${stat('累计流出', outflow)}</div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="pill" data-act="fix-balance" data-v="${a.id}">修正当前余额</button></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="pill" data-act="acc-settings" data-v="${a.id}">账户设置</button><button class="pill" data-act="fix-balance" data-v="${a.id}">修正当前余额</button></div>
       </div></div>
     <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)), cur)}</span></div>${rowsOf(l, L)}</div>`).join('') || '<div class="card muted">这个账户还没有账单</div>'}</div></div>`;
 }
@@ -362,7 +375,7 @@ const RECURRING_DEFAULT = [
   { name: '话费', categories: ['通讯', '话费'], keywords: [], income: false },
 ];
 function recurringView() {
-  const L = computeLookup(), rules = store.get('hl.recurring', RECURRING_DEFAULT);
+  const L = computeLookup(), rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT));
   const now = new Date(), months = [];
   for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(`${d.getFullYear()}-${d.getMonth() + 1}`); }
   const key = (t) => { const d = dayToDate(t.date); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`; };
@@ -427,7 +440,8 @@ async function moreAction(act, v, el) {
     case 'search-clear': state.q = ''; setTimeout(() => document.getElementById('q')?.focus()); break;
     case 'search-pick': state.q = v; if (el.dataset.r) rememberSearch(v); break;
     case 'search-recent-clear': store.del('hl.recentSearches'); break;
-    case 'close-view': if (el !== event?.target) return true; state.view = null; break;
+    case 'close-view': if (el !== lastClickTarget) return true; state.view = null; break;
+    case 'acc-settings': state.tab = 'manage'; mgState().tab = 'account'; state.accountId = null; for (const f of MOD.actions) if (await f('mg-acc-edit', v, el)) break; break;
     case 'close-view-btn': state.view = null; break;
     case 'view-delete': if (!confirm('删除这笔账单？')) return true; try { await deleteRecord('tx', state.view); state.view = null; } catch (e) { state.error = e.message; } break;
     case 'period': state.period = v; break;
@@ -448,10 +462,10 @@ async function moreAction(act, v, el) {
     case 'rule-cancel': state.addingRule = false; break;
     case 'rule-save': {
       const name = document.getElementById('r-name').value.trim(), cat = document.getElementById('r-cat').value, kw = document.getElementById('r-kw').value.trim();
-      if (name && (cat || kw)) { store.set('hl.recurring', [...store.get('hl.recurring', RECURRING_DEFAULT).filter((r) => r.name !== name), { name, categories: cat ? [cat] : [], keywords: kw ? [kw] : [], income: document.getElementById('r-income').value === '1' }]); state.addingRule = false; }
+      if (name && (cat || kw)) { await shared.set('recurring', [...shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)).filter((r) => r.name !== name), { name, categories: cat ? [cat] : [], keywords: kw ? [kw] : [], income: document.getElementById('r-income').value === '1' }]); state.addingRule = false; }
       break;
     }
-    case 'rule-remove': { const rules = store.get('hl.recurring', RECURRING_DEFAULT); if (confirm(`移除「${rules[Number(v)].name}」？账单不会被删除。`)) { rules.splice(Number(v), 1); store.set('hl.recurring', rules); state.openKey = null; } break; }
+    case 'rule-remove': { const rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)); if (confirm(`移除「${rules[Number(v)].name}」？账单不会被删除。`)) { rules.splice(Number(v), 1); await shared.set('recurring', rules); state.openKey = null; } break; }
     case 'export': exportCsv(); return true;
     default: return false;
   }
