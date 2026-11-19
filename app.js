@@ -408,7 +408,7 @@ function editorView() {
   return `<div class="modal" data-act="close-backdrop"><div class="card grid" role="dialog" aria-label="账单">
     <div class="between"><b style="font-size:18px">${e._isNew ? '记一笔' : '修改账单'}</b>${e._isNew ? '' : '<button class="btn link danger" data-act="delete">删除</button>'}</div>
     <div class="seg">${['支出', '收入', '转账'].map((n, i) => `<button class="${e.kind === i ? 'on' : ''}" data-act="e-kind" data-v="${i}">${n}</button>`).join('')}</div>
-    <label class="f">金额（${HOME}）<input id="e-amount" inputmode="decimal" value="${h(e._amount)}" placeholder="0.00" style="font-size:22px;font-weight:700"></label>
+    <label class="f">金额（${e._isNew ? acctCur(state.data.account.get(e.accountId) ?? {}) : HOME}）<input id="e-amount" inputmode="decimal" value="${h(e._amount)}" placeholder="0.00" style="font-size:22px;font-weight:700"></label>
     ${foreign ? `<p class="muted small" style="margin:0">这笔原本是 ${money(e.origCents, e.currency)}，这里改的是折合 ${HOME} 的金额。</p>` : ''}
     ${transfer ? '' : `<div class="two">
       <label class="f">分类<select id="e-top">${tops.map((c) => `<option value="${c.id}" ${c.id === topId ? 'selected' : ''}>${h(c.name)}</option>`).join('')}</select></label>
@@ -454,6 +454,9 @@ async function saveEditing() {
   if (transfer && (!e.toAccountId || e.toAccountId === e.accountId)) { state.error = '请选择两个不同的账户。'; return render(); }
   const { _amount, _isNew, ...t } = e;
   t.amountCents = cents;
+  // 新记的一笔按账户的币种填：外币账户存下原币金额，再折成主货币
+  const cur = acctCur(state.data.account.get(e.accountId) ?? {});
+  if (_isNew && cur !== HOME) { t.currency = cur; t.origCents = cents; t.amountCents = convert(cents, cur, HOME) ?? cents; }
   if (transfer) { t.categoryId = 0; t.reimburse = 0; t.excluded = false; } else t.toAccountId = 0;
   if (t.kind !== KIND.EXPENSE) t.reimburse = 0;
   if (t.kind !== KIND.INCOME) { t.offsetOf = 0; t.offsetParts = ''; }
@@ -659,6 +662,8 @@ app.addEventListener('change', async (ev) => {
   if (ev.target.dataset.act === 'ledger') { state.ledgerId = Number(ev.target.value); store.set('hl.ledger', state.ledgerId); render(); }
   // 换了一级分类，子分类的下拉要跟着换
   if (ev.target.id === 'e-top') { collect(); state.editing.categoryId = Number(ev.target.value); render(); }
+  // 换了账户，金额的币种跟着账户走
+  if (ev.target.id === 'e-account' && state.editing?._isNew) { collect(); render(); }
   if (ev.target.id === 'e-account' && state.editing?.kind === KIND.TRANSFER) { collect(); render(); }
 });
 
