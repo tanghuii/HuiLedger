@@ -468,3 +468,13 @@ body.ed-selecting .ed-toast:not(.top) { bottom: 210px; }
   .subbar b { font-size: 19px; }
   .subbar .round { width: 36px; height: 36px; font-size: 22px; line-height: 1; display: grid; place-items: center; }
 }
+
+/* 左上角标题：主题色 → 粉 → 蓝 的流光渐变字，慢慢来回流动 */
+@keyframes titleFlow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+.top h1 {
+  background: linear-gradient(100deg, var(--primary), #ff5c9a, #4fa8f0, var(--primary));
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: titleFlow 6s linear infinite alternate; font-weight: 800; letter-spacing: .5px;
+}
+@media (prefers-color-scheme: dark) { .top h1 { background-image: linear-gradient(100deg, #c4b8ff, #ff9cc4, #8fcaff, #c4b8ff); } }
+@media (prefers-reduced-motion: reduce) { .top h1 { animation: none; } }
