@@ -7,7 +7,7 @@
 'use strict';
 
 const ed = { layer: null, toast: null, toastTimer: 0, bulk: null, bulkPick: null, busy: '', confirm: null };
-const ED_REIMBURSE = ['不报销', '待报销', '已报销'];
+const edReimburse = () => [tr('不报销', 'Not reimbursable'), tr('待报销', 'To reimburse'), tr('已报销', 'Reimbursed')];
 
 const edSvg = (key, color) => `<svg class="ed-ic" viewBox="0 0 24 24"${color ? ` style="stroke:${color}"` : ''}><path d="${(ICONS[key] ?? ICONS.tag).d}"/></svg>`;
 /** 分 → 输入框里的字：整数不带小数点。 */
@@ -77,10 +77,10 @@ function edCats(e) {
 }
 function edDayName(day) {
   const t = today();
-  if (day === t) return '今天';
-  if (day === t - 1) return '昨天';
-  const d = dayToDate(day), y = d.getUTCFullYear();
-  return `${y !== new Date().getFullYear() ? y + '年' : ''}${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+  if (day === t) return tr('今天', 'Today');
+  if (day === t - 1) return tr('昨天', 'Yesterday');
+  const d = dayToDate(day), y = d.getUTCFullYear(), other = y !== new Date().getFullYear();
+  return tr(`${other ? y + '年' : ''}${d.getUTCMonth() + 1}月${d.getUTCDate()}日`, `${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()}${other ? ', ' + y : ''}`);
 }
 const edTags = (e) => String(e.tags ?? '').split(/[\s#,，]+/).filter(Boolean);
 function edKnownTags() {
@@ -109,7 +109,7 @@ function edAmountCard(e) {
   const home = cents != null && cur !== HOME ? edHomeCents(e, cents) : null;
   const lines = [
     cents != null && edIsFormula(a) ? `= ${edInput(cents)}` : '',
-    cur !== HOME && cents != null ? (home != null ? `≈ ${money(home)}` : '无汇率') : '',
+    cur !== HOME && cents != null ? (home != null ? `≈ ${money(home)}` : tr('无汇率', 'No rate')) : '',
   ].filter(Boolean);
   return `<div class="ed-amount"><span class="ed-cur">${flagOf(cur)} ${h(cur)}</span>
     <div class="ed-amt-w"><div class="ed-amt num ${cls} ${a.length > 12 ? 'long' : ''}">${h(a || '0.00')}</div>${lines.length ? `<div class="ed-amt-sub">${lines.join('　')}</div>` : ''}</div></div>`;
@@ -121,36 +121,37 @@ function editorView() {
   const acc = state.data.account, transfer = e.kind === KIND.TRANSFER;
   const { tops, top, leafId, subs } = edCats(e);
   const from = acc.get(e.accountId), to = edTo(e), tags = edTags(e);
-  const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? '选择账户')}</span></button>`;
+  const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? tr('选择账户', 'Choose account'))}</span></button>`;
   const head = transfer
-    ? `<div class="ed-box ed-move"><div class="muted small">从 → 到</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? '<div class="err">至少要两个账户</div>' : ''}</div>`
-    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(c.name)}</span></button>`).join('')}</div>` : '<div class="muted small">还没有分类</div>'}
+    ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('至少要两个账户', 'Needs two accounts')}</div>` : ''}</div>`
+    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(c.name)}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('还没有分类', 'No categories yet')}</div>`}
       ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(s.name)}</button>`).join('')}</div>` : ''}</div>`;
   // 可报销的支出、报销收入才问项目和资金来源（已经填了的照样显示）
   const pf = !transfer && (e.kind === KIND.EXPENSE && e.reimburse || e.kind === KIND.INCOME && top?.name === '报销' || e.project || e.fund);
   const chips = [
     transfer ? '' : accChip(from, 'acc'),
-    `<label class="chip ed-datechip">${edSvg('calendar')}<span>${edDayName(e.date)}</span><input type="date" id="e-date" value="${dayISO(e.date)}" aria-label="日期"></label>`,
-    `<button class="chip ${tags.length ? 'on' : ''}" data-act="ed-pick" data-v="tags">${edSvg('tag')}<span>${tags.length ? tags.map((x) => '#' + h(x)).join(' ') : '标签'}</span></button>`,
-    e.kind === KIND.EXPENSE ? `<button class="chip ${e.reimburse ? 'on' : ''}" data-act="ed-pick" data-v="reimburse">${edSvg('receipt')}<span>${ED_REIMBURSE[e.reimburse ?? 0]}</span></button>` : '',
-    pf ? `<button class="chip ${e.project ? 'on' : ''}" data-act="ed-pick" data-v="project">${edSvg('target')}<span>${e.project ? '项目 · ' + h(e.project) : '项目'}</span></button>` : '',
-    pf ? `<button class="chip ${e.fund ? 'on' : ''}" data-act="ed-pick" data-v="fund">${edSvg('coins')}<span>${e.fund ? '资金 · ' + h(e.fund) : '资金来源'}</span></button>` : '',
-    transfer ? '' : `<button class="chip ${e.excluded ? 'on' : ''}" data-act="ed-pick" data-v="excluded"><span>${e.excluded ? '不计入收支' : '计入收支'}</span></button>`,
-    e._isNew ? '' : '<button class="chip danger" data-act="delete"><span>删除</span></button>',
+    `<label class="chip ed-datechip">${edSvg('calendar')}<span>${edDayName(e.date)}</span><input type="date" id="e-date" value="${dayISO(e.date)}" aria-label="${tr('日期', 'Date')}"></label>`,
+    `<button class="chip ${tags.length ? 'on' : ''}" data-act="ed-pick" data-v="tags">${edSvg('tag')}<span>${tags.length ? tags.map((x) => '#' + h(x)).join(' ') : tr('标签', 'Tags')}</span></button>`,
+    e.kind === KIND.EXPENSE ? `<button class="chip ${e.reimburse ? 'on' : ''}" data-act="ed-pick" data-v="reimburse">${edSvg('receipt')}<span>${edReimburse()[e.reimburse ?? 0]}</span></button>` : '',
+    pf ? `<button class="chip ${e.project ? 'on' : ''}" data-act="ed-pick" data-v="project">${edSvg('target')}<span>${e.project ? tr('项目 · ', 'Project · ') + h(e.project) : tr('项目', 'Project')}</span></button>` : '',
+    pf ? `<button class="chip ${e.fund ? 'on' : ''}" data-act="ed-pick" data-v="fund">${edSvg('coins')}<span>${e.fund ? tr('资金 · ', 'Funding · ') + h(e.fund) : tr('资金来源', 'Funding')}</span></button>` : '',
+    transfer ? '' : `<button class="chip ${e.excluded ? 'on' : ''}" data-act="ed-pick" data-v="excluded"><span>${e.excluded ? tr('不计入收支', 'Excluded') : tr('计入收支', 'Included')}</span></button>`,
+    e._isNew ? '' : `<button class="chip danger" data-act="delete"><span>${tr('删除', 'Delete')}</span></button>`,
   ].filter(Boolean).join('');
   const valid = edCalc(e._amount) != null;
-  const key = (k) => k === 'SAVE' ? `<button class="ed-key save ${valid ? '' : 'dim'}" data-act="save">保存</button>`
-    : k === 'AGAIN' ? '<button class="ed-key op txt" data-act="ed-again">再记</button>'
-    : k === 'C' ? '<button class="ed-key op txt" data-act="ed-key" data-v="C">清空</button>'
-    : `<button class="ed-key ${'⌫+−'.includes(k) ? 'op' : ''}" data-act="ed-key" data-v="${k}" ${k === '⌫' ? 'aria-label="退格"' : ''}>${k}</button>`;
+  const key = (k) => k === 'SAVE' ? `<button class="ed-key save ${valid ? '' : 'dim'}" data-act="save">${tr('保存', 'Save')}</button>`
+    : k === 'AGAIN' ? `<button class="ed-key op txt" data-act="ed-again">${tr('再记', 'Next')}</button>`
+    : k === 'C' ? `<button class="ed-key op txt" data-act="ed-key" data-v="C">${tr('清空', 'Clear')}</button>`
+    : `<button class="ed-key ${'⌫+−'.includes(k) ? 'op' : ''}" data-act="ed-key" data-v="${k}" ${k === '⌫' ? `aria-label="${tr('退格', 'Backspace')}"` : ''}>${k}</button>`;
   const keys = ['1', '2', '3', '⌫', '4', '5', '6', '+', '7', '8', '9', '−', e._isNew ? 'AGAIN' : 'C', '0', '.', 'SAVE'];
-  return `<div class="modal ed-modal" data-act="close-backdrop"><div class="card ed-sheet" role="dialog" aria-label="${e._isNew ? '记一笔' : '修改'}">
-    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="关闭">✕</button><b>${e._isNew ? '记一笔' : '修改'}</b>${seg('e-kind', [[0, '支出'], [1, '收入'], [2, '转账']], e.kind)}</div>
+  const heading = e._isNew ? tr('记一笔', 'New entry') : tr('修改', 'Edit');
+  return `<div class="modal ed-modal" data-act="close-backdrop"><div class="card ed-sheet" role="dialog" aria-label="${heading}">
+    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${seg('e-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')], [2, tr('转账', 'Transfer')]], e.kind)}</div>
     ${edAmountCard(e)}
     <div class="ed-scroll">
       ${head}
       <div class="ed-chips">${chips}</div>
-      <label class="ed-note">${edSvg('pencil')}<textarea id="e-note" rows="${Math.min(4, String(e.note ?? '').split('\n').length)}" placeholder="备注">${h(e.note)}</textarea></label>
+      <label class="ed-note">${edSvg('pencil')}<textarea id="e-note" rows="${Math.min(4, String(e.note ?? '').split('\n').length)}" placeholder="${tr('备注', 'Note')}">${h(e.note)}</textarea></label>
       ${state.error ? `<p class="err" style="margin:0">${h(state.error)}</p>` : ''}
     </div>
     <div class="ed-keys">${keys.map(key).join('')}</div>
@@ -166,24 +167,24 @@ function edPop(e) {
   let title = '', body = '';
   if (p === 'acc' || p === 'to') {
     const k = p === 'to' ? 'toAccountId' : 'accountId', sel = p === 'to' ? edTo(e)?.id : e.accountId;
-    title = p === 'to' ? '转入账户' : e.kind === KIND.TRANSFER ? '转出账户' : '账户';
+    title = p === 'to' ? tr('转入账户', 'To account') : e.kind === KIND.TRANSFER ? tr('转出账户', 'From account') : tr('账户', 'Account');
     body = edAccounts(sel).filter((a) => p !== 'to' || a.id !== e.accountId)
       .map((a) => opt(k, a.id, `${h(a.name)}${acctCur(a) !== HOME ? ` <small class="muted">${h(acctCur(a))}</small>` : ''}`, a.id === sel, accountTile(a))).join('');
   } else if (p === 'reimburse') {
-    title = '报销'; body = ED_REIMBURSE.map((n, i) => opt('reimburse', i, n, (e.reimburse ?? 0) === i)).join('');
+    title = tr('报销', 'Reimburse'); body = edReimburse().map((n, i) => opt('reimburse', i, n, (e.reimburse ?? 0) === i)).join('');
   } else if (p === 'excluded') {
-    title = '收支统计'; body = opt('excluded', 0, '计入收支', !e.excluded) + opt('excluded', 1, '不计入收支', !!e.excluded);
+    title = tr('收支统计', 'In totals'); body = opt('excluded', 0, tr('计入收支', 'Included'), !e.excluded) + opt('excluded', 1, tr('不计入收支', 'Excluded'), !!e.excluded);
   } else if (p === 'project' || p === 'fund') {
-    title = p === 'project' ? '报销项目' : '资金来源';
-    body = opt(p, '', '（不填）', !e[p]) + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(p, n, h(n), e[p] === n)).join('')
-      + `<div class="ed-new"><input id="ed-newname" placeholder="新建" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="ed-newname" data-v="${p}">添加</button></div>`;
+    title = p === 'project' ? tr('报销项目', 'Project') : tr('资金来源', 'Funding');
+    body = opt(p, '', tr('（不填）', '(None)'), !e[p]) + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(p, n, h(n), e[p] === n)).join('')
+      + `<div class="ed-new"><input id="ed-newname" placeholder="${tr('新建', 'New')}" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="ed-newname" data-v="${p}">${tr('添加', 'Add')}</button></div>`;
   } else if (p === 'tags') {
     const on = edTags(e), all = [...on.filter((x) => !edKnownTags().includes(x)), ...edKnownTags()];
-    title = '标签';
-    body = `<div class="ed-chips">${all.map((x) => `<button class="chip ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">#${h(x)}</button>`).join('') || '<span class="muted small">还没有标签</span>'}</div>
-      <div class="ed-new"><input id="ed-newtag" placeholder="新标签" enterkeyhint="done" autocomplete="off"><button class="btn primary" data-act="ed-tags-done">好</button></div>`;
+    title = tr('标签', 'Tags');
+    body = `<div class="ed-chips">${all.map((x) => `<button class="chip ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">#${h(x)}</button>`).join('') || `<span class="muted small">${tr('还没有标签', 'No tags yet')}</span>`}</div>
+      <div class="ed-new"><input id="ed-newtag" placeholder="${tr('新标签', 'New tag')}" enterkeyhint="done" autocomplete="off"><button class="btn primary" data-act="ed-tags-done">${tr('好', 'Done')}</button></div>`;
   }
-  return `<div class="ed-pop" data-act="ed-pick-close"><div class="ed-popcard" data-act="noop"><div class="between"><b>${title}</b><button class="ed-x" data-act="ed-pick-x" aria-label="关闭">✕</button></div><div class="ed-opts">${body}</div></div></div>`;
+  return `<div class="ed-pop" data-act="ed-pick-close"><div class="ed-popcard" data-act="noop"><div class="between"><b>${title}</b><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div><div class="ed-opts">${body}</div></div></div>`;
 }
 
 /** 以前的表单要先把输入框里的字收回来；现在只剩备注是输入框（边打边存），留着这个名字给别处调用。 */
@@ -231,11 +232,11 @@ async function saveEditing(again = false) {
   if (!e) return;
   collect();
   const cents = edCalc(e._amount);
-  if (cents == null) { state.error = '请输入金额'; return edRefresh(); }
+  if (cents == null) { state.error = tr('请输入金额', 'Enter an amount'); return edRefresh(); }
   const transfer = e.kind === KIND.TRANSFER;
-  if (!state.data.account.get(e.accountId)) { state.error = '请选择账户'; return edRefresh(); }
+  if (!state.data.account.get(e.accountId)) { state.error = tr('请选择账户', 'Choose an account'); return edRefresh(); }
   const to = transfer ? edTo(e) : null;
-  if (transfer && !to) { state.error = '请选择两个不同的账户'; return edRefresh(); }
+  if (transfer && !to) { state.error = tr('请选择两个不同的账户', 'Choose two different accounts'); return edRefresh(); }
   const t = {};
   for (const [k, v] of Object.entries(e)) if (!k.startsWith('_')) t[k] = v;
   // 新记的一笔按账户的币种填：外币账户存下原币金额，再折成主货币
@@ -257,7 +258,7 @@ async function saveEditing(again = false) {
     if (again && e._isNew) {
       state.editing = { ...e, id: newId(), createdAt: Date.now(), _amount: '', note: '', _pick: null };
       render();
-      edToast('已保存');
+      edToast(tr('已保存', 'Saved'));
       return;
     }
     state.editing = null;
@@ -278,7 +279,7 @@ function txRow(t, L, showDate = false) {
   const cat = state.data.category, acc = state.data.account;
   const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), from = acc.get(t.accountId), to = acc.get(t.toAccountId);
   const transfer = t.kind === KIND.TRANSFER;
-  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? '未分类' : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
+  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? tr('未分类', 'Uncategorized') : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
   const offset = t.kind === KIND.EXPENSE ? L.offsets.get(t.id) ?? 0 : 0;
   const foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
   const net = L.net(t);
@@ -292,15 +293,15 @@ function txRow(t, L, showDate = false) {
   const payer = face ? `<span class="payer" style="--pc:${face}">${accountTile(from, 'mini')}${h(from.name)}</span>` : '';
   const targets = L.parts(t);
   const extra = [
-    offset > 0 ? `原 ${money(t.amountCents)} · 抵 ${money(offset)}` : '',
+    offset > 0 ? `${tr('原', 'Orig.')} ${money(t.amountCents)} · ${tr('抵', 'offset')} ${money(offset)}` : '',
     foreign ? `≈ ${money(t.amountCents)}` : '',
-    targets.length ? `抵扣 ${targets.length > 1 ? targets.length + ' 笔支出' : h(cat.get(state.data.tx.get(targets[0][0])?.categoryId)?.name ?? '')}` : '',
+    targets.length ? `${tr('抵扣', 'Offsets')} ${targets.length > 1 ? tr(targets.length + ' 笔支出', targets.length + ' expenses') : h(cat.get(state.data.tx.get(targets[0][0])?.categoryId)?.name ?? '')}` : '',
   ].filter(Boolean).join(' · ');
   // 多选时前面多一个勾；"row click" 和 data-act="view" 这两段别处（txRowStatic）会替换，不要改写法
   return `<div class="row click ed-tx${state.sel?.has(t.id) ? ' sel-on' : ''}" data-act="view" data-v="${t.id}">
     <span class="ed-check" aria-hidden="true"></span>
     ${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}
-    <div class="main"><div class="title">${title}${t.excluded ? '<span class="badge gray">不计</span>' : ''}${t.reimburse === 1 ? '<span class="badge">待报销</span>' : t.reimburse === 2 ? '<span class="badge gray">已报销</span>' : ''}</div>
+    <div class="main"><div class="title">${title}${t.excluded ? `<span class="badge gray">${tr('不计', 'Excluded')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To reimburse')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
       ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
     <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra ? `<div class="small muted">${extra}</div>` : ''}</div>
   </div>`;
@@ -311,14 +312,14 @@ async function edRemove(t) {
   try { await deleteRecord('tx', t.id); } catch (e) { state.error = e.message; render(); return; }
   if (state.view === t.id) state.view = null;
   render();
-  edToast('已删除', async () => { await saveRecord('tx', t); });
+  edToast(tr('已删除', 'Deleted'), async () => { await saveRecord('tx', t); });
 }
 /** 复制一笔到今天（抵扣关系不带，报销回到"待报销"），可撤销。 */
 async function edCopy(t) {
   const copy = { ...t, id: newId(), date: today(), createdAt: Date.now(), offsetOf: 0, offsetParts: '', reimburse: t.reimburse ? 1 : 0 };
   try { await saveRecord('tx', copy); } catch (e) { state.error = e.message; render(); return; }
   render();
-  edToast('已复制到今天', async () => { await deleteRecord('tx', copy.id); });
+  edToast(tr('已复制到今天', 'Copied to today'), async () => { await deleteRecord('tx', copy.id); });
 }
 
 // ---------------------------------------------------------------- #app 外面的一层：撤销提示、多选操作条、删除确认
@@ -341,7 +342,7 @@ function edPaintLayer() {
 function edPaintToast() {
   const t = ed.toast;
   edLayerEl().querySelector('.ed-toastbox').innerHTML = t
-    ? `<div class="ed-toast ${state.editing ? 'top' : ''}"><span>${h(t.text)}</span>${t.undo ? '<button data-ed="undo">撤销</button>' : ''}</div>` : '';
+    ? `<div class="ed-toast ${state.editing ? 'top' : ''}"><span>${h(t.text)}</span>${t.undo ? `<button data-ed="undo">${tr('撤销', 'Undo')}</button>` : ''}</div>` : '';
 }
 function edToast(text, undo = null) {
   clearTimeout(ed.toastTimer);
@@ -355,11 +356,11 @@ function edConfirmView() {
   const t = ed.confirm, L = computeLookup(), copy = ed.confirmCopy;
   const d = dayToDate(t.date);
   return `<div class="modal ed-lmodal" data-ed="cf-no-bg"><div class="card ed-bcard ed-confirm" data-ed="noop">
-    <b style="font-size:17px">${copy ? '确认复制此笔账目？' : '确认删除此笔账目？'}</b>
-    <div class="small muted">${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEK[d.getUTCDay()]}</div>
+    <b style="font-size:17px">${copy ? tr('确认复制此笔账目？', 'Copy this entry?') : tr('确认删除此笔账目？', 'Delete this entry?')}</b>
+    <div class="small muted">${tr(`${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEK[d.getUTCDay()]}`, `${WEEK[d.getUTCDay()]}, ${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`)}</div>
     <div class="ed-cfrow">${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>
-    <div class="small" style="color:${copy ? '#5B8DEF' : 'var(--expense)'}">${copy ? '会复制一笔到今天' : '删除后可在底部撤销'}</div>
-    <div class="ed-selbtns"><button class="btn" data-ed="cf-no">取消</button><button class="btn ${copy ? 'primary' : 'ed-redbtn'}" data-ed="cf-yes">${copy ? '复制' : '删除'}</button></div>
+    <div class="small" style="color:${copy ? '#5B8DEF' : 'var(--expense)'}">${copy ? tr('会复制一笔到今天', 'A copy will be added today') : tr('删除后可在底部撤销', 'You can undo after deleting')}</div>
+    <div class="ed-selbtns"><button class="btn" data-ed="cf-no">${tr('取消', 'Cancel')}</button><button class="btn ${copy ? 'primary' : 'ed-redbtn'}" data-ed="cf-yes">${copy ? tr('复制', 'Copy') : tr('删除', 'Delete')}</button></div>
   </div></div>`;
 }
 
@@ -401,37 +402,37 @@ function edBulkPlan() {
 function edSelBar() {
   const n = state.sel.size, b = ed.bulk, vis = edVisibleIds();
   const all = vis.length > 0 && vis.every((id) => state.sel.has(id));
-  const lab = (name, val) => (val == null ? name : `${name} · ${val === '' ? '清空' : h(val)}`);
+  const lab = (name, val) => (val == null ? name : `${name} · ${val === '' ? tr('清空', 'Cleared') : h(val)}`);
   const cat = b.categoryId != null ? state.data.category.get(b.categoryId) : null;
   const plan = edBulkPlan().length;
   return `<div class="ed-selbar">
-    <div class="ed-selhead"><button class="ed-x" data-ed="exit" aria-label="退出多选">✕</button><b>已选 ${n} 笔</b><button class="btn link" data-ed="all">${all ? '全不选' : '全选'}</button></div>
+    <div class="ed-selhead"><button class="ed-x" data-ed="exit" aria-label="${tr('退出多选', 'Exit selection')}">✕</button><b>${tr(`已选 ${n} 笔`, `${n} selected`)}</b><button class="btn link" data-ed="all">${all ? tr('全不选', 'Select none') : tr('全选', 'Select all')}</button></div>
     <div class="ed-chips">
-      <button class="chip ${b.project != null ? 'on' : ''}" data-ed="pick" data-v="project">${edSvg('target')}${lab('项目', b.project)}</button>
-      <button class="chip ${b.fund != null ? 'on' : ''}" data-ed="pick" data-v="fund">${edSvg('coins')}${lab('资金来源', b.fund)}</button>
-      <button class="chip ${cat ? 'on' : ''}" data-ed="pick" data-v="categoryId">${edSvg('layers')}${cat ? '分类 · ' + h(cat.name) : '分类'}</button>
-      <button class="chip ${b.reimburse != null ? 'on' : ''}" data-ed="pick" data-v="reimburse">${edSvg('receipt')}${b.reimburse != null ? '报销 · ' + ED_REIMBURSE[b.reimburse] : '报销'}</button>
+      <button class="chip ${b.project != null ? 'on' : ''}" data-ed="pick" data-v="project">${edSvg('target')}${lab(tr('项目', 'Project'), b.project)}</button>
+      <button class="chip ${b.fund != null ? 'on' : ''}" data-ed="pick" data-v="fund">${edSvg('coins')}${lab(tr('资金来源', 'Funding'), b.fund)}</button>
+      <button class="chip ${cat ? 'on' : ''}" data-ed="pick" data-v="categoryId">${edSvg('layers')}${cat ? tr('分类 · ', 'Category · ') + h(cat.name) : tr('分类', 'Category')}</button>
+      <button class="chip ${b.reimburse != null ? 'on' : ''}" data-ed="pick" data-v="reimburse">${edSvg('receipt')}${b.reimburse != null ? tr('报销 · ', 'Reimburse · ') + edReimburse()[b.reimburse] : tr('报销', 'Reimburse')}</button>
     </div>
-    <div class="ed-selbtns"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>删除</button>
-      <button class="btn primary" data-ed="apply" ${plan && !ed.busy ? '' : 'disabled'}>${ed.busy || (plan ? `应用 ${plan} 笔` : '应用多笔')}</button></div>
+    <div class="ed-selbtns"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>${tr('删除', 'Delete')}</button>
+      <button class="btn primary" data-ed="apply" ${plan && !ed.busy ? '' : 'disabled'}>${ed.busy || (plan ? tr(`应用 ${plan} 笔`, `Apply to ${plan}`) : tr('应用多笔', 'Apply'))}</button></div>
   </div>`;
 }
 
 function edBulkPop() {
   const p = ed.bulkPick, b = ed.bulk;
   const opt = (v, label, on, lead = '') => `<button class="ed-opt ${on ? 'on' : ''}" data-ed="bset" data-k="${p}" ${v == null ? 'data-none="1"' : `data-v="${h(v)}"`}>${lead}<span>${label}</span>${on ? edSvg('check') : ''}</button>`;
-  let title = '', body = opt(null, '（不改）', b[p] == null);
+  let title = '', body = opt(null, tr('（不改）', '(Keep)'), b[p] == null);
   if (p === 'project' || p === 'fund') {
-    title = p === 'project' ? '报销项目' : '资金来源';
-    body += opt('', '（清空）', b[p] === '') + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(n, h(n), b[p] === n)).join('')
-      + `<div class="ed-new"><input id="ed-bnew" placeholder="新建" enterkeyhint="done" autocomplete="off"><button class="btn" data-ed="bnew" data-v="${p}">添加</button></div>`;
+    title = p === 'project' ? tr('报销项目', 'Project') : tr('资金来源', 'Funding');
+    body += opt('', tr('（清空）', '(Clear)'), b[p] === '') + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(n, h(n), b[p] === n)).join('')
+      + `<div class="ed-new"><input id="ed-bnew" placeholder="${tr('新建', 'New')}" enterkeyhint="done" autocomplete="off"><button class="btn" data-ed="bnew" data-v="${p}">${tr('添加', 'Add')}</button></div>`;
   } else if (p === 'reimburse') {
-    title = '报销';
-    body += ED_REIMBURSE.map((n, i) => opt(i, n, b.reimburse === i)).join('');
+    title = tr('报销', 'Reimburse');
+    body += edReimburse().map((n, i) => opt(i, n, b.reimburse === i)).join('');
   } else if (p === 'categoryId') {
-    title = '分类';
+    title = tr('分类', 'Category');
     const cats = [...state.data.category.values()].sort((x, y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0) || x.id - y.id);
-    for (const [inc, name] of [[false, '支出'], [true, '收入']]) {
+    for (const [inc, name] of [[false, tr('支出', 'Expense')], [true, tr('收入', 'Income')]]) {
       body += `<div class="muted small ed-grp">${name}</div>`;
       for (const top of cats.filter((c) => !c.parentId && !!c.isIncome === inc)) {
         body += opt(top.id, h(top.name), b.categoryId === top.id, iconTile(top.icon ?? 'tag', 'sm'));
@@ -439,31 +440,31 @@ function edBulkPop() {
       }
     }
   }
-  return `<div class="modal ed-lmodal" data-ed="pop-close"><div class="card ed-bcard" data-ed="noop"><div class="between"><b>${title}</b><button class="ed-x" data-ed="pop-x" aria-label="关闭">✕</button></div><div class="ed-opts">${body}</div></div></div>`;
+  return `<div class="modal ed-lmodal" data-ed="pop-close"><div class="card ed-bcard" data-ed="noop"><div class="between"><b>${title}</b><button class="ed-x" data-ed="pop-x" aria-label="${tr('关闭', 'Close')}">✕</button></div><div class="ed-opts">${body}</div></div></div>`;
 }
 
 async function edBulkApply() {
   const plan = edBulkPlan(), b = ed.bulk;
   if (!plan.length || ed.busy) return;
   for (let i = 0; i < plan.length; i++) {
-    ed.busy = `保存中 ${i + 1}/${plan.length}`; edPaintLayer();
-    try { await saveRecord('tx', plan[i].now); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast('没存完：' + e.message); return; }
+    ed.busy = tr(`保存中 ${i + 1}/${plan.length}`, `Saving ${i + 1}/${plan.length}`); edPaintLayer();
+    try { await saveRecord('tx', plan[i].now); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('没存完：', 'Not all saved: ') + e.message); return; }
   }
   if (b.project) rememberName('hl.projects', b.project);
   if (b.fund) rememberName('hl.funds', b.fund);
   edExitSelect(); render();
-  edToast(`已改 ${plan.length} 笔`, async () => { for (const p of plan) await saveRecord('tx', p.old); });
+  edToast(tr(`已改 ${plan.length} 笔`, `Updated ${plan.length}`), async () => { for (const p of plan) await saveRecord('tx', p.old); });
 }
 
 async function edBulkDelete() {
   const list = [...state.sel].map((id) => state.data.tx.get(id)).filter(Boolean);
-  if (!list.length || ed.busy || !confirm(`删除 ${list.length} 笔？`)) return;
+  if (!list.length || ed.busy || !confirm(tr(`删除 ${list.length} 笔？`, `Delete ${list.length} ${list.length === 1 ? 'entry' : 'entries'}?`))) return;
   for (let i = 0; i < list.length; i++) {
-    ed.busy = `删除中 ${i + 1}/${list.length}`; edPaintLayer();
-    try { await deleteRecord('tx', list[i].id); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast('没删完：' + e.message); return; }
+    ed.busy = tr(`删除中 ${i + 1}/${list.length}`, `Deleting ${i + 1}/${list.length}`); edPaintLayer();
+    try { await deleteRecord('tx', list[i].id); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('没删完：', 'Not all deleted: ') + e.message); return; }
   }
   edExitSelect(); render();
-  edToast(`已删除 ${list.length} 笔`, async () => { for (const t of list) await saveRecord('tx', t); });
+  edToast(tr(`已删除 ${list.length} 笔`, `Deleted ${list.length}`), async () => { for (const t of list) await saveRecord('tx', t); });
 }
 
 async function edLayerClick(ev) {
@@ -524,7 +525,7 @@ function swPaint(row, d) {
   }
   s.className = `ed-swstrip ${left ? 'del' : 'copy'}${armed ? ' armed' : ''}`;
   s.style.width = Math.abs(x) + 'px';
-  s.querySelector('span').textContent = armed ? (left ? '松手删除' : '松手复制') : '继续拉';
+  s.querySelector('span').textContent = armed ? (left ? tr('松手删除', 'Release to delete') : tr('松手复制', 'Release to copy')) : tr('继续拉', 'Keep pulling');
   sw.armed = armed;
 }
 function swRelease(row) {
@@ -636,7 +637,7 @@ document.addEventListener('keydown', (ev) => {
 
 // ---------------------------------------------------------------- 登记
 
-MOD.homeCards.push(() => `<div class="ed-listbar"><button class="btn ed-selbtn" data-act="ed-sel-start">${edSvg('check')}多选</button></div>`);
+MOD.homeCards.push(() => `<div class="ed-listbar"><button class="btn ed-selbtn" data-act="ed-sel-start">${edSvg('check')}${tr('多选', 'Select')}</button></div>`);
 
 MOD.changes.push(async (ev) => {
   if (ev.target.id !== 'e-date' || !state.editing) return false;

@@ -2,7 +2,7 @@
 // 写进云端的格式和手机端同步写的一样（见 backup.js 里的 HL_JSON）；账本颜色、信用卡还款日是和手机共享的设置。
 'use strict';
 
-const MG_TYPES = [[0, '储蓄'], [1, '投资'], [2, '信用'], [3, '现金']];
+const mgTypes = () => [[0, tr('储蓄', 'Savings')], [1, tr('投资', 'Investments')], [2, tr('信用', 'Credit')], [3, tr('现金', 'Cash')]];
 const MG_CODES = ['EUR', 'CNY', 'USD', 'GBP', 'JPY', 'HKD', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK', 'HUF', 'TRY', 'AUD', 'CAD', 'SGD', 'KRW', 'THB', 'MYR', 'INR', 'NZD', 'ISK', 'RON'];
 const MG_COLORS = ['#6C5CE7', '#3B82F6', '#0EA5A4', '#22A06B', '#84A93A', '#E0A100', '#F07C2B', '#E5484D', '#E0569B', '#8A6A4F'];
 const mgState = () => (state.mg ??= { tab: 'category', income: false, open: 0, color: 0, edit: null, error: '' });
@@ -34,7 +34,7 @@ async function mgSwap(kind, all, group, id, dir) {
   [list[i], list[j]] = [list[j], list[i]];
   await mgPutMany(kind, list.map((x, n) => ((x.sortOrder ?? 0) === n ? null : HL_JSON[kind]({ ...x, sortOrder: n }))).filter(Boolean));
 }
-const mgMoveBtns = (what, id, i, n) => `<span class="mg-mv"><button data-act="mg-${what}-up" data-v="${id}" ${i === 0 ? 'disabled' : ''} aria-label="上移">↑</button><button data-act="mg-${what}-down" data-v="${id}" ${i === n - 1 ? 'disabled' : ''} aria-label="下移">↓</button></span>`;
+const mgMoveBtns = (what, id, i, n) => `<span class="mg-mv"><button data-act="mg-${what}-up" data-v="${id}" ${i === 0 ? 'disabled' : ''} aria-label="${tr('上移', 'Move up')}">↑</button><button data-act="mg-${what}-down" data-v="${id}" ${i === n - 1 ? 'disabled' : ''} aria-label="${tr('下移', 'Move down')}">↓</button></span>`;
 
 // ---------------------------------------------------------------- 分类
 
@@ -44,23 +44,23 @@ function mgCategoriesView() {
   const rows = tops.map((c, i) => {
     const subs = cats.filter((s) => s.parentId === c.id), open = m.open === c.id;
     return `<div class="mg-item"><div class="row click" data-act="mg-open" data-v="${c.id}">${iconTile(c.icon)}
-        <div class="main"><div class="title">${h(c.name)} <span class="small muted">${open ? '▴' : '▾'}</span></div>${subs.length ? `<div class="sub">${subs.map((s) => h(s.name)).join('、')}</div>` : ''}</div>
-        ${mgMoveBtns('cat', c.id, i, tops.length)}<button class="btn link small" data-act="mg-cat-edit" data-v="${c.id}">修改</button></div>
+        <div class="main"><div class="title">${h(c.name)} <span class="small muted">${open ? '▴' : '▾'}</span></div>${subs.length ? `<div class="sub">${subs.map((s) => h(s.name)).join(tr('、', ', '))}</div>` : ''}</div>
+        ${mgMoveBtns('cat', c.id, i, tops.length)}<button class="btn link small" data-act="mg-cat-edit" data-v="${c.id}">${tr('修改', 'Edit')}</button></div>
       ${open ? `<div class="indent">${subs.map((s) => `<div class="row click indent" data-act="mg-cat-edit" data-v="${s.id}">${iconTile(s.icon, 'sm')}<div class="main">${h(s.name)}</div><span class="muted">›</span></div>`).join('')}
-        <button class="btn link small" data-act="mg-cat-new" data-v="${c.id}">＋ 子分类</button></div>` : ''}</div>`;
+        <button class="btn link small" data-act="mg-cat-new" data-v="${c.id}">${tr('＋ 子分类', '＋ Subcategory')}</button></div>` : ''}</div>`;
   }).join('');
-  return `<div class="card grid">${seg('mg-income', [[0, '支出'], [1, '收入']], m.income ? 1 : 0)}
-    <div class="between"><span class="muted small">${tops.length} 个分类</span><button class="btn link" data-act="mg-cat-new" data-v="0">＋ 新建</button></div></div>
-    <div class="card">${rows || '<span class="muted">还没有分类</span>'}</div>`;
+  return `<div class="card grid">${seg('mg-income', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], m.income ? 1 : 0)}
+    <div class="between"><span class="muted small">${tr(`${tops.length} 个分类`, `${tops.length} ${tops.length === 1 ? 'category' : 'categories'}`)}</span><button class="btn link" data-act="mg-cat-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div></div>
+    <div class="card">${rows || `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
 }
 
 function mgCategoryDialog(e) {
   const c = e.obj, isSub = !!c.parentId, tops = [...state.data.category.values()].filter((x) => !x.parentId && !!x.isIncome === !!c.isIncome);
-  const title = isSub ? (e.isNew ? '新增子分类' : '修改子分类') : e.isNew ? '新增分类' : '修改分类';
+  const title = isSub ? (e.isNew ? tr('新增子分类', 'New subcategory') : tr('修改子分类', 'Edit subcategory')) : e.isNew ? tr('新增分类', 'New category') : tr('修改分类', 'Edit category');
   const canDelete = !e.isNew && (isSub || tops.length > 1);
-  return `<div class="between"><b style="font-size:18px">${title}</b>${canDelete ? '<button class="btn link danger" data-act="mg-cat-delete">删除</button>' : ''}</div>
+  return `<div class="between"><b style="font-size:18px">${title}</b>${canDelete ? `<button class="btn link danger" data-act="mg-cat-delete">${tr('删除', 'Delete')}</button>` : ''}</div>
     ${isSub ? `<div class="muted small">${h(state.data.category.get(c.parentId)?.name ?? '')}</div>` : ''}
-    <label class="f">名称<input id="mg-name" value="${h(c.name)}"></label>
+    <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(c.name)}"></label>
     <div class="mg-icons">${mgIcons().map((k) => `<button class="${k === c.icon ? 'on' : ''}" data-act="mg-icon" data-v="${k}" aria-label="${k}">${iconTile(k)}</button>`).join('')}</div>`;
 }
 
@@ -87,14 +87,14 @@ function mgLedgersView() {
   const rows = ledgers.map((l) => {
     const color = ledgerColor(l.id), on = l.id === state.ledgerId;
     return `<div class="mg-item"><div class="row click" data-act="mg-ledger-pick" data-v="${l.id}">
-        <button class="tile mg-ltile ${color ? 'set' : ''}" style="${color ? `background:${color}` : ''}" data-act="mg-color" data-v="${l.id}" aria-label="颜色"><svg viewBox="0 0 24 24"><path d="${ICONS.layers.d}"/></svg></button>
-        <div class="main"><div class="title">${h(l.name)}${on ? ' <span class="badge">当前</span>' : ''}</div><div class="sub">${count.get(l.id) ?? 0} 笔</div></div>
-        <button class="btn link small" data-act="mg-ledger-edit" data-v="${l.id}">改名</button>
-        ${ledgers.length > 1 ? `<button class="btn link small danger" data-act="mg-ledger-delete" data-v="${l.id}">删除</button>` : ''}</div>
+        <button class="tile mg-ltile ${color ? 'set' : ''}" style="${color ? `background:${color}` : ''}" data-act="mg-color" data-v="${l.id}" aria-label="${tr('颜色', 'Color')}"><svg viewBox="0 0 24 24"><path d="${ICONS.layers.d}"/></svg></button>
+        <div class="main"><div class="title">${h(l.name)}${on ? ` <span class="badge">${tr('当前', 'Current')}</span>` : ''}</div><div class="sub">${count.get(l.id) ?? 0} ${tr('笔', count.get(l.id) === 1 ? 'entry' : 'entries')}</div></div>
+        <button class="btn link small" data-act="mg-ledger-edit" data-v="${l.id}">${tr('改名', 'Rename')}</button>
+        ${ledgers.length > 1 ? `<button class="btn link small danger" data-act="mg-ledger-delete" data-v="${l.id}">${tr('删除', 'Delete')}</button>` : ''}</div>
       ${m.color === l.id ? `<div class="mg-colors">${MG_COLORS.map((c) => `<button style="background:${c}" class="${c === color?.toUpperCase() ? 'on' : ''}" data-act="mg-color-set" data-v="${c}" aria-label="${c}"></button>`).join('')}
-        <button class="btn link small" data-act="mg-color-set" data-v="">跟随外观</button></div>` : ''}</div>`;
+        <button class="btn link small" data-act="mg-color-set" data-v="">${tr('跟随外观', 'Follow theme')}</button></div>` : ''}</div>`;
   }).join('');
-  return `<div class="card"><div class="between"><span class="muted small">${ledgers.length} 个账本</span><button class="btn link" data-act="mg-ledger-new">＋ 新建</button></div>${rows}</div>`;
+  return `<div class="card"><div class="between"><span class="muted small">${tr(`${ledgers.length} 个账本`, `${ledgers.length} ledger${ledgers.length === 1 ? '' : 's'}`)}</span><button class="btn link" data-act="mg-ledger-new">${tr('＋ 新建', '＋ New')}</button></div>${rows}</div>`;
 }
 
 // ---------------------------------------------------------------- 账户
@@ -102,28 +102,28 @@ function mgLedgersView() {
 function mgAccountsView() {
   const accounts = [...state.data.account.values()].sort(mgOrder), due = shared.get('cardDue', {}) ?? {};
   const row = (a, i, n) => {
-    const sub = [acctCur(a), due[String(a.id)] && a.type === 2 ? `${due[String(a.id)]} 号还款` : ''].filter(Boolean).join(' · ');
+    const sub = [acctCur(a), due[String(a.id)] && a.type === 2 ? tr(`${due[String(a.id)]} 号还款`, `Due day ${due[String(a.id)]}`) : ''].filter(Boolean).join(' · ');
     return `<div class="row click" data-act="mg-acc-edit" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title ${a.archived ? 'muted' : ''}">${h(a.name)}</div><div class="sub">${sub}</div></div>
       ${mgMoveBtns('acc', a.id, i, n)}</div>`;
   };
-  const groups = MG_TYPES.map(([type, label]) => {
+  const groups = mgTypes().map(([type, label]) => {
     const g = accounts.filter((a) => (a.type ?? 0) === type && !a.archived);
     return g.length ? `<div class="card"><div class="dayhead"><span>${label}</span><span>${g.length}</span></div>${g.map((a, i) => row(a, i, g.length)).join('')}</div>` : '';
   }).join('');
   const old = accounts.filter((a) => a.archived);
-  const archived = old.length ? `<div class="card"><div class="dayhead"><span>已归档</span><span>${old.length}</span></div>${old.map((a) => row(a, 0, 1)).join('')}</div>` : '';
-  return `<div class="card"><div class="between"><span class="muted small">${accounts.length} 个账户</span><button class="btn link" data-act="mg-acc-new">＋ 新建</button></div></div>${groups}${archived}`;
+  const archived = old.length ? `<div class="card"><div class="dayhead"><span>${tr('已归档', 'Archived')}</span><span>${old.length}</span></div>${old.map((a) => row(a, 0, 1)).join('')}</div>` : '';
+  return `<div class="card"><div class="between"><span class="muted small">${tr(`${accounts.length} 个账户`, `${accounts.length} account${accounts.length === 1 ? '' : 's'}`)}</span><button class="btn link" data-act="mg-acc-new">${tr('＋ 新建', '＋ New')}</button></div></div>${groups}${archived}`;
 }
 
 function mgAccountDialog(e) {
   const a = e.obj;
-  return `<div class="between"><b style="font-size:18px">${e.isNew ? '添加账户' : '账户设置'}</b>${e.isNew ? '' : '<button class="btn link danger" data-act="mg-acc-delete">删除</button>'}</div>
-    <label class="f">名称<input id="mg-name" value="${h(a.name)}" placeholder="如 ING、支付宝"></label>
-    ${seg('mg-type', MG_TYPES, a.type ?? 0)}
-    <div class="two"><label class="f">币种<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${flagOf(c)} ${c}</option>`).join('')}</select></label>
-      <label class="f">初始余额<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="0.00，欠款填负数"></label></div>
-    ${a.type === 2 ? `<label class="f">还款日（每月几号）<input id="mg-due" inputmode="numeric" value="${h(a._due)}" placeholder="1–31"></label>` : ''}
-    ${e.isNew ? '' : `<label class="sc-check"><input type="checkbox" id="mg-arch" ${a.archived ? 'checked' : ''}> 归档</label>`}`;
+  return `<div class="between"><b style="font-size:18px">${e.isNew ? tr('添加账户', 'Add account') : tr('账户设置', 'Account settings')}</b>${e.isNew ? '' : `<button class="btn link danger" data-act="mg-acc-delete">${tr('删除', 'Delete')}</button>`}</div>
+    <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(a.name)}" placeholder="${tr('如 ING、支付宝', 'e.g. ING, PayPal')}"></label>
+    ${seg('mg-type', mgTypes(), a.type ?? 0)}
+    <div class="two"><label class="f">${tr('币种', 'Currency')}<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${flagOf(c)} ${c}</option>`).join('')}</select></label>
+      <label class="f">${tr('初始余额', 'Opening balance')}<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="${tr('0.00，欠款填负数', '0.00, negative if owed')}"></label></div>
+    ${a.type === 2 ? `<label class="f">${tr('还款日（每月几号）', 'Due day (of month)')}<input id="mg-due" inputmode="numeric" value="${h(a._due)}" placeholder="1–31"></label>` : ''}
+    ${e.isNew ? '' : `<label class="sc-check"><input type="checkbox" id="mg-arch" ${a.archived ? 'checked' : ''}> ${tr('归档', 'Archived')}</label>`}`;
 }
 
 /** 有账单的账户不能删，最后一个账户也不删（同手机端）。 */
@@ -135,10 +135,10 @@ function mgDialog() {
   const e = mgState().edit;
   if (!e) return '';
   const body = e.kind === 'category' ? mgCategoryDialog(e) : e.kind === 'account' ? mgAccountDialog(e)
-    : `<b style="font-size:18px">${e.isNew ? '新建账本' : '账本改名'}</b><label class="f">名称<input id="mg-name" value="${h(e.obj.name)}"></label>`;
-  return `<div class="modal" data-bg="mg"><div class="card grid" role="dialog" aria-label="管理">${body}
+    : `<b style="font-size:18px">${e.isNew ? tr('新建账本', 'New ledger') : tr('账本改名', 'Rename ledger')}</b><label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(e.obj.name)}"></label>`;
+  return `<div class="modal" data-bg="mg"><div class="card grid" role="dialog" aria-label="${tr('管理', 'Manage')}">${body}
     ${mgState().error ? `<p class="err" style="margin:0">${h(mgState().error)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="mg-cancel">取消</button><button class="btn primary" data-act="mg-save">保存</button></div></div></div>`;
+    <div class="between"><button class="btn" data-act="mg-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="mg-save">${tr('保存', 'Save')}</button></div></div></div>`;
 }
 
 function mgCollect() {
@@ -154,16 +154,16 @@ function mgCollect() {
 async function mgSave() {
   mgCollect();
   const m = mgState(), e = m.edit, o = e.obj, name = o.name.trim();
-  if (!name) { m.error = '请填名称'; return; }
+  if (!name) { m.error = tr('请填名称', 'Enter a name'); return; }
   if (e.kind === 'category') await saveRecord('category', HL_JSON.category({ ...o, name }));
   else if (e.kind === 'ledger') {
     await saveRecord('ledger', HL_JSON.ledger({ ...o, name }));
     if (e.isNew) { state.ledgerId = o.id; store.set('hl.ledger', o.id); }
   } else {
     const text = String(o._init ?? '').trim().replace(',', '.'), init = text ? Number(text) : 0;
-    if (!Number.isFinite(init)) { m.error = '初始余额不对'; return; }
+    if (!Number.isFinite(init)) { m.error = tr('初始余额不对', 'Invalid opening balance'); return; }
     const dueText = String(o._due ?? '').trim(), day = Number(dueText);
-    if (o.type === 2 && dueText && !(Number.isInteger(day) && day >= 1 && day <= 31)) { m.error = '还款日填 1–31'; return; }
+    if (o.type === 2 && dueText && !(Number.isInteger(day) && day >= 1 && day <= 31)) { m.error = tr('还款日填 1–31', 'Due day must be 1–31'); return; }
     await saveRecord('account', HL_JSON.account({ ...o, name, initialCents: Math.round(init * 100), currency: o._cur === HOME ? '' : o._cur }));
     // 信用卡还款日：和手机端共享（cardDue），不是信用卡就去掉
     const due = { ...(shared.get('cardDue', {}) ?? {}) }, key = String(o.id), want = o.type === 2 && dueText ? day : null;
@@ -177,10 +177,10 @@ async function mgSave() {
 function manageView() {
   const m = mgState();
   const body = m.tab === 'ledger' ? mgLedgersView() : m.tab === 'account' ? mgAccountsView() : mgCategoriesView();
-  return `<div class="grid mg">${seg('mg-tab', [['category', '分类'], ['ledger', '账本'], ['account', '账户']], m.tab)}${body}</div>${mgDialog()}`;
+  return `<div class="grid mg">${seg('mg-tab', [['category', tr('分类', 'Categories')], ['ledger', tr('账本', 'Ledgers')], ['account', tr('账户', 'Accounts')]], m.tab)}${body}</div>${mgDialog()}`;
 }
 MOD.pages.manage = () => manageView();
-MOD.me.push({ key: 'manage', name: '管理', icon: 'blocks', order: 40 });
+MOD.me.push({ key: 'manage', get name() { return tr('管理', 'Manage'); }, icon: 'blocks', order: 40 });
 
 MOD.actions.push(async (act, v) => {
   if (!act.startsWith('mg-')) return false;
@@ -205,7 +205,7 @@ MOD.actions.push(async (act, v) => {
       case 'mg-icon': mgCollect(); m.edit.obj.icon = v; break;
       case 'mg-cat-delete': {
         const c = m.edit.obj, n = allTxs().filter((t) => t.categoryId === c.id || state.data.category.get(t.categoryId)?.parentId === c.id).length;
-        if (!confirm(`删除「${c.name}」？${n ? `${n} 笔账单并入${c.parentId ? '上级分类' : '「其他」'}` : ''}`)) return true;
+        if (!confirm(tr(`删除「${c.name}」？${n ? `${n} 笔账单并入${c.parentId ? '上级分类' : '「其他」'}` : ''}`, `Delete "${c.name}"?${n ? ` ${n} ${n === 1 ? 'entry moves' : 'entries move'} to ${c.parentId ? 'the parent category' : '"Other"'}.` : ''}`))) return true;
         await mgDeleteCategory(state.data.category.get(c.id)); m.edit = null;
         break;
       }
@@ -214,7 +214,7 @@ MOD.actions.push(async (act, v) => {
       case 'mg-ledger-edit': m.edit = { kind: 'ledger', isNew: false, obj: { ...state.data.ledger.get(id) } }; break;
       case 'mg-ledger-delete': {
         const l = state.data.ledger.get(id), txs = allTxs().filter((t) => t.ledgerId === id);
-        if (state.data.ledger.size <= 1 || !confirm(`删除账本「${l.name}」？其中 ${txs.length} 笔账单一并删除，无法恢复。`)) return true;
+        if (state.data.ledger.size <= 1 || !confirm(tr(`删除账本「${l.name}」？其中 ${txs.length} 笔账单一并删除，无法恢复。`, `Delete ledger "${l.name}" and its ${txs.length} ${txs.length === 1 ? 'entry' : 'entries'}? This can't be undone.`))) return true;
         await mgPutMany('tx', txs.map((t) => t.id), true);
         await deleteRecord('ledger', id);
         if (state.ledgerId === id) { state.ledgerId = [...state.data.ledger.keys()][0]; store.set('hl.ledger', state.ledgerId); }
@@ -245,8 +245,8 @@ MOD.actions.push(async (act, v) => {
       case 'mg-type': mgCollect(); m.edit.obj.type = Number(v); break;
       case 'mg-acc-delete': {
         const a = m.edit.obj;
-        if (mgAccountUsed(a.id)) { m.error = '还有账单，不能删'; break; }
-        if (!confirm(`删除账户「${a.name}」？`)) return true;
+        if (mgAccountUsed(a.id)) { m.error = tr('还有账单，不能删', "Has entries, can't delete"); break; }
+        if (!confirm(tr(`删除账户「${a.name}」？`, `Delete account "${a.name}"?`))) return true;
         await deleteRecord('account', a.id);
         const due = { ...(shared.get('cardDue', {}) ?? {}) };
         if (String(a.id) in due) { delete due[String(a.id)]; await shared.set('cardDue', due); }

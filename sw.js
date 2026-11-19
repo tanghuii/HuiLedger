@@ -1,7 +1,7 @@
 // 辉记账本的离线缓存：网页本身（脚本、样式、图标、字体）缓存在手机上，断网也能打开。
 // 网页代码先走网络（联网时总是最新版），连不上再用缓存；图标、字体、银行 logo 直接用缓存。
 // 云端数据（Supabase）和汇率不经过这里，离线时由页面自己的快照顶上。
-const CACHE = 'huiledger-20261120000207';
+const CACHE = 'huiledger-20261120003154';
 const SHELL = ['./', 'index.html', 'style.css', 'config.js', 'shared.js', 'icons.js', 'more.js', 'ai.js', 'app.js', 'modules/budget.js', 'modules/loans.js', 'modules/schedules.js', 'modules/backup.js', 'modules/manage.js', 'modules/editor.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

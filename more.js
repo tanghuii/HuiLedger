@@ -8,6 +8,8 @@ const catOf = (t) => state.data.category.get(t.categoryId);
 const sum = (list, f) => list.reduce((s, x) => s + f(x), 0);
 const seg = (act, options, current) => `<div class="seg">${options.map(([v, n]) => `<button class="${String(current) === String(v) ? 'on' : ''}" data-act="${act}" data-v="${v}">${n}</button>`).join('')}</div>`;
 const rowsOf = (list, L, showDate = true) => list.map((t) => txRow(t, L, showDate)).join('');
+/** 笔数：3 笔 / 3 entries */
+const nTx = (n) => tr(`${n} 笔`, `${n} ${n === 1 ? 'entry' : 'entries'}`);
 const today = () => { const d = new Date(); return epochDay(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
 
 /** 名单（报销项目、资金来源）：存在浏览器里的，加上账单上用过的。 */
@@ -25,8 +27,8 @@ function rememberName(key, name) {
 
 function pageView() {
   // 从"我的"进去的页面：顶上一条返回栏
-  const sub = { calendar: '日历', ask: '问账本', ...Object.fromEntries(MOD.me.map((m) => [m.key, m.name])) }[state.tab];
-  const back = sub ? `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="返回">‹</button><b>${h(sub)}</b></div>` : '';
+  const sub = { calendar: tr('日历', 'Calendar'), ask: tr('问账本', 'Ask'), ...Object.fromEntries(MOD.me.map((m) => [m.key, m.name])) }[state.tab];
+  const back = sub ? `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="${tr('返回', 'Back')}">‹</button><b>${h(sub)}</b></div>` : '';
   return back + pageBody();
 }
 function pageBody() {
@@ -44,7 +46,7 @@ function pageBody() {
 /** 资产页：账户，加上对账、报销、补贴、周期性收支这几个和钱有关的专题。 */
 function assetsView() {
   const tab = state.assetTab;
-  const bar = `<div class="card" style="padding:8px">${seg('asset-tab', [['accounts', '账户'], ['reconcile', '对账'], ['reimburse', '报销'], ['subsidy', '补贴'], ['recurring', '周期性']], tab)}</div>`;
+  const bar = `<div class="card" style="padding:8px">${seg('asset-tab', [['accounts', tr('账户', 'Accounts')], ['reconcile', tr('对账', 'Reconcile')], ['reimburse', tr('报销', 'Reimburse')], ['subsidy', tr('补贴', 'Subsidy')], ['recurring', tr('周期性', 'Recurring')]], tab)}</div>`;
   return `<div class="grid">${bar}${tab === 'reconcile' ? reconcileView() : tab === 'reimburse' ? reimburseView() : tab === 'subsidy' ? subsidyView() : tab === 'recurring' ? recurringView() : accountsView()}</div>`;
 }
 
@@ -59,33 +61,33 @@ function detailView() {
   const offset = L.offsets.get(t.id) ?? 0;
   const linked = L.parts(t).map(([id]) => state.data.tx.get(id)).filter(Boolean);
   const offsetBy = t.kind === KIND.EXPENSE ? allTxs().filter((x) => L.parts(x).some(([id]) => id === t.id)) : [];
-  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? '未分类' : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
+  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? tr('未分类', 'Uncategorized') : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
   // 顶部一张彩色卡：颜色取自分类图标，转账用主题色
   const tint = transfer ? 'var(--card-tint)' : cardColor((ICONS[leaf?.icon] ?? ICONS.tag).c);
-  const badges = [t.reimburse === 1 ? '待报销' : t.reimburse === 2 ? '已报销' : '', t.excluded ? '不计入收支' : ''].filter(Boolean);
+  const badges = [t.reimburse === 1 ? tr('待报销', 'To reimburse') : t.reimburse === 2 ? tr('已报销', 'Reimbursed') : '', t.excluded ? tr('不计入收支', 'Excluded') : ''].filter(Boolean);
   const tags = (t.tags ?? '').split(' ').filter(Boolean);
   const cell = (k, v) => `<div class="cell"><div class="muted">${k}</div><div class="v">${v}</div></div>`;
   const cells = [
-    transfer ? '' : cell('账户', `${accountTile(from)}<span>${h(from?.name ?? '?')}</span>`),
-    cell('日期', `${dayISO(t.date)} · ${WEEK[dayToDate(t.date).getUTCDay()]}`),
-    tags.length ? cell('标签', tags.map((x) => `<span class="badge gray" style="margin:0">#${h(x)}</span>`).join('')) : '',
-    t.project ? cell('项目', h(t.project)) : '', t.fund ? cell('资金来源', h(t.fund)) : '',
-    t.loanPerson ? cell(t.loanSide === 1 ? '借出给' : '借自', h(t.loanPerson)) : '',
-    cell('账本', h(state.data.ledger.get(t.ledgerId)?.name ?? '')),
+    transfer ? '' : cell(tr('账户', 'Account'), `${accountTile(from)}<span>${h(from?.name ?? '?')}</span>`),
+    cell(tr('日期', 'Date'), `${dayISO(t.date)} · ${WEEK[dayToDate(t.date).getUTCDay()]}`),
+    tags.length ? cell(tr('标签', 'Tags'), tags.map((x) => `<span class="badge gray" style="margin:0">#${h(x)}</span>`).join('')) : '',
+    t.project ? cell(tr('项目', 'Project'), h(t.project)) : '', t.fund ? cell(tr('资金来源', 'Funding'), h(t.fund)) : '',
+    t.loanPerson ? cell(t.loanSide === 1 ? tr('借出给', 'Lent to') : tr('借自', 'Borrowed from'), h(t.loanPerson)) : '',
+    cell(tr('账本', 'Ledger'), h(state.data.ledger.get(t.ledgerId)?.name ?? '')),
   ].filter(Boolean).join('');
-  return `<div class="modal" data-act="close-view"><div class="card grid" role="dialog" aria-label="账单详情">
-    <div class="card cc hero" style="--cc:${tint}"><button class="x" data-act="close-view-btn" aria-label="关闭">✕</button>
+  return `<div class="modal" data-act="close-view"><div class="card grid" role="dialog" aria-label="${tr('账单详情', 'Entry details')}">
+    <div class="card cc hero" style="--cc:${tint}"><button class="x" data-act="close-view-btn" aria-label="${tr('关闭', 'Close')}">✕</button>
       <div class="halo">${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}</div>
       <div class="muted" style="font-weight:600">${title}</div>
       <div class="big amt ${t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : ''}">${t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : ''}${foreign ? money(t.origCents, t.currency) : money(t.amountCents)}</div>
-      ${foreign ? `<div class="muted small">≈ ${money(t.amountCents)}</div>` : ''}${offset > 0 ? `<div class="muted small">抵扣 ${money(offset)} 后实际 ${money(L.net(t))}</div>` : ''}
+      ${foreign ? `<div class="muted small">≈ ${money(t.amountCents)}</div>` : ''}${offset > 0 ? `<div class="muted small">${tr(`抵扣 ${money(offset)} 后实际 ${money(L.net(t))}`, `Net ${money(L.net(t))} after ${money(offset)} offset`)}</div>` : ''}
       ${badges.length ? `<div class="tags">${badges.map((b) => `<span>${b}</span>`).join('')}</div>` : ''}
     </div>
-    <div class="cell"><div class="muted">备注</div><div class="note ${t.note ? '' : 'muted'}">${h(t.note) || '无'}</div></div>
+    <div class="cell"><div class="muted">${tr('备注', 'Note')}</div><div class="note ${t.note ? '' : 'muted'}">${h(t.note) || tr('无', 'None')}</div></div>
     <div class="cells">${cells}</div>
-    ${linked.length ? `<div><div class="muted small">它抵扣的支出</div>${rowsOf(linked, L)}</div>` : ''}
-    ${offsetBy.length ? `<div><div class="muted small">抵扣它的补贴、退款</div>${rowsOf(offsetBy, L)}</div>` : ''}
-    <div class="btns3"><button class="btn danger" data-act="view-delete">删除</button><button class="btn" data-act="view-copy">复制</button><button class="btn primary" data-act="edit" data-v="${t.id}">修改</button></div>
+    ${linked.length ? `<div><div class="muted small">${tr('它抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
+    ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}
+    <div class="btns3"><button class="btn danger" data-act="view-delete">${tr('删除', 'Delete')}</button><button class="btn" data-act="view-copy">${tr('复制', 'Copy')}</button><button class="btn primary" data-act="edit" data-v="${t.id}">${tr('修改', 'Edit')}</button></div>
   </div></div>`;
 }
 
@@ -98,11 +100,12 @@ function searchView() {
     const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), iso = dayISO(t.date), d = dayToDate(t.date);
     return [t.note, t.tags, leaf?.name, top?.name, acc.get(t.accountId)?.name, acc.get(t.toAccountId)?.name, state.data.ledger.get(t.ledgerId)?.name, t.project, t.fund,
       (t.amountCents / 100).toFixed(2), t.origCents ? (t.origCents / 100).toFixed(2) : '', t.currency, iso, `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`, `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`,
-      ['支出', '收入', '转账'][t.kind], L.isReimburse(t) ? '报销' : '', t.excluded ? '不计' : ''].filter(Boolean).join(' ').toLowerCase();
+      ['支出 expense', '收入 income', '转账 transfer'][t.kind], L.isReimburse(t) ? '报销 reimburse' : '', t.excluded ? '不计 excluded' : '',
+      `${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()} ${d.getUTCFullYear()}`].filter(Boolean).join(' ').toLowerCase();
   };
   // 胶囊形的搜索框：左边放大镜，有字时右边一个清除
-  const box = `<div class="between"><div class="sbox">${SEARCH_SVG}<input id="q" value="${h(state.q)}" placeholder="备注、分类、账户、标签、金额、日期" autocomplete="off" enterkeyhint="search" aria-label="搜索">
-      ${state.q ? '<button class="x" data-act="search-clear" aria-label="清除">✕</button>' : ''}</div><button class="btn" data-act="search-close">取消</button></div>`;
+  const box = `<div class="between"><div class="sbox">${SEARCH_SVG}<input id="q" value="${h(state.q)}" placeholder="${tr('备注、分类、账户、标签、金额、日期', 'Note, category, account, tag, amount, date')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('搜索', 'Search')}">
+      ${state.q ? `<button class="x" data-act="search-clear" aria-label="${tr('清除', 'Clear')}">✕</button>` : ''}</div><button class="btn" data-act="search-close">${tr('取消', 'Cancel')}</button></div>`;
   const wrap = (body) => `<div class="grid" style="max-width:760px;width:100%;margin:0 auto">${box}${body}</div>`;
   if (!words.length) {
     // 还没输入：最近搜索、常用分类、常用标签（最近 90 天），点一下就搜
@@ -117,21 +120,21 @@ function searchView() {
     const chip = (label, lead = '', remember = false) => `<button class="chip ${lead ? 'lead' : ''}" data-act="search-pick" data-v="${h(label)}" ${remember ? 'data-r="1"' : ''}>${lead}${h(label)}</button>`;
     const block = (head, chips) => `<div><div class="dayhead"><span>${head[0]}</span>${head[1] ?? ''}</div><div class="chips">${chips}</div></div>`;
     const parts = [
-      recent.length ? block(['最近搜索', '<button class="btn link small" style="padding:0" data-act="search-recent-clear">清空</button>'], recent.map((w) => chip(w)).join('')) : '',
-      cats.length ? block(['常用分类'], cats.map((c) => chip(c.name, iconTile(c.icon ?? 'tag'), true)).join('')) : '',
-      tags.length ? block(['常用标签'], tags.map((x) => chip(x, `<span class="tile" style="background:var(--primary)">${h(x.slice(0, 2).toUpperCase())}</span>`, true)).join('')) : '',
+      recent.length ? block([tr('最近搜索', 'Recent'), `<button class="btn link small" style="padding:0" data-act="search-recent-clear">${tr('清空', 'Clear')}</button>`], recent.map((w) => chip(w)).join('')) : '',
+      cats.length ? block([tr('常用分类', 'Top categories')], cats.map((c) => chip(c.name, iconTile(c.icon ?? 'tag'), true)).join('')) : '',
+      tags.length ? block([tr('常用标签', 'Top tags')], tags.map((x) => chip(x, `<span class="tile" style="background:var(--primary)">${h(x.slice(0, 2).toUpperCase())}</span>`, true)).join('')) : '',
     ].filter(Boolean);
     return wrap(parts.length ? `<div class="card grid">${parts.join('')}</div>` : '');
   }
   const hits = allTxs().filter((t) => { const s = text(t); return words.every((w) => s.includes(w)); }).sort(byNewest);
-  if (!hits.length) return wrap('<div class="card muted">没找到</div>');
+  if (!hits.length) return wrap(`<div class="card muted">${tr('没找到', 'No results')}</div>`);
   const out = sum(hits.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents), inc = sum(hits.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents);
   // 结果：顶上一张合计卡片，下面按月分组
   const months = new Map();
-  for (const t of hits.slice(0, 500)) { const d = dayToDate(t.date), k = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`; if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
-  return wrap(`<div class="card sum3"><div><div class="muted small">笔数</div><div class="num">${hits.length}</div></div><div><div class="muted small">支出</div><div class="num out">${money(out)}</div></div><div><div class="muted small">收入</div><div class="num in">${money(inc)}</div></div></div>
-    ${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${l.length} 笔</span></div>${rowsOf(l, L)}</div>`).join('')}
-    ${hits.length > 500 ? '<p class="muted small" style="margin:0">只显示前 500 笔</p>' : ''}`);
+  for (const t of hits.slice(0, 500)) { const d = dayToDate(t.date), k = ymLabel(d.getUTCFullYear(), d.getUTCMonth() + 1); if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
+  return wrap(`<div class="card sum3"><div><div class="muted small">${tr('笔数', 'Entries')}</div><div class="num">${hits.length}</div></div><div><div class="muted small">${tr('支出', 'Expense')}</div><div class="num out">${money(out)}</div></div><div><div class="muted small">${tr('收入', 'Income')}</div><div class="num in">${money(inc)}</div></div></div>
+    ${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${nTx(l.length)}</span></div>${rowsOf(l, L)}</div>`).join('')}
+    ${hits.length > 500 ? `<p class="muted small" style="margin:0">${tr('只显示前 500 笔', 'Showing first 500')}</p>` : ''}`);
 }
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
 /** 最近搜过的词存在这个浏览器里，最多 10 个。 */
@@ -166,10 +169,10 @@ function calendarView() {
   const t = L.totals(txs), items = days.get(selected) ?? [], n = dayNums(items);
   return `<div class="cols wide">
     <div class="card">${monthBar()}
-      <div class="between small" style="margin:10px 2px"><span class="out">支出 ${money(t.expense)}</span><span class="in">收入 ${money(t.income)}</span><span>结余 ${money(t.income - t.expense)}</span></div>
-      <div class="calgrid head">${['一', '二', '三', '四', '五', '六', '日'].map((x, i) => `<i class="${i >= 5 ? 'we' : ''}">${x}</i>`).join('')}</div><div class="calgrid">${cells}</div>
-      <div class="legend">少${[0.07, 0.17, 0.29, 0.45].map((a) => `<i style="background:${heat(a)}"></i>`).join('')}多</div></div>
-    <div class="card"><div class="dayhead"><span>${dayLabel(selected)}</span><span>支 ${money(n.out)}  收 ${money(n.inc)}</span></div>${items.length ? rowsOf(items, L, false) : '<p class="muted">这天没有账单</p>'}</div></div>`;
+      <div class="between small" style="margin:10px 2px"><span class="out">${tr('支出', 'Out')} ${money(t.expense)}</span><span class="in">${tr('收入', 'In')} ${money(t.income)}</span><span>${tr('结余', 'Net')} ${money(t.income - t.expense)}</span></div>
+      <div class="calgrid head">${(LANG === 'en' ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['一', '二', '三', '四', '五', '六', '日']).map((x, i) => `<i class="${i >= 5 ? 'we' : ''}">${x}</i>`).join('')}</div><div class="calgrid">${cells}</div>
+      <div class="legend">${tr('少', 'Less')}${[0.07, 0.17, 0.29, 0.45].map((a) => `<i style="background:${heat(a)}"></i>`).join('')}${tr('多', 'More')}</div></div>
+    <div class="card"><div class="dayhead"><span>${dayLabel(selected)}</span><span>${tr('支', 'Out')} ${money(n.out)}  ${tr('收', 'In')} ${money(n.inc)}</span></div>${items.length ? rowsOf(items, L, false) : `<p class="muted">${tr('这天没有账单', 'No entries')}</p>`}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 统计：总览 / 分类 / 标签
@@ -191,10 +194,10 @@ function trendChart(shown, L, color) {
     let d = `M${pts[0][0]},${pts[0][1]}`;
     for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], mid = (ax + bx) / 2; d += ` C${mid},${ay} ${mid},${by} ${bx},${by}`; }
     body = `<path d="${d} L${pts[n - 1][0]},${H} L${pts[0][0]},${H} Z" fill="${color}" opacity=".18"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`;
-  } else body = v.map((c, i) => { const hh = (H - 6) * c / max; return hh > 0 ? `<rect x="${i * slot + slot * 0.18}" y="${H - hh}" width="${slot * 0.64}" height="${hh}" rx="${Math.min(6, slot * 0.3)}" fill="${color}"><title>${year ? i + 1 + '月' : i + 1 + '日'} ${money(c)}</title></rect>` : ''; }).join('');
-  return `<div class="card"><div class="between"><b class="muted">${year ? '每月趋势' : '每日趋势'}</b><div style="width:140px">${seg('chart', [[0, '柱状'], [1, '曲线']], state.line ? 1 : 0)}</div></div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px" role="img" aria-label="趋势图">${body}</svg>
-    <div class="between small muted"><span>1</span><span>最高 ${money(max)}</span><span>${n}</span></div></div>`;
+  } else body = v.map((c, i) => { const hh = (H - 6) * c / max; return hh > 0 ? `<rect x="${i * slot + slot * 0.18}" y="${H - hh}" width="${slot * 0.64}" height="${hh}" rx="${Math.min(6, slot * 0.3)}" fill="${color}"><title>${year ? tr(`${i + 1}月`, MONTH_EN[i]) : tr(`${i + 1}日`, `${MONTH_EN[m - 1]} ${i + 1}`)} ${money(c)}</title></rect>` : ''; }).join('');
+  return `<div class="card"><div class="between"><b class="muted">${year ? tr('每月趋势', 'Monthly trend') : tr('每日趋势', 'Daily trend')}</b><div style="width:140px">${seg('chart', [[0, tr('柱状', 'Bars')], [1, tr('曲线', 'Line')]], state.line ? 1 : 0)}</div></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px" role="img" aria-label="${tr('趋势图', 'Trend chart')}">${body}</svg>
+    <div class="between small muted"><span>1</span><span>${tr('最高', 'Max')} ${money(max)}</span><span>${n}</span></div></div>`;
 }
 
 function statsView2() {
@@ -204,24 +207,24 @@ function statsView2() {
   const total = sum(shown, (t) => L.net(t));
   const { y, m } = state.month, step = state.period === 'y' ? 12 : 1;
   const side = `<div class="card sticky grid">
-    ${seg('period', [['m', '月'], ['y', '年'], ['a', '全部']], state.period)}
-    ${state.period === 'a' ? '' : `<div class="month"><button class="round" data-act="month" data-v="${-step}" aria-label="上一段">‹</button><b>${state.period === 'y' ? y + '年' : y + '年' + m + '月'}</b><button class="round" data-act="month" data-v="${step}" aria-label="下一段">›</button></div>`}
-    ${seg('stats-kind', [[0, '支出'], [1, '收入']], state.statsIncome ? 1 : 0)}
-    ${seg('section', [['overview', '总览'], ['category', '分类'], ['tag', '标签'], ['review', '复盘']], state.section)}
-    <div><div class="muted small">${state.statsIncome ? '总收入' : '总支出'}</div><div class="big num">${money(total)}</div></div>
+    ${seg('period', [['m', tr('月', 'Month')], ['y', tr('年', 'Year')], ['a', tr('全部', 'All')]], state.period)}
+    ${state.period === 'a' ? '' : `<div class="month"><button class="round" data-act="month" data-v="${-step}" aria-label="${tr('上一段', 'Previous')}">‹</button><b>${state.period === 'y' ? tr(`${y}年`, `${y}`) : ymLabel(y, m)}</b><button class="round" data-act="month" data-v="${step}" aria-label="${tr('下一段', 'Next')}">›</button></div>`}
+    ${seg('stats-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], state.statsIncome ? 1 : 0)}
+    ${seg('section', [['overview', tr('总览', 'Overview')], ['category', tr('分类', 'Categories')], ['tag', tr('标签', 'Tags')], ['review', tr('复盘', 'Review')]], state.section)}
+    <div><div class="muted small">${state.statsIncome ? tr('总收入', 'Total income') : tr('总支出', 'Total expense')}</div><div class="big num">${money(total)}</div></div>
   </div>`;
   let main;
-  if (state.section === 'review') main = state.period === 'm' ? reviewView() : '<div class="card muted">复盘按月看，先把上面切到"月"。</div>';
+  if (state.section === 'review') main = state.period === 'm' ? reviewView() : `<div class="card muted">${tr('复盘按月看，先把上面切到"月"。', 'Review is monthly. Switch to Month.')}</div>`;
   else if (state.section === 'overview') {
     const leftOut = inRange.filter((t) => L.isReimburse(t) || L.isRefund(t) || t.excluded);
     main = `<div class="card cc"><div class="between">
-        <div><div class="muted small">支出</div><div class="num out" style="font-size:19px">${money(totals.expense)}</div></div>
-        <div><div class="muted small">收入</div><div class="num in" style="font-size:19px">${money(totals.income)}</div></div>
-        <div class="right"><div class="muted small">结余</div><div class="num" style="font-size:19px">${money(totals.income - totals.expense)}</div></div></div>
-        <div class="muted small" style="margin-top:8px">共 ${inRange.length} 笔</div></div>
+        <div><div class="muted small">${tr('支出', 'Expense')}</div><div class="num out" style="font-size:19px">${money(totals.expense)}</div></div>
+        <div><div class="muted small">${tr('收入', 'Income')}</div><div class="num in" style="font-size:19px">${money(totals.income)}</div></div>
+        <div class="right"><div class="muted small">${tr('结余', 'Net')}</div><div class="num" style="font-size:19px">${money(totals.income - totals.expense)}</div></div></div>
+        <div class="muted small" style="margin-top:8px">${tr(`共 ${inRange.length} 笔`, nTx(inRange.length))}</div></div>
       ${state.period === 'a' ? '' : trendChart(shown, L, state.statsIncome ? 'var(--income)' : 'var(--primary)')}
-      ${leftOut.length ? `<div class="card"><div class="row click" data-act="left-out" style="padding:0"><div class="main"><div class="muted small">不参与分类统计的部分 ${state.openLeftOut ? '▴' : '▾'}</div>
-        <div class="small amber">可报销支出 ${money(totals.reimbursable)} · 报销收入 ${money(totals.reimbursed)}</div><div class="small muted">退款 ${money(totals.refund)}${totals.excluded ? ' · 不计 ' + money(totals.excluded) : ''}</div></div></div>
+      ${leftOut.length ? `<div class="card"><div class="row click" data-act="left-out" style="padding:0"><div class="main"><div class="muted small">${tr('不参与分类统计的部分', 'Not in category stats')} ${state.openLeftOut ? '▴' : '▾'}</div>
+        <div class="small amber">${tr('可报销支出', 'Reimbursable')} ${money(totals.reimbursable)} · ${tr('报销收入', 'Reimbursed')} ${money(totals.reimbursed)}</div><div class="small muted">${tr('退款', 'Refunds')} ${money(totals.refund)}${totals.excluded ? ` · ${tr('不计', 'Excluded')} ` + money(totals.excluded) : ''}</div></div></div>
         ${state.openLeftOut ? rowsOf(leftOut, L) : ''}</div>` : ''}`;
   } else if (state.section === 'category') {
     const groups = new Map();
@@ -240,33 +243,33 @@ function statsView2() {
       const hasSubs = [...subs.keys()].some((id) => state.data.category.get(id)?.parentId);
       const inner = !open ? '' : !hasSubs ? `<div class="indent">${rowsOf(g.items, L)}</div>` : [...subs.entries()].map(([id, l]) => [id, l, sum(l, (t) => L.net(t))]).sort((a, b) => b[2] - a[2]).map(([id, l, c]) => {
         const leaf = state.data.category.get(id), o = state.openSub === id;
-        return `<div class="row click indent" data-act="open-sub" data-v="${id}">${iconTile(leaf?.icon ?? g.top?.icon ?? 'tag', 'sm')}<div class="main muted">${leaf && leaf.parentId ? h(leaf.name) : '（未细分）'} · ${l.length} 笔 ${o ? '▴' : '▾'}</div><div class="num muted">${money(c)}</div></div>${o ? `<div class="indent2">${rowsOf(l, L)}</div>` : ''}`;
+        return `<div class="row click indent" data-act="open-sub" data-v="${id}">${iconTile(leaf?.icon ?? g.top?.icon ?? 'tag', 'sm')}<div class="main muted">${leaf && leaf.parentId ? h(leaf.name) : tr('（未细分）', '(no subcategory)')} · ${nTx(l.length)} ${o ? '▴' : '▾'}</div><div class="num muted">${money(c)}</div></div>${o ? `<div class="indent2">${rowsOf(l, L)}</div>` : ''}`;
       }).join('');
       // 和上期比：支出多了红、少了绿；收入反过来；涨十倍以上写"×倍数"
       let change = '';
       if (state.period !== 'a') {
         const p = prev.get(key) ?? 0, diff = g.cents - p, worse = state.statsIncome ? diff < 0 : diff > 0;
         const pct = p ? Math.round(Math.abs(diff) * 100 / p) : 0;
-        const label = !p ? '新增' : !diff ? '—' : (diff > 0 ? '▲ ' : '▼ ') + (pct >= 1000 ? '×' + Math.round(g.cents / p) : pct + '%');
+        const label = !p ? tr('新增', 'New') : !diff ? '—' : (diff > 0 ? '▲ ' : '▼ ') + (pct >= 1000 ? '×' + Math.round(g.cents / p) : pct + '%');
         change = `<span class="chg ${!p || !diff ? '' : worse ? 'out' : 'in'}">${label}</span>`;
       }
       // 排名：前三名实心圆，其余淡色数字；占比条以最多的那一类为满
       const badge = rank < 3 ? `<b style="background:color-mix(in srgb, ${def.c} ${90 - rank * 20}%, transparent)">${rank + 1}</b>` : rank + 1;
       return `<div class="row click crow" data-act="open-top" data-v="${key}"><span class="rank">${badge}</span>${iconTile(g.top?.icon ?? 'tag')}
-        <div class="main"><div class="line1"><span class="title">${h(g.top?.name ?? '未分类')} <span class="small muted">${open ? '▴' : '▾'}</span></span><span class="num">${money(g.cents)}</span></div>
+        <div class="main"><div class="line1"><span class="title">${h(g.top?.name ?? tr('未分类', 'Uncategorized'))} <span class="small muted">${open ? '▴' : '▾'}</span></span><span class="num">${money(g.cents)}</span></div>
           <div class="bar thin" style="background:color-mix(in srgb, ${def.c} 12%, transparent)"><i style="width:${Math.max(1, g.cents * 100 / first).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${def.c} 60%, transparent), ${def.c})"></i></div>
-          <div class="line2"><span>${total > 0 ? Math.round(g.cents * 100 / total) : 0}% · ${g.items.length} 笔</span>${change}</div></div></div>${inner}`;
+          <div class="line2"><span>${total > 0 ? Math.round(g.cents * 100 / total) : 0}% · ${nTx(g.items.length)}</span>${change}</div></div></div>${inner}`;
     }).join('');
-    main = `<div class="card">${rows || '<span class="muted">这段时间没有记录</span>'}</div>`;
+    main = `<div class="card">${rows || `<span class="muted">${tr('这段时间没有记录', 'No entries in this period')}</span>`}</div>`;
   } else {
     const tags = new Map();
     for (const t of shown) for (const tag of (t.tags ?? '').split(' ').filter(Boolean)) { if (!tags.has(tag)) tags.set(tag, []); tags.get(tag).push(t); }
     const rows = [...tags.entries()].map(([tag, l]) => [tag, l, sum(l, (t) => L.net(t))]).sort((a, b) => b[2] - a[2]).map(([tag, l, c]) => {
       const o = state.openTag === tag;
       return `<div class="row click" data-act="open-tag" data-v="${h(tag)}"><span class="tile" style="background:var(--primary)">${h(tag.slice(0, 2).toUpperCase())}</span>
-        <div class="main"><div class="title">${h(tag)} ${o ? '▴' : '▾'}</div><div class="sub">${dayISO(Math.min(...l.map((t) => t.date)))} – ${dayISO(Math.max(...l.map((t) => t.date)))} · ${l.length} 笔</div></div><div class="num">${money(c)}</div></div>${o ? `<div class="indent">${rowsOf(l, L)}</div>` : ''}`;
+        <div class="main"><div class="title">${h(tag)} ${o ? '▴' : '▾'}</div><div class="sub">${dayISO(Math.min(...l.map((t) => t.date)))} – ${dayISO(Math.max(...l.map((t) => t.date)))} · ${nTx(l.length)}</div></div><div class="num">${money(c)}</div></div>${o ? `<div class="indent">${rowsOf(l, L)}</div>` : ''}`;
     }).join('');
-    main = `<div class="card">${rows || '<span class="muted">这段时间没有带标签的账单</span>'}</div>`;
+    main = `<div class="card">${rows || `<span class="muted">${tr('这段时间没有带标签的账单', 'No tagged entries in this period')}</span>`}</div>`;
   }
   return `<div class="cols">${side}<div class="grid">${main}</div></div>`;
 }
@@ -280,22 +283,22 @@ function accountDetailView() {
   const effects = list.map((t) => effect(a, t));
   const inflow = sum(effects.filter((x) => x > 0), (x) => x), outflow = -sum(effects.filter((x) => x < 0), (x) => x);
   const months = new Map();
-  for (const t of list) { const d = dayToDate(t.date), k = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`; if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
+  for (const t of list) { const d = dayToDate(t.date), k = ymLabel(d.getUTCFullYear(), d.getUTCMonth() + 1); if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
   // 像一张银行卡：卡面颜色取自这家银行的品牌色，白字
-  const notes = [cur !== HOME ? `≈ ${money(toHome(a, balance))}` : '', a.checkedAt > 0 ? `上次核对 ${dayISO(a.checkedAt)}` : '', a.archived ? '已归档' : ''].filter(Boolean).join('  ·  ');
+  const notes = [cur !== HOME ? `≈ ${money(toHome(a, balance))}` : '', a.checkedAt > 0 ? `${tr('上次核对', 'Last checked')} ${dayISO(a.checkedAt)}` : '', a.archived ? tr('已归档', 'Archived') : ''].filter(Boolean).join('  ·  ');
   const stat = (label, cents) => `<div><div class="small muted">${label}</div><div class="num">${money(cents, cur)}</div></div>`;
   return `<div class="cols">
-    <div class="grid sticky"><div><button class="btn" data-act="account-back">‹ 全部账户</button></div>
+    <div class="grid sticky"><div><button class="btn" data-act="account-back">‹ ${tr('全部账户', 'All accounts')}</button></div>
       <div class="card cc acard" style="--cc:${accountFace(a)}">
-        <div class="row" style="padding:0"><span class="logo-w lg">${accountTile(a)}</span><div class="main"><div class="title" style="font-weight:600;font-size:16px">${h(a.name)}</div><div class="small muted">${['储蓄', '投资', '信用', '现金'][a.type] ?? ''}账户 · ${list.length} 笔</div></div>
+        <div class="row" style="padding:0"><span class="logo-w lg">${accountTile(a)}</span><div class="main"><div class="title" style="font-weight:600;font-size:16px">${h(a.name)}</div><div class="small muted">${tr(`${['储蓄', '投资', '信用', '现金'][a.type] ?? ''}账户`, ['Savings', 'Investment', 'Credit', 'Cash'][a.type] ? `${['Savings', 'Investment', 'Credit', 'Cash'][a.type]} account` : 'Account')} · ${nTx(list.length)}</div></div>
           <span class="small muted" style="display:flex;align-items:center;gap:6px"><span class="flag">${flagOf(cur)}</span>${cur}</span></div>
-        <div class="small muted" style="margin-top:22px">余额</div>
+        <div class="small muted" style="margin-top:22px">${tr('余额', 'Balance')}</div>
         <div class="big bal">${money(balance, cur)}</div>
         ${notes ? `<div class="small muted">${notes}</div>` : ''}
-        <div class="stats3">${stat('初始余额', a.initialCents ?? 0)}${stat('累计流入', inflow)}${stat('累计流出', outflow)}</div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="pill" data-act="acc-settings" data-v="${a.id}">账户设置</button><button class="pill" data-act="fix-balance" data-v="${a.id}">修正当前余额</button></div>
+        <div class="stats3">${stat(tr('初始余额', 'Opening'), a.initialCents ?? 0)}${stat(tr('累计流入', 'Total in'), inflow)}${stat(tr('累计流出', 'Total out'), outflow)}</div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="pill" data-act="acc-settings" data-v="${a.id}">${tr('账户设置', 'Settings')}</button><button class="pill" data-act="fix-balance" data-v="${a.id}">${tr('修正当前余额', 'Fix balance')}</button></div>
       </div></div>
-    <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)), cur)}</span></div>${rowsOf(l, L)}</div>`).join('') || '<div class="card muted">这个账户还没有账单</div>'}</div></div>`;
+    <div class="grid">${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${money(sum(l, (t) => effect(a, t)), cur)}</span></div>${rowsOf(l, L)}</div>`).join('') || `<div class="card muted">${tr('这个账户还没有账单', 'No entries yet')}</div>`}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 报销：按项目看
@@ -306,9 +309,9 @@ function projectStats(name, L) {
 }
 function projectNumbers(p) {
   const gap = p.claim - p.back;
-  return `<div class="between" style="margin-top:8px"><div><div class="num" style="font-size:17px">${money(p.claim)}</div><div class="muted small">报销总额</div></div>
-    <div><div class="num in" style="font-size:17px">${money(p.back)}</div><div class="muted small">已报销</div></div>
-    <div class="right"><div class="num ${gap > 0 ? 'amber' : 'muted'}" style="font-size:17px">${money(Math.abs(gap))}</div><div class="muted small">${gap >= 0 ? '还差' : '多报回'}</div></div></div>`;
+  return `<div class="between" style="margin-top:8px"><div><div class="num" style="font-size:17px">${money(p.claim)}</div><div class="muted small">${tr('报销总额', 'Claimed')}</div></div>
+    <div><div class="num in" style="font-size:17px">${money(p.back)}</div><div class="muted small">${tr('已报销', 'Reimbursed')}</div></div>
+    <div class="right"><div class="num ${gap > 0 ? 'amber' : 'muted'}" style="font-size:17px">${money(Math.abs(gap))}</div><div class="muted small">${gap >= 0 ? tr('还差', 'Outstanding') : tr('多报回', 'Overpaid')}</div></div></div>`;
 }
 /** 进度环：报回来的占要报的多少，中间写百分比；全报回来变绿。 */
 function progressRing(p) {
@@ -321,32 +324,35 @@ function progressRing(p) {
 function projectCard(name, p) {
   const gap = p.claim - p.back;
   return `<div class="card click" data-act="project" data-v="${h(name)}"><div class="row" style="padding:0;gap:14px">${progressRing(p)}
-    <div class="main"><div class="between"><b style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(name || '未归项目')}</b><span class="muted small">${p.list.length} 笔</span></div>
-      <div class="small muted">已报 <span class="num" style="font-weight:500">${money(p.back)} / ${money(p.claim)}</span></div>
-      <div class="num ${gap > 0 ? 'amber' : 'in'}" style="font-size:14px">${gap > 0 ? '还差 ' + money(gap) : gap < 0 ? '多报回 ' + money(-gap) : '已结清'}</div></div></div></div>`;
+    <div class="main"><div class="between"><b style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(name || tr('未归项目', 'No project'))}</b><span class="muted small">${nTx(p.list.length)}</span></div>
+      <div class="small muted">${tr('已报', 'Reimbursed')} <span class="num" style="font-weight:500">${money(p.back)} / ${money(p.claim)}</span></div>
+      <div class="num ${gap > 0 ? 'amber' : 'in'}" style="font-size:14px">${gap > 0 ? tr('还差 ', 'Outstanding ') + money(gap) : gap < 0 ? tr('多报回 ', 'Overpaid ') + money(-gap) : tr('已结清', 'Settled')}</div></div></div></div>`;
 }
 function reimburseView() {
   const L = computeLookup();
   if (state.project != null) {
     const p = projectStats(state.project, L), funds = new Map();
     for (const t of p.list) if (t.fund) { if (!funds.has(t.fund)) funds.set(t.fund, []); funds.get(t.fund).push(t); }
-    return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ 全部项目</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || '未归项目')}</b>${projectNumbers(p)}</div>
-      ${funds.size ? `<div class="card"><div class="muted small">资金来源</div>${[...funds.entries()].map(([f, l]) => `<div class="between small"><span>${h(f)}</span><span class="muted">支 ${money(sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents))} · 回 ${money(sum(l.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents))}</span></div>`).join('')}</div>` : ''}</div>
-      <div class="card">${p.list.length ? rowsOf(p.list, L) : '<span class="muted">这里还没有账单。在账单的"修改"里填上报销项目即可。</span>'}</div></div>`;
+    return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ ${tr('全部项目', 'All projects')}</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || tr('未归项目', 'No project'))}</b>${projectNumbers(p)}</div>
+      ${funds.size ? `<div class="card"><div class="muted small">${tr('资金来源', 'Funding')}</div>${[...funds.entries()].map(([f, l]) => `<div class="between small"><span>${h(f)}</span><span class="muted">${tr('支', 'Out')} ${money(sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents))} · ${tr('回', 'Back')} ${money(sum(l.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents))}</span></div>`).join('')}</div>` : ''}</div>
+      <div class="card">${p.list.length ? rowsOf(p.list, L) : `<span class="muted">${tr('这里还没有账单。在账单的"修改"里填上报销项目即可。', 'No entries yet. Set a project when editing an entry.')}</span>`}</div></div>`;
   }
-  const head = `<div class="card">${seg('rmode', [['projects', '项目'], ['pending', '待报销'], ['done', '已报销']], state.rmode)}</div>`;
+  const head = `<div class="card">${seg('rmode', [['projects', tr('项目', 'Projects')], ['pending', tr('待报销', 'Pending')], ['done', tr('已报销', 'Done')]], state.rmode)}</div>`;
   if (state.rmode === 'projects') {
     const cards = [...projectNames(), ''].map((name) => { const p = projectStats(name, L); return name || p.list.length ? projectCard(name, p) : ''; }).join('');
     return `<div class="grid">${head}<div class="grid three">${cards}</div></div>`;
   }
   const want = state.rmode === 'done' ? 2 : 1;
   const list = allTxs().filter((t) => t.reimburse === want).sort(byNewest);
-  const options = (cur) => ['', ...projectNames()].map((n) => `<option value="${h(n)}" ${n === (cur ?? '') ? 'selected' : ''}>${h(n || '（未归项目）')}</option>`).join('');
-  return `<div class="grid">${head}<div class="card cc" style="--cc:${want === 1 ? '#E8962E' : '#21A67A'}"><div class="small muted">${want === 1 ? '还没报回来的钱' : '已报销合计'}</div><div class="big">${money(sum(list, (t) => t.amountCents))}</div><div class="small muted">${list.length} 笔</div></div>
-    <div class="card">${list.map((t) => `${txRow(t, L, true)}<div class="between small" style="margin:-4px 0 8px 52px"><select class="mini" data-change="set-project" data-v="${t.id}" aria-label="报销项目">${options(t.project)}</select><button class="btn link" data-act="toggle-reimburse" data-v="${t.id}">${want === 1 ? '标为已报销' : '改回待报销'}</button></div>`).join('') || '<span class="muted">没有账单。</span>'}</div></div>`;
+  const options = (cur) => ['', ...projectNames()].map((n) => `<option value="${h(n)}" ${n === (cur ?? '') ? 'selected' : ''}>${h(n || tr('（未归项目）', '(no project)'))}</option>`).join('');
+  return `<div class="grid">${head}<div class="card cc" style="--cc:${want === 1 ? '#E8962E' : '#21A67A'}"><div class="small muted">${want === 1 ? tr('还没报回来的钱', 'Awaiting reimbursement') : tr('已报销合计', 'Reimbursed total')}</div><div class="big">${money(sum(list, (t) => t.amountCents))}</div><div class="small muted">${nTx(list.length)}</div></div>
+    <div class="card">${list.map((t) => `${txRow(t, L, true)}<div class="between small" style="margin:-4px 0 8px 52px"><select class="mini" data-change="set-project" data-v="${t.id}" aria-label="${tr('报销项目', 'Project')}">${options(t.project)}</select><button class="btn link" data-act="toggle-reimburse" data-v="${t.id}">${want === 1 ? tr('标为已报销', 'Mark reimbursed') : tr('改回待报销', 'Mark pending')}</button></div>`).join('') || `<span class="muted">${tr('没有账单。', 'No entries.')}</span>`}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 补贴
+
+/** 补贴分组的英文显示名（分组键保持中文） */
+const SUBSIDY_EN = { '医保补贴': 'Health subsidy', '住房补贴': 'Housing subsidy', '其他补贴': 'Other subsidies' };
 
 function subsidyView() {
   const L = computeLookup();
@@ -362,9 +368,9 @@ function subsidyView() {
   for (const t of list) { const k = type(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
   const used = sum(list, (t) => Math.min(t.amountCents, sum(L.parts(t), (p) => p[1])));
   const loose = list.filter((t) => !L.isOffset(t)).length;
-  return `<div class="cols"><div class="card sticky"><div class="muted small">收到补贴（全部时间）</div><div class="big num">${money(sum(list, (t) => t.amountCents))}</div>
-      <div class="between small" style="margin-top:8px"><span class="muted">已抵扣支出 ${money(used)}</span>${loose ? `<span class="amber">${loose} 笔未关联</span>` : ''}</div></div>
-    <div class="grid">${[...groups.entries()].map(([k, l]) => { const o = state.openKey === k; return `<div class="card"><div class="row click" data-act="open-key" data-v="${k}" style="padding:0">${iconTile('coins')}<div class="main"><div class="title">${k} ${o ? '▴' : '▾'}</div><div class="sub">${l.length} 笔</div></div><div class="num">${money(sum(l, (t) => t.amountCents))}</div></div>${o ? rowsOf(l, L) : ''}</div>`; }).join('') || '<div class="card muted">还没有补贴记录</div>'}</div></div>`;
+  return `<div class="cols"><div class="card sticky"><div class="muted small">${tr('收到补贴（全部时间）', 'Subsidies received (all time)')}</div><div class="big num">${money(sum(list, (t) => t.amountCents))}</div>
+      <div class="between small" style="margin-top:8px"><span class="muted">${tr('已抵扣支出', 'Offset')} ${money(used)}</span>${loose ? `<span class="amber">${tr(`${loose} 笔未关联`, `${loose} unlinked`)}</span>` : ''}</div></div>
+    <div class="grid">${[...groups.entries()].map(([k, l]) => { const o = state.openKey === k; return `<div class="card"><div class="row click" data-act="open-key" data-v="${k}" style="padding:0">${iconTile('coins')}<div class="main"><div class="title">${tr(k, SUBSIDY_EN[k] ?? k)} ${o ? '▴' : '▾'}</div><div class="sub">${nTx(l.length)}</div></div><div class="num">${money(sum(l, (t) => t.amountCents))}</div></div>${o ? rowsOf(l, L) : ''}</div>`; }).join('') || `<div class="card muted">${tr('还没有补贴记录', 'No subsidies yet')}</div>`}</div></div>`;
 }
 
 // ---------------------------------------------------------------- 周期性收支
@@ -387,21 +393,21 @@ function recurringView() {
   const cats = [...state.data.category.values()].map((c) => c.name).filter((v, i, a) => a.indexOf(v) === i).sort();
   const cards = items.map((it, idx) => {
     const o = state.openKey === 'r' + idx, max = Math.max(1, ...it.per), color = it.r.income ? 'var(--income)' : 'var(--primary)';
-    const bars = it.per.map((c, i) => { const hh = c > 0 ? Math.max(3, 34 * c / max) : 2; return `<rect x="${i * 20 + 4}" y="${36 - hh}" width="12" height="${hh}" rx="3" fill="${color}" opacity="${c > 0 ? 1 : 0.2}"><title>${months[i].replace('-', '年')}月 ${money(c)}</title></rect>`; }).join('');
+    const bars = it.per.map((c, i) => { const hh = c > 0 ? Math.max(3, 34 * c / max) : 2; return `<rect x="${i * 20 + 4}" y="${36 - hh}" width="12" height="${hh}" rx="3" fill="${color}" opacity="${c > 0 ? 1 : 0.2}"><title>${ymLabel(...months[i].split('-').map(Number))} ${money(c)}</title></rect>`; }).join('');
     return `<div class="card"><div class="row click" data-act="open-key" data-v="r${idx}" style="padding:0">${iconTile(state.data.category.get([...state.data.category.values()].find((c) => (it.r.categories ?? []).includes(c.name))?.id)?.icon ?? 'calendar')}
-      <div class="main"><div class="title">${h(it.r.name)} ${o ? '▴' : '▾'}</div><div class="sub ${it.cur > 0 ? '' : 'amber'}">${it.cur > 0 ? '本月 ' + money(it.cur) : '本月还没有'}</div></div>
-      <div class="right"><div class="num ${it.r.income ? 'in' : ''}">${it.r.income ? '+' : ''}${money(it.avg)}</div><div class="muted small">月均</div></div></div>
-      <svg viewBox="0 0 240 36" style="width:100%;height:36px;margin-top:8px" role="img" aria-label="近 12 个月">${bars}</svg>
-      <div class="muted small">近 12 个月 ${money(sum(it.per, (x) => x))}</div>
-      ${o ? `${rowsOf(it.list.slice(0, 200), L)}<button class="btn link danger" data-act="rule-remove" data-v="${idx}">移除这一项</button>` : ''}</div>`;
+      <div class="main"><div class="title">${h(it.r.name)} ${o ? '▴' : '▾'}</div><div class="sub ${it.cur > 0 ? '' : 'amber'}">${it.cur > 0 ? tr('本月 ', 'This month ') + money(it.cur) : tr('本月还没有', 'None this month')}</div></div>
+      <div class="right"><div class="num ${it.r.income ? 'in' : ''}">${it.r.income ? '+' : ''}${money(it.avg)}</div><div class="muted small">${tr('月均', 'Avg/mo')}</div></div></div>
+      <svg viewBox="0 0 240 36" style="width:100%;height:36px;margin-top:8px" role="img" aria-label="${tr('近 12 个月', 'Last 12 months')}">${bars}</svg>
+      <div class="muted small">${tr('近 12 个月', 'Last 12 months')} ${money(sum(it.per, (x) => x))}</div>
+      ${o ? `${rowsOf(it.list.slice(0, 200), L)}<button class="btn link danger" data-act="rule-remove" data-v="${idx}">${tr('移除这一项', 'Remove')}</button>` : ''}</div>`;
   }).join('');
   const out = items.filter((i) => !i.r.income), inc = items.filter((i) => i.r.income);
-  return `<div class="cols"><div class="card sticky grid"><div><div class="muted small">每月固定支出约</div><div class="big num">${money(sum(out, (i) => i.avg))}</div></div>
-      <div class="between small muted"><span>固定收入约 ${money(sum(inc, (i) => i.avg))}</span><span>本月已有 ${items.filter((i) => i.cur > 0).length}/${items.length}</span></div>
-      ${state.addingRule ? `<label class="f">名称<input id="r-name"></label><label class="f">类型<select id="r-income"><option value="0">支出</option><option value="1">收入</option></select></label>
-        <label class="f">分类<select id="r-cat"><option value="">（不按分类）</option>${cats.map((c) => `<option>${h(c)}</option>`).join('')}</select></label><label class="f">或备注里含<input id="r-kw"></label>
-        <div class="between"><button class="btn" data-act="rule-cancel">取消</button><button class="btn primary" data-act="rule-save">保存</button></div>` : '<button class="btn" data-act="rule-add">＋ 添加项目</button>'}
-      <p class="muted small" style="margin:0">这里的项目只存在这个浏览器里。</p></div>
+  return `<div class="cols"><div class="card sticky grid"><div><div class="muted small">${tr('每月固定支出约', 'Fixed spending / mo ≈')}</div><div class="big num">${money(sum(out, (i) => i.avg))}</div></div>
+      <div class="between small muted"><span>${tr('固定收入约', 'Fixed income ≈')} ${money(sum(inc, (i) => i.avg))}</span><span>${tr('本月已有', 'This month')} ${items.filter((i) => i.cur > 0).length}/${items.length}</span></div>
+      ${state.addingRule ? `<label class="f">${tr('名称', 'Name')}<input id="r-name"></label><label class="f">${tr('类型', 'Type')}<select id="r-income"><option value="0">${tr('支出', 'Expense')}</option><option value="1">${tr('收入', 'Income')}</option></select></label>
+        <label class="f">${tr('分类', 'Category')}<select id="r-cat"><option value="">${tr('（不按分类）', '(any)')}</option>${cats.map((c) => `<option>${h(c)}</option>`).join('')}</select></label><label class="f">${tr('或备注里含', 'Or note contains')}<input id="r-kw"></label>
+        <div class="between"><button class="btn" data-act="rule-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="rule-save">${tr('保存', 'Save')}</button></div>` : `<button class="btn" data-act="rule-add">＋ ${tr('添加项目', 'Add item')}</button>`}
+      <p class="muted small" style="margin:0">${tr('这里的项目只存在这个浏览器里。', 'Saved in this browser only.')}</p></div>
     <div class="grid">${cards}</div></div>`;
 }
 
@@ -418,7 +424,7 @@ function exportCsv() {
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
-  a.download = `辉记账本-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${tr('辉记账本', 'HuiLedger')}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
 
@@ -443,7 +449,7 @@ async function moreAction(act, v, el) {
     case 'close-view': if (el !== lastClickTarget) return true; state.view = null; break;
     case 'acc-settings': state.tab = 'manage'; mgState().tab = 'account'; state.accountId = null; for (const f of MOD.actions) if (await f('mg-acc-edit', v, el)) break; break;
     case 'close-view-btn': state.view = null; break;
-    case 'view-delete': if (!confirm('删除这笔账单？')) return true; try { await deleteRecord('tx', state.view); state.view = null; } catch (e) { state.error = e.message; } break;
+    case 'view-delete': if (!confirm(tr('删除这笔账单？', 'Delete this entry?'))) return true; try { await deleteRecord('tx', state.view); state.view = null; } catch (e) { state.error = e.message; } break;
     case 'period': state.period = v; break;
     case 'section': state.section = v; state.openTop = null; state.openSub = null; state.openTag = null; break;
     case 'chart': state.line = v === '1'; break;
@@ -465,7 +471,7 @@ async function moreAction(act, v, el) {
       if (name && (cat || kw)) { await shared.set('recurring', [...shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)).filter((r) => r.name !== name), { name, categories: cat ? [cat] : [], keywords: kw ? [kw] : [], income: document.getElementById('r-income').value === '1' }]); state.addingRule = false; }
       break;
     }
-    case 'rule-remove': { const rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)); if (confirm(`移除「${rules[Number(v)].name}」？账单不会被删除。`)) { rules.splice(Number(v), 1); await shared.set('recurring', rules); state.openKey = null; } break; }
+    case 'rule-remove': { const rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)); if (confirm(tr(`移除「${rules[Number(v)].name}」？账单不会被删除。`, `Remove "${rules[Number(v)].name}"? Entries stay.`))) { rules.splice(Number(v), 1); await shared.set('recurring', rules); state.openKey = null; } break; }
     case 'export': exportCsv(); return true;
     default: return false;
   }

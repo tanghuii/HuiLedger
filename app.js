@@ -38,8 +38,13 @@ function epochDay(y, m, d) { return Math.round(Date.UTC(y, m - 1, d) / 86400000)
 function dayToDate(day) { return new Date(day * 86400000); }
 function dayISO(day) { return dayToDate(day).toISOString().slice(0, 10); }
 function isoToDay(iso) { const [y, m, d] = iso.split('-').map(Number); return epochDay(y, m, d); }
-const WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-function dayLabel(day) { const d = dayToDate(day); return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEK[d.getUTCDay()]}`; }
+const WEEK_ZH = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'], WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// 用的时候再按当前语言取（切换语言后不用刷新页面）
+const WEEK = new Proxy([], { get: (_, k) => (LANG === 'en' ? WEEK_EN : WEEK_ZH)[k] });
+const MONTH_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** 年月：2026年11月 / Nov 2026 */
+const ymLabel = (y, m) => tr(`${y}年${m}月`, `${MONTH_EN[m - 1]} ${y}`);
+function dayLabel(day) { const d = dayToDate(day); return tr(`${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEK[d.getUTCDay()]}`, `${WEEK[d.getUTCDay()]}, ${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()}`); }
 const SYMBOL = { EUR: '€', CNY: '¥', USD: '$', GBP: '£', JPY: 'JP¥', HKD: 'HK$' };
 const HOME = 'EUR';
 function money(cents, cur = HOME) {
@@ -117,15 +122,18 @@ async function api(method, path, body, { auth = true, prefer } = {}) {
   let res;
   try {
     res = await fetch(url.replace(/\/+$/, '') + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  } catch { throw Object.assign(new Error('连不上云端，请检查网络和项目地址。'), { offline: true }); }
+  } catch { throw Object.assign(new Error(tr('连不上云端，请检查网络。', 'Can\'t reach the cloud. Check your connection.')), { offline: true }); }
   const text = await res.text();
   const json = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
   if (!res.ok) {
     const msg = json?.msg || json?.error_description || json?.message || text.slice(0, 200);
-    if (/invalid login/i.test(msg)) throw new Error('邮箱或密码不对。');
-    if (/not confirmed/i.test(msg)) throw new Error('邮箱还没验证，请先点邮件里的确认链接。');
-    if (res.status === 401) { signOut(); throw new Error('登录已失效，请重新登录。'); }
-    throw new Error(`云端返回错误（${res.status}）：${msg}`);
+    if (/invalid login/i.test(msg)) throw new Error(tr('邮箱或密码不对。', 'Wrong email or password.'));
+    if (/not confirmed/i.test(msg)) throw Object.assign(new Error(tr('邮箱还没验证，请点邮件里的确认链接。', 'Email not confirmed yet. Click the link in the email.')), { unconfirmed: true });
+    if (/rate limit|too many|security purposes/i.test(msg)) throw new Error(tr('操作太频繁，请过几分钟再试。', 'Too many attempts. Try again in a few minutes.'));
+    if (/already registered|already exists/i.test(msg)) throw new Error(tr('这个邮箱已经注册过，直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'));
+    if (/weak|at least/i.test(msg) && /password/i.test(msg)) throw new Error(tr('密码太简单，换一个长一点的。', 'Password too weak. Try a longer one.'));
+    if (res.status === 401 && auth) { signOut(); throw new Error(tr('登录已失效，请重新登录。', 'Session expired. Please sign in again.')); }
+    throw new Error(tr(`云端返回错误（${res.status}）：${msg}`, `Cloud error (${res.status}): ${msg}`));
   }
   return json;
 }
@@ -136,7 +144,7 @@ function saveSession(o) {
 }
 async function accessToken() {
   const s = state.session;
-  if (!s) throw new Error('还没有登录。');
+  if (!s) throw new Error(tr('还没有登录。', 'Not signed in.'));
   if (Date.now() < s.expires - 60000) return s.access;
   saveSession(await api('POST', '/auth/v1/token?grant_type=refresh_token', { refresh_token: s.refresh }, { auth: false }));
   return state.session.access;
@@ -169,7 +177,7 @@ async function loadAll() {
       for (const t of state.data.tx.values()) count.set(t.ledgerId, (count.get(t.ledgerId) ?? 0) + 1);
       state.ledgerId = ledgers.sort((a, b) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0))[0]?.id ?? 1;
     }
-  } catch (e) { if (!(hadSnap && isNetworkError(e))) state.error = e.message; else state.notice = '离线中，显示的是上次的数据'; }
+  } catch (e) { if (!(hadSnap && isNetworkError(e))) state.error = e.message; else state.notice = tr('离线中，显示的是上次的数据', 'Offline: showing last saved data'); }
   state.loading = false; render();
 }
 
@@ -238,29 +246,30 @@ const app = document.getElementById('app');
 function render() {
   if (!state.session) { app.innerHTML = loginView(); return; }
   // 和手机端一样的分法：报销、补贴、周期性收支、对账都收在资产里
-  const tabs = [['ledger', '明细'], ['calendar', '日历'], ['stats', '统计'], ['accounts', '资产'], ['ask', '问账本'], ['me', '我的']];
+  const tabs = [['ledger', tr('明细', 'Ledger')], ['calendar', tr('日历', 'Calendar')], ['stats', tr('统计', 'Stats')], ['accounts', tr('资产', 'Assets')], ['ask', tr('问账本', 'Ask')], ['me', tr('我的', 'Me')]];
   const navOn = (k) => (state.tab === k || (k === 'me' && !['ledger', 'stats', 'accounts'].includes(state.tab)) ? 'on' : '');
   const ledgers = [...state.data.ledger.values()];
   app.innerHTML = `<div class="wrap">
     <div class="top">
-      <h1>辉记账本</h1>
+      <h1>${tr('辉记账本', 'HuiLedger')}</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${n}</button>`).join('')}</div>
-      <button class="search" data-act="search-open">${SEARCH_SVG}<span>搜索全部账单</span></button>
-      <label class="btn" style="cursor:pointer">导入修正文件<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
-      <button class="btn" data-act="ai-settings">AI 设置</button>
-      <button class="btn" data-act="export">导出</button>
-      <button class="btn" data-act="reload">刷新</button>
-      <button class="btn" data-act="signout">退出</button>
+      <button class="search" data-act="search-open">${SEARCH_SVG}<span>${tr('搜索全部账单', 'Search all')}</span></button>
+      <label class="btn" style="cursor:pointer">${tr('导入修正文件', 'Import fixes')}<input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>
+      <button class="btn" data-act="ai-settings">${tr('AI 设置', 'AI settings')}</button>
+      <button class="btn" data-act="export">${tr('导出', 'Export')}</button>
+      <button class="btn" data-act="reload">${tr('刷新', 'Refresh')}</button>
+      ${langSwitch()}
+      <button class="btn" data-act="signout">${tr('退出', 'Sign out')}</button>
     </div>
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}${state.notice ? `<p class="ok small" data-act="notice-x">${h(state.notice)}</p>` : ''}
-    ${state.loading ? '<p class="muted">正在读取…</p>' : state.searching || state.q.trim() ? searchView() : pageView()}
+    ${state.loading ? `<p class="muted">${tr('正在读取…', 'Loading…')}</p>` : state.searching || state.q.trim() ? searchView() : pageView()}
   </div>
-  ${state.tab === 'ledger' && !state.loading ? '<button class="fab" data-act="new" aria-label="记一笔">+</button>' : ''}
+  ${state.tab === 'ledger' && !state.loading ? `<button class="fab" data-act="new" aria-label="${tr('记一笔', 'Add')}">+</button>` : ''}
   <nav class="bottom-nav">
-    ${[['ledger', '明细', 'list'], ['stats', '统计', 'pie']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
-    <button class="nav-add" data-act="new" aria-label="记一笔">+</button>
-    ${[['accounts', '资产', 'wallet'], ['me', '我的', 'user']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
+    ${[['ledger', tr('明细', 'Ledger'), 'list'], ['stats', tr('统计', 'Stats'), 'pie']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
+    <button class="nav-add" data-act="new" aria-label="${tr('记一笔', 'Add')}">+</button>
+    ${[['accounts', tr('资产', 'Assets'), 'wallet'], ['me', tr('我的', 'Me'), 'user']].map(([k, n, i]) => `<button class="${navOn(k)}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`).join('')}
   </nav>
   ${state.aiSettings ? aiSettingsView() : ''}${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
 }
@@ -270,52 +279,67 @@ const navIcon = (k) => `<svg viewBox="0 0 24 24"><path d="${(ICONS[k] ?? ICONS.t
 /** "我的"页：所有不在底栏上的功能都从这里进。模块用 MOD.me 登记自己的入口。 */
 function meView() {
   const items = [
-    { key: 'calendar', name: '日历', icon: 'calendar', order: 1 },
-    { key: 'ask', name: '问账本', icon: 'sparkle', order: 2 },
+    { key: 'calendar', name: tr('日历', 'Calendar'), icon: 'calendar', order: 1 },
+    { key: 'ask', name: tr('问账本', 'Ask'), icon: 'sparkle', order: 2 },
     ...MOD.me,
-    { act: 'ai-settings', name: 'AI 设置', icon: 'chip', order: 90 },
-    { act: 'export', name: '导出 CSV', icon: 'upload', order: 92 },
-    { file: true, name: '导入修正文件', icon: 'document', order: 91 },
+    { act: 'ai-settings', name: tr('AI 设置', 'AI settings'), icon: 'chip', order: 90 },
+    { act: 'export', name: tr('导出 CSV', 'Export CSV'), icon: 'upload', order: 92 },
+    { file: true, name: tr('导入修正文件', 'Import fixes'), icon: 'document', order: 91 },
   ].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
   const tile = (it) => it.file
     ? `<label class="me-item">${iconTile(it.icon)}<span>${h(it.name)}</span><input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>`
     : `<button class="me-item" data-act="${it.act ?? 'tab'}" data-v="${h(it.key ?? '')}">${iconTile(it.icon)}<span>${h(it.name)}</span></button>`;
-  const install = STANDALONE ? '' : `<div class="card small muted">${IS_IOS ? '在 Safari 点 分享 → 添加到主屏幕，就能像 App 一样用' : '浏览器菜单里选"安装应用 / 添加到主屏幕"，就能像 App 一样用'}</div>`;
+  const install = STANDALONE ? '' : `<div class="card small muted">${IS_IOS ? tr('在 Safari 点 分享 → 添加到主屏幕，就能像 App 一样用', 'In Safari: Share → Add to Home Screen to use it like an app') : tr('浏览器菜单里选"安装应用 / 添加到主屏幕"，就能像 App 一样用', 'Use "Install app / Add to Home Screen" in the browser menu')}</div>`;
   const pending = outbox.list().length;
   return `<div class="grid">
-    <div class="card cc"><div class="between"><div><div style="font-size:20px;font-weight:700">辉记账本</div><div class="muted small">${pending ? `${pending} 条修改等联网后上传` : '已和云端同步'}</div></div>
-      <button class="pill" data-act="reload">刷新</button></div></div>
+    <div class="card cc"><div class="between"><div><div style="font-size:20px;font-weight:700">${tr('辉记账本', 'HuiLedger')}</div><div class="muted small">${h(state.session?.email ?? '')}</div><div class="muted small">${pending ? tr(`${pending} 条修改等联网后上传`, `${pending} changes waiting to upload`) : tr('已和云端同步', 'Synced')}</div></div>
+      <button class="pill" data-act="reload">${tr('刷新', 'Refresh')}</button></div></div>
+    <div class="card between"><span>${tr('语言', 'Language')}</span>${langSwitch()}</div>
     ${install}
     <div class="card"><div class="me-grid">${items.map(tile).join('')}</div></div>
-    <button class="btn" data-act="signout">退出登录</button>
+    <button class="btn" data-act="signout">${tr('退出登录', 'Sign out')}</button>
   </div>`;
 }
 
 function loginView() {
   const c = state.cfg, mode = state.authMode || 'login', dis = state.loading ? 'disabled' : '';
-  const pass = (id, label) => `<label class="f">${label}<input id="${id}" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>`;
-  const title = { login: '登录', register: '注册', forgot: '发送重设邮件', reset: '保存新密码' }[mode];
-  return `<div class="wrap"><div class="card login grid">
-    <h1 style="margin:0">辉记账本</h1>
+  const pass = (id, label) => `<label class="f pw">${label}<input id="${id}" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"><button type="button" class="eye" data-act="pw-eye" data-v="${id}">${tr('显示', 'Show')}</button></label>`;
+  const title = { login: tr('登录', 'Sign in'), register: tr('注册', 'Create account'), forgot: tr('发送重设邮件', 'Send reset link'), reset: tr('保存新密码', 'Save new password'), sent: '' }[mode];
+  const heading = { login: tr('登录', 'Sign in'), register: tr('注册新账号', 'Create an account'), forgot: tr('找回密码', 'Reset password'), reset: tr('设置新密码', 'Set a new password'), sent: tr('查收邮件', 'Check your email') }[mode];
+  const email = `<label class="f">${tr('邮箱', 'Email')}<input id="l-email" type="email" autocomplete="username" inputmode="email" value="${h(state.authEmail || '')}"></label>`;
+  // 邮件已发出：告诉用户发到哪了、接下来点什么，并能重发
+  const sentBox = mode === 'sent' ? `<p style="margin:0">${state.sentKind === 'recovery'
+      ? tr(`重设密码的链接已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里设置新密码。`, `A reset link was sent to <b>${h(state.authEmail)}</b>. Open it to come back here and set a new password.`)
+      : tr(`确认邮件已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里并自动登录。`, `A confirmation email was sent to <b>${h(state.authEmail)}</b>. Open the link to come back here signed in.`)}</p>
+    <p class="hint">${tr('没收到？看看垃圾邮件，或者过一分钟再重发。', 'Nothing yet? Check spam, or resend in a minute.')}</p>
+    <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>` : '';
+  return `<div class="wrap"><div class="card login grid" style="position:relative">
+    ${langSwitch()}
+    <h1 style="margin:0">${tr('辉记账本', 'HuiLedger')}</h1>
+    <div class="muted">${heading}</div>
     ${state.notice ? `<p class="ok">${h(state.notice)}</p>` : ''}
-    ${CLOUD.url ? '' : `<label class="f">Supabase 项目地址<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
-    <label class="f">公开密钥（anon / publishable）<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
-    ${mode === 'reset' ? '' : `<label class="f">邮箱<input id="l-email" type="email" autocomplete="username" value="${h(state.authEmail || '')}"></label>`}
-    ${mode === 'forgot' ? '' : pass('l-pass', mode === 'reset' ? '新密码（至少 6 位）' : mode === 'register' ? '密码（至少 6 位）' : '密码')}
-    ${mode === 'register' || mode === 'reset' ? pass('l-pass2', '再输一遍密码') : ''}
+    ${CLOUD.url ? '' : `<label class="f">${tr('Supabase 项目地址', 'Supabase project URL')}<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
+    <label class="f">${tr('公开密钥（anon / publishable）', 'Public key (anon / publishable)')}<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
+    ${sentBox}
+    ${mode === 'reset' || mode === 'sent' ? '' : email}
+    ${mode === 'reset' ? `<p class="hint">${h(state.authEmail || '')}</p>` : ''}
+    ${mode === 'forgot' || mode === 'sent' ? '' : pass('l-pass', mode === 'reset' ? tr('新密码（至少 6 位）', 'New password (6+ characters)') : mode === 'register' ? tr('密码（至少 6 位）', 'Password (6+ characters)') : tr('密码', 'Password'))}
+    ${mode === 'register' || mode === 'reset' ? pass('l-pass2', tr('再输一遍密码', 'Repeat password')) : ''}
+    ${mode === 'forgot' ? `<p class="hint">${tr('输入注册时的邮箱，我们会发一个重设密码的链接。', 'Enter your account email and we\'ll send a reset link.')}</p>` : ''}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <button class="btn primary" data-act="auth" ${dis}>${state.loading ? '请稍候…' : title}</button>
+    ${state.unconfirmed && mode === 'login' ? `<button class="btn" data-act="auth-resend" ${dis}>${tr('重发确认邮件', 'Resend confirmation email')}</button>` : ''}
+    ${title ? `<button class="btn primary" data-act="auth" ${dis}>${state.loading ? tr('请稍候…', 'Please wait…') : title}</button>` : ''}
     <div class="between" style="justify-content:center">
-      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>还没有账号？注册</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>忘记密码</button>`
-        : `<button class="btn link" data-act="mode" data-v="login" ${dis}>返回登录</button>`}
+      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>${tr('还没有账号？注册', 'No account? Sign up')}</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>${tr('忘记密码', 'Forgot password')}</button>`
+        : `<button class="btn link" data-act="mode" data-v="login" ${dis}>${tr('返回登录', 'Back to sign in')}</button>`}
     </div>
-    ${IS_ANDROID ? '<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">在 App 中打开</a>' : ''}
+    ${IS_ANDROID ? `<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">${tr('在 App 中打开', 'Open in app')}</a>` : ''}
   </div></div>`;
 }
 
 function monthBar() {
   const { y, m } = state.month;
-  return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="上个月">‹</button><b>${y}年${m}月</b><button class="round" data-act="month" data-v="1" aria-label="下个月">›</button></div>`;
+  return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="${tr('上个月', 'Previous month')}">‹</button><b>${ymLabel(y, m)}</b><button class="round" data-act="month" data-v="1" aria-label="${tr('下个月', 'Next month')}">›</button></div>`;
 }
 
 // 账单行 txRow() 在 modules/editor.js（侧滑、多选都在那边）
@@ -323,14 +347,14 @@ function monthBar() {
 function summaryCard(t) {
   return `<div class="card cc">
     ${monthBar()}
-    <div class="muted small" style="margin-top:14px">本月结余</div>
+    <div class="muted small" style="margin-top:14px">${tr('本月结余', 'Balance this month')}</div>
     <div class="big num">${money(t.income - t.expense)}</div>
     <div class="between" style="margin-top:10px">
-      <div><div class="muted small">支出</div><div class="num out" style="font-size:18px">${money(t.expense)}</div></div>
-      <div class="right"><div class="muted small">收入</div><div class="num in" style="font-size:18px">${money(t.income)}</div></div>
+      <div><div class="muted small">${tr('支出', 'Expense')}</div><div class="num out" style="font-size:18px">${money(t.expense)}</div></div>
+      <div class="right"><div class="muted small">${tr('收入', 'Income')}</div><div class="num in" style="font-size:18px">${money(t.income)}</div></div>
     </div>
-    ${t.reimbursable || t.reimbursed ? `<div class="between small amber" style="margin-top:10px"><span>可报销支出 ${money(t.reimbursable)}</span><span>报销收入 ${money(t.reimbursed)}</span></div>` : ''}
-    ${t.refund || t.excluded ? `<div class="between small muted" style="margin-top:4px"><span>${t.refund ? '退款 ' + money(t.refund) : ''}</span><span>${t.excluded ? '不计 ' + money(t.excluded) : ''}</span></div>` : ''}
+    ${t.reimbursable || t.reimbursed ? `<div class="between small amber" style="margin-top:10px"><span>${tr('可报销支出', 'Reimbursable')} ${money(t.reimbursable)}</span><span>${tr('报销收入', 'Reimbursed')} ${money(t.reimbursed)}</span></div>` : ''}
+    ${t.refund || t.excluded ? `<div class="between small muted" style="margin-top:4px"><span>${t.refund ? tr('退款 ', 'Refunds ') + money(t.refund) : ''}</span><span>${t.excluded ? tr('不计 ', 'Excluded ') + money(t.excluded) : ''}</span></div>` : ''}
   </div>`;
 }
 
@@ -340,10 +364,10 @@ function ledgerView() {
   for (const t of txs) { if (!days.has(t.date)) days.set(t.date, []); days.get(t.date).push(t); }
   const list = [...days.entries()].map(([day, items]) => {
     const d = L.totals(items);
-    const head = [d.income > 0 ? `收 ${money(d.income)}` : '', d.expense > 0 ? `支 ${money(d.expense)}` : ''].filter(Boolean).join('  ');
+    const head = [d.income > 0 ? `${tr('收', 'In')} ${money(d.income)}` : '', d.expense > 0 ? `${tr('支', 'Out')} ${money(d.expense)}` : ''].filter(Boolean).join('  ');
     return `<div class="card"><div class="dayhead"><span>${dayLabel(day)}</span><span>${head}</span></div>${items.map((t) => txRow(t, L)).join('')}</div>`;
   }).join('');
-  return `<div class="cols"><div class="grid sticky">${summaryCard(totals)}${MOD.homeCards.map((f) => f()).join('')}${quickBar()}</div><div class="grid">${list || '<div class="card muted">这个月还没有账单</div>'}</div></div>`;
+  return `<div class="cols"><div class="grid sticky">${summaryCard(totals)}${MOD.homeCards.map((f) => f()).join('')}${quickBar()}</div><div class="grid">${list || `<div class="card muted">${tr('这个月还没有账单', 'No entries this month')}</div>`}</div></div>`;
 }
 
 function statsView() {
@@ -361,21 +385,21 @@ function statsView() {
     for (const t of g.items) subs.set(t.categoryId, (subs.get(t.categoryId) ?? 0) + L.net(t));
     const subRows = open ? [...subs.entries()].sort((a, b) => b[1] - a[1]).map(([id, c]) => {
       const leaf = state.data.category.get(id);
-      return `<div class="row" style="padding:4px 0 4px 12px">${iconTile(leaf?.icon ?? g.top?.icon ?? 'tag', 'sm')}<div class="main muted">${leaf && leaf.parentId ? h(leaf.name) : '（未细分）'}</div><div class="num muted">${money(c)}</div></div>`;
+      return `<div class="row" style="padding:4px 0 4px 12px">${iconTile(leaf?.icon ?? g.top?.icon ?? 'tag', 'sm')}<div class="main muted">${leaf && leaf.parentId ? h(leaf.name) : tr('（未细分）', '(none)')}</div><div class="num muted">${money(c)}</div></div>`;
     }).join('') : '';
     return `<div class="row click" data-act="open-top" data-v="${g.top?.id ?? 0}">${iconTile(g.top?.icon ?? 'tag')}
-      <div class="main"><div class="title">${h(g.top?.name ?? '未分类')}</div>
+      <div class="main"><div class="title">${h(g.top?.name ?? tr('未分类', 'Uncategorized'))}</div>
         <div class="bar" style="margin:5px 0 3px"><i style="width:${total > 0 ? Math.max(2, Math.round(g.cents * 100 / total)) : 0}%;background:${def.c}"></i></div>
-        <div class="sub">${total > 0 ? Math.round(g.cents * 100 / total) : 0}% · ${g.items.length} 笔</div></div>
+        <div class="sub">${total > 0 ? Math.round(g.cents * 100 / total) : 0}% · ${g.items.length} ${tr('笔', 'entries')}</div></div>
       <div class="num">${money(g.cents)}</div></div>${subRows}`;
   }).join('');
   return `<div class="cols">
     <div class="card sticky grid">
       ${monthBar()}
-      <div class="seg"><button class="${!state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="0">支出</button><button class="${state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="1">收入</button></div>
-      <div><div class="muted small">${state.statsIncome ? '总收入' : '总支出'}</div><div class="big num">${money(total)}</div></div>
+      <div class="seg"><button class="${!state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="0">${tr('支出', 'Expense')}</button><button class="${state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="1">${tr('收入', 'Income')}</button></div>
+      <div><div class="muted small">${state.statsIncome ? tr('总收入', 'Total income') : tr('总支出', 'Total expense')}</div><div class="big num">${money(total)}</div></div>
     </div>
-    <div class="card">${rows || '<span class="muted">这段时间没有记录</span>'}</div>
+    <div class="card">${rows || `<span class="muted">${tr('这段时间没有记录', 'Nothing in this period')}</span>`}</div>
   </div>`;
 }
 
@@ -423,12 +447,12 @@ function accountsView() {
   const pending = pendingReimburse(txs);
   const assets = [...bal.values()].filter((v) => v > 0).reduce((s, v) => s + v, 0) + pending;
   const debts = -[...bal.values()].filter((v) => v < 0).reduce((s, v) => s + v, 0);
-  const receivable = pending > 0 ? `<div class="card"><div class="dayhead"><span>应收</span><span>${money(pending)}</span></div>
-      <div class="row click" data-act="asset-tab" data-v="reimburse">${iconTile('receipt')}<div class="main"><div class="title">待报销</div></div><div class="right"><div class="num">${money(pending)}</div></div></div></div>` : '';
-  const types = [[0, '储蓄账户'], [1, '投资账户'], [2, '信用账户'], [3, '现金账户']];
+  const receivable = pending > 0 ? `<div class="card"><div class="dayhead"><span>${tr('应收', 'Receivable')}</span><span>${money(pending)}</span></div>
+      <div class="row click" data-act="asset-tab" data-v="reimburse">${iconTile('receipt')}<div class="main"><div class="title">${tr('待报销', 'To reimburse')}</div></div><div class="right"><div class="num">${money(pending)}</div></div></div></div>` : '';
+  const types = [[0, tr('储蓄账户', 'Savings')], [1, tr('投资账户', 'Investments')], [2, tr('信用账户', 'Credit')], [3, tr('现金账户', 'Cash')]];
   // 每个账户一张迷你卡面，颜色取自银行品牌色；列表里不放币种和国旗，详情页再看
   const face = (a) => {
-    const b = own.get(a.id), notes = [acctCur(a) !== HOME ? `≈ ${money(bal.get(a.id))}` : '', b < 0 ? '欠款' : ''].filter(Boolean).join(' · ');
+    const b = own.get(a.id), notes = [acctCur(a) !== HOME ? `≈ ${money(bal.get(a.id))}` : '', b < 0 ? tr('欠款', 'Owed') : ''].filter(Boolean).join(' · ');
     return `<div class="face" style="--cc:${accountFace(a)}" data-act="account" data-v="${a.id}"><span class="logo-w">${accountTile(a)}</span><span class="name">${h(a.name)}</span>
       <div class="right"><div class="num">${b < 0 ? '−' : ''}${money(Math.abs(b), acctCur(a))}</div>${notes ? `<div class="small">${notes}</div>` : ''}</div></div>`;
   };
@@ -440,13 +464,13 @@ function accountsView() {
   }).join('');
   // 归档的账户收在最下面（余额照样算进净资产）
   const old = accounts.filter((a) => a.archived);
-  const archivedCard = old.length ? `<div class="card"><div class="dayhead"><span>已归档 ${old.length} 个</span><span>${money(old.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
+  const archivedCard = old.length ? `<div class="card"><div class="dayhead"><span>${tr(`已归档 ${old.length} 个`, `Archived (${old.length})`)}</span><span>${money(old.reduce((s, a) => s + bal.get(a.id), 0))}</span></div>
       ${old.map((a) => `<div class="row click" data-act="account" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title muted">${h(a.name)}</div></div><div class="right"><div class="num muted">${money(own.get(a.id), acctCur(a))}</div></div></div>`).join('')}</div>` : '';
   return `<div class="cols">
-    <div class="card sticky"><div class="muted small">净资产</div><div class="big num">${money(assets - debts)}</div>
-      <div class="between" style="margin-top:10px"><div><div class="muted small">资产</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">负债</div><div class="num out">${money(debts)}</div></div></div>
+    <div class="card sticky"><div class="muted small">${tr('净资产', 'Net worth')}</div><div class="big num">${money(assets - debts)}</div>
+      <div class="between" style="margin-top:10px"><div><div class="muted small">${tr('资产', 'Assets')}</div><div class="num in">${money(assets)}</div></div><div class="right"><div class="muted small">${tr('负债', 'Debts')}</div><div class="num out">${money(debts)}</div></div></div>
       ${assets + debts > 0 ? `<div class="ratio">${assets > 0 ? `<i style="flex:${assets};background:var(--income)"></i>` : ''}${debts > 0 ? `<i style="flex:${debts};background:var(--expense)"></i>` : ''}</div>
-      <div class="small muted" style="margin-top:4px">负债率 ${Math.round(debts * 100 / Math.max(assets, 1))}%</div>` : ''}</div>
+      <div class="small muted" style="margin-top:4px">${tr('负债率', 'Debt ratio')} ${Math.round(debts * 100 / Math.max(assets, 1))}%</div>` : ''}</div>
     <div class="grid">${netWorthCard()}${receivable}${groups}${archivedCard}</div></div>`;
 }
 
@@ -477,7 +501,7 @@ function parseCsv(text) {
 function readPatch(text) {
   const rows = parseCsv(text.replace(/^﻿/, ''));
   const head = (rows[0] ?? []).map((x) => x.trim());
-  if (head[0] !== '操作') throw new Error('这不是修正文件：第一列应该是"操作"。');
+  if (head[0] !== '操作') throw new Error(tr('这不是修正文件：第一列应该是"操作"。', 'Not a fix file: the first column should be "操作".'));
   const col = (r, name) => (r[head.indexOf(name)] ?? '').trim();
   const accountByName = new Map([...state.data.account.values()].map((a) => [a.name, a]));
   const used = new Set();
@@ -516,14 +540,14 @@ function patchView() {
   const p = state.patch;
   const line = (r) => `<div class="between small"><span>${r.iso} ${r.kind === KIND.TRANSFER ? h(r.account) + ' → ' + h(r.toAccount) : h([r.category, r.sub].filter(Boolean).join(' · ')) + ' ' + h(r.account)} <span class="muted">${h(r.note.slice(0, 40))}</span></span><span class="num">${money(r.cents)}</span></div>`;
   return `<div class="modal"><div class="card grid">
-    <h2 style="margin:0">修正文件</h2>
-    <p class="muted" style="margin:0">删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔，改账户 ${p.moves.length} 笔${p.lost ? `，${p.lost} 笔没找到` : ''}${p.bad ? `，${p.bad} 行无效（日期、金额或账户不对）` : ''}</p>
-    ${p.deletes.length ? `<div><b class="out">删除</b>${p.deletes.map((d) => line(d.row)).join('')}</div>` : ''}
-    ${p.adds.length ? `<div><b class="in">新增</b>${p.adds.map(line).join('')}</div>` : ''}
-    ${p.moves.length ? `<div><b>改账户</b>${p.moves.slice(0, 40).map((m) => `<div class="small">${dayISO(m.tx.date)} ${money(m.tx.amountCents)} → ${h(m.account.name)} <span class="muted">${h((m.tx.note ?? '').slice(0, 50))}</span></div>`).join('')}</div>` : ''}
-    ${p.notes.length ? `<div><b>改备注</b>${p.notes.slice(0, 20).map((n) => `<div class="small">${dayISO(n.tx.date)} ${money(n.tx.amountCents)} <span class="muted">${h(n.note.slice(0, 70))}</span></div>`).join('')}${p.notes.length > 20 ? '<div class="muted">…</div>' : ''}</div>` : ''}
+    <h2 style="margin:0">${tr('修正文件', 'Fix file')}</h2>
+    <p class="muted" style="margin:0">${tr(`删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔，改账户 ${p.moves.length} 笔`, `Delete ${p.deletes.length}, add ${p.adds.length}, edit notes ${p.notes.length}, move ${p.moves.length}`)}${p.lost ? tr(`，${p.lost} 笔没找到`, `, ${p.lost} not found`) : ''}${p.bad ? tr(`，${p.bad} 行无效（日期、金额或账户不对）`, `, ${p.bad} invalid rows`) : ''}</p>
+    ${p.deletes.length ? `<div><b class="out">${tr('删除', 'Delete')}</b>${p.deletes.map((d) => line(d.row)).join('')}</div>` : ''}
+    ${p.adds.length ? `<div><b class="in">${tr('新增', 'Add')}</b>${p.adds.map(line).join('')}</div>` : ''}
+    ${p.moves.length ? `<div><b>${tr('改账户', 'Move')}</b>${p.moves.slice(0, 40).map((m) => `<div class="small">${dayISO(m.tx.date)} ${money(m.tx.amountCents)} → ${h(m.account.name)} <span class="muted">${h((m.tx.note ?? '').slice(0, 50))}</span></div>`).join('')}</div>` : ''}
+    ${p.notes.length ? `<div><b>${tr('改备注', 'Edit notes')}</b>${p.notes.slice(0, 20).map((n) => `<div class="small">${dayISO(n.tx.date)} ${money(n.tx.amountCents)} <span class="muted">${h(n.note.slice(0, 70))}</span></div>`).join('')}${p.notes.length > 20 ? '<div class="muted">…</div>' : ''}</div>` : ''}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="patch-cancel">取消</button><button class="btn primary" data-act="patch-apply" ${state.loading || !(p.deletes.length + p.adds.length + p.notes.length + p.moves.length) ? 'disabled' : ''}>${state.loading ? '正在写入…' : '应用修正'}</button></div>
+    <div class="between"><button class="btn" data-act="patch-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="patch-apply" ${state.loading || !(p.deletes.length + p.adds.length + p.notes.length + p.moves.length) ? 'disabled' : ''}>${state.loading ? tr('正在写入…', 'Writing…') : tr('应用修正', 'Apply')}</button></div>
   </div></div>`;
 }
 
@@ -571,6 +595,21 @@ app.addEventListener('click', async (ev) => {
   if (act === 'close-backdrop' && ev.target !== el) return;
   switch (act) {
     case 'mode': state.authEmail = document.getElementById('l-email')?.value.trim() || state.authEmail; state.authMode = v; state.error = ''; state.notice = ''; render(); break;
+    case 'lang': setLang(v); break;
+    case 'pw-eye': { const inp = document.getElementById(v); if (inp) { inp.type = inp.type === 'password' ? 'text' : 'password'; el.textContent = inp.type === 'password' ? tr('显示', 'Show') : tr('隐藏', 'Hide'); } break; }
+    case 'auth-resend': {
+      // 重发确认邮件 / 重设邮件：发信频率有限制，失败时给出能看懂的提示
+      const email = (document.getElementById('l-email')?.value.trim() || state.authEmail || '').trim();
+      if (!email.includes('@')) { state.error = tr('请填写邮箱。', 'Please enter your email.'); render(); break; }
+      state.loading = true; state.error = ''; render();
+      try {
+        if (state.sentKind === 'recovery' && state.authMode === 'sent') await api('POST', '/auth/v1/recover?redirect_to=' + HERE, { email }, { auth: false });
+        else await api('POST', '/auth/v1/resend?redirect_to=' + HERE, { type: 'signup', email }, { auth: false });
+        state.authEmail = email; state.sentKind = state.sentKind === 'recovery' && state.authMode === 'sent' ? 'recovery' : 'signup';
+        state.authMode = 'sent'; state.unconfirmed = false; state.notice = tr('已重新发送。', 'Sent again.');
+      } catch (e) { state.error = e.message; }
+      state.loading = false; render(); break;
+    }
     case 'auth': {
       const mode = state.authMode || 'login', val = (id) => document.getElementById(id)?.value ?? '';
       if (!CLOUD.url) {
@@ -579,36 +618,44 @@ app.addEventListener('click', async (ev) => {
       }
       const email = val('l-email').trim(), pass = val('l-pass'), pass2 = val('l-pass2');
       if (mode !== 'reset') state.authEmail = email;
-      state.loading = true; state.error = ''; state.notice = ''; render();
+      state.loading = true; state.error = ''; state.notice = ''; state.unconfirmed = false; render();
       try {
-        if (mode !== 'reset' && !email.includes('@')) throw new Error('请填写邮箱。');
-        if (mode !== 'forgot' && pass.length < 6) throw new Error('密码至少 6 位。');
-        if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error('两次输入的密码不一样。');
+        if (mode !== 'reset' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error(tr('请填写正确的邮箱。', 'Please enter a valid email.'));
+        if (mode !== 'forgot' && pass.length < 6) throw new Error(tr('密码至少 6 位。', 'Password needs at least 6 characters.'));
+        if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error(tr('两次输入的密码不一样。', 'The passwords don\'t match.'));
         if (mode === 'forgot') {
           await api('POST', '/auth/v1/recover?redirect_to=' + HERE, { email }, { auth: false });
-          state.loading = false; state.authMode = 'login'; state.notice = '重设密码的邮件已发出，请查收。'; render(); break;
+          state.loading = false; state.authMode = 'sent'; state.sentKind = 'recovery'; render(); break;
         }
         if (mode === 'reset') {
-          // 邮件链接带来的临时凭证只用来改这一次密码，不保存
-          const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recoverToken}` }, body: JSON.stringify({ password: pass }) });
-          if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? '新密码不能和旧密码一样。' : res.status === 401 || res.status === 403 ? '链接已失效，请重新点"忘记密码"。' : `没改成（${res.status}）：${j.msg || ''}`); }
-          state.recoverToken = null; state.loading = false; state.authMode = 'login'; state.notice = '密码已改好，请用新密码登录。'; render(); break;
+          // 邮件链接带来的临时登录：改好密码就直接进去，不用再输一遍
+          const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recover.access_token}` }, body: JSON.stringify({ password: pass }) });
+          if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? tr('新密码不能和旧密码一样。', 'New password must differ from the old one.') : res.status === 401 || res.status === 403 ? tr('链接已失效，请重新点"忘记密码"。', 'The link has expired. Use "Forgot password" again.') : `${res.status} ${j.msg || ''}`); }
+          const user = await res.json().catch(() => null);
+          saveSession({ ...state.recover, user: user ?? state.recover.user });
+          state.recover = null; state.loading = false; state.authMode = 'login'; state.notice = tr('密码已改好，已登录。', 'Password changed. You\'re signed in.');
+          await loadAll(); break;
         }
         const o = mode === 'register'
           ? await api('POST', '/auth/v1/signup?redirect_to=' + HERE, { email, password: pass }, { auth: false })
           : await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
-        // 开着邮箱验证时，注册不会直接给登录凭证
-        if (!o.access_token) { state.loading = false; state.authMode = 'login'; state.notice = '注册成功，请到邮箱点确认链接，然后回来登录。'; render(); break; }
+        // 开着邮箱验证时，注册不会直接给登录凭证；已注册过的邮箱 Supabase 也会假装成功（identities 为空）
+        if (!o.access_token) {
+          state.loading = false;
+          if (mode === 'register' && Array.isArray(o.identities) && o.identities.length === 0) { state.authMode = 'login'; state.error = tr('这个邮箱已经注册过，直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'); }
+          else { state.authMode = 'sent'; state.sentKind = 'signup'; }
+          render(); break;
+        }
         saveSession(o); state.loading = false; state.authMode = 'login'; await loadAll();
-      } catch (e) { state.loading = false; state.error = e.message; render(); }
+      } catch (e) { state.loading = false; state.error = e.message; state.unconfirmed = !!e.unconfirmed; render(); }
       break;
     }
     case 'patch-cancel': state.patch = null; state.error = ''; render(); break;
     case 'patch-apply':
       state.loading = true; state.error = ''; render();
-      try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = '没有写完，可以再点一次：' + e.message; }
+      try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = tr('没有写完，可以再点一次：', 'Not finished, try again: ') + e.message; }
       state.loading = false; render(); break;
-    case 'signout': if (confirm('退出登录？')) signOut(); break;
+    case 'signout': if (confirm(tr('退出登录？', 'Sign out?'))) signOut(); break;
     case 'notice-x': state.notice = ''; render(); break;
     default: if (await aiAction(act, v) || await moreAction(act, v, el)) break;
       for (const f of MOD.actions) { if (await f(act, v, el)) break; }
@@ -661,13 +708,36 @@ app.addEventListener('change', async (ev) => {
   if (ev.target.dataset.act === 'ledger') { state.ledgerId = Number(ev.target.value); store.set('hl.ledger', state.ledgerId); render(); }
 });
 
-// 点了确认邮件里的链接会带着一串参数跳到这里：给个提示，并把地址栏里的参数抹掉
-(() => {
-  const p = new URLSearchParams(location.hash.slice(1));
-  if (p.get('error_description')) state.error = /expired|invalid/i.test(p.get('error_description')) ? '确认链接已失效，请重新注册或直接登录试试。' : p.get('error_description');
-  else if (p.get('type') === 'recovery' && p.get('access_token')) { state.session = null; state.recoverToken = p.get('access_token'); state.authMode = 'reset'; }
-  else if (p.get('access_token')) state.notice = '邮箱已确认，可以登录了。';
-  if (location.hash) history.replaceState(null, '', location.pathname);
+// 点了邮件里的链接会带着一串参数跳回这里（Supabase 把结果放在 # 后面，出错时有时放在 ? 后面）：
+// 确认注册 → 直接登录；重设密码 → 进入"设置新密码"；链接过期 → 说清楚并让用户重发。处理完把地址栏抹干净。
+(async () => {
+  const p = new URLSearchParams(location.hash.slice(1)), q = new URLSearchParams(location.search);
+  const err = p.get('error_description') || q.get('error_description'), code = p.get('error_code') || q.get('error_code');
+  if (location.hash || q.has('error') || q.has('code')) history.replaceState(null, '', location.pathname);
+  if (err) {
+    state.authMode = 'login';
+    state.error = code === 'otp_expired' || /expired|invalid/i.test(err)
+      ? tr('邮件里的链接已过期或已用过。可以重发确认邮件，或点"忘记密码"重新获取。', 'That email link has expired or was already used. Resend the confirmation, or use "Forgot password".')
+      : err;
+    state.unconfirmed = true; render(); return;
+  }
+  const access = p.get('access_token');
+  if (!access) return;
+  const tokens = { access_token: access, refresh_token: p.get('refresh_token'), expires_in: Number(p.get('expires_in')) || 3600 };
+  try {
+    // 用链接带来的凭证问一下是谁
+    const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { headers: { apikey: state.cfg.key, Authorization: `Bearer ${access}` } });
+    if (!res.ok) throw new Error(String(res.status));
+    const user = await res.json();
+    if (p.get('type') === 'recovery') {
+      state.session = null; state.recover = { ...tokens, user }; state.authEmail = user.email; state.authMode = 'reset'; render(); return;
+    }
+    saveSession({ ...tokens, user });
+    state.notice = tr('邮箱已确认，已登录。', 'Email confirmed. You\'re signed in.');
+    await loadAll();
+  } catch {
+    state.authMode = 'login'; state.notice = tr('邮箱已确认，请登录。', 'Email confirmed. Please sign in.'); render();
+  }
 })();
 render();
 refreshRates();

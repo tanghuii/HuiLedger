@@ -2,7 +2,7 @@
 // 每一期账单的 id 由"哪条规则、哪一天"算出来（occurrenceId），手机和网页都记了同一期，云端也只有一笔。
 'use strict';
 
-const SCHED_FREQS = [['week', 1, '每周'], ['week', 2, '每两周'], ['month', 1, '每月'], ['month', 3, '每季度'], ['year', 1, '每年']];
+const schedFreqs = () => [['week', 1, tr('每周', 'Weekly')], ['week', 2, tr('每两周', 'Every 2 weeks')], ['month', 1, tr('每月', 'Monthly')], ['month', 3, tr('每季度', 'Quarterly')], ['year', 1, tr('每年', 'Yearly')]];
 
 /** 和手机端 Schedule.of 一样补默认值。 */
 function schedOf(o) {
@@ -31,9 +31,9 @@ function schedAfter(s, day) {
   return epochDay(ny, nm, Math.min(Math.min(Math.max(s.anchor, 1), 31), len(ny, nm)));
 }
 function schedLabel(s) {
-  if (s.unit === 'week') return s.every === 1 ? '每周' : s.every === 2 ? '每两周' : `每 ${s.every} 周`;
-  if (s.unit === 'year') return '每年';
-  return s.every === 1 ? '每月' : s.every === 3 ? '每季度' : `每 ${s.every} 个月`;
+  if (s.unit === 'week') return s.every === 1 ? tr('每周', 'Weekly') : s.every === 2 ? tr('每两周', 'Every 2 weeks') : tr(`每 ${s.every} 周`, `Every ${s.every} weeks`);
+  if (s.unit === 'year') return tr('每年', 'Yearly');
+  return s.every === 1 ? tr('每月', 'Monthly') : s.every === 3 ? tr('每季度', 'Quarterly') : tr(`每 ${s.every} 个月`, `Every ${s.every} months`);
 }
 
 /** 把到期的都记上（落下几期补几期）；已有同一 id 的账单就跳过。返回新记了几笔。 */
@@ -76,21 +76,21 @@ function schedView() {
   const list = schedList().sort((a, b) => a.next - b.next), acc = state.data.account, cat = state.data.category;
   const rows = list.map((s) => {
     const a = acc.get(s.accountId), c = cat.get(s.categoryId);
-    const sub = s.paused ? '<span class="amber">已暂停</span>' : `${schedLabel(s)} · 下次 ${dayISO(s.next)} · ${h(a?.name ?? '?')}`;
+    const sub = s.paused ? `<span class="amber">${tr('已暂停', 'Paused')}</span>` : `${schedLabel(s)} · ${tr('下次', 'Next')} ${dayISO(s.next)} · ${h(a?.name ?? '?')}`;
     const lead = s.kind === KIND.TRANSFER ? accountTile(acc.get(s.toAccountId)) : iconTile(c?.icon ?? 'calendar');
     return `<div class="row click" data-act="sc-edit" data-v="${s.id}">${lead}
       <div class="main"><div class="title">${h(s.name)}</div><div class="sub">${sub}</div></div>
       <div class="right"><div class="num ${s.kind === KIND.INCOME ? 'in' : ''}">${money(s.cents, a ? acctCur(a) : HOME)}</div>
-        <button class="btn link small sc-pause" data-act="sc-pause" data-v="${s.id}">${s.paused ? '恢复' : '暂停'}</button></div></div>`;
+        <button class="btn link small sc-pause" data-act="sc-pause" data-v="${s.id}">${s.paused ? tr('恢复', 'Resume') : tr('暂停', 'Pause')}</button></div></div>`;
   }).join('');
   const monthly = list.filter((s) => !s.paused && s.kind === KIND.EXPENSE).reduce((sum, s) => {
     const a = acc.get(s.accountId), home = a ? convert(s.cents, acctCur(a), HOME) ?? s.cents : s.cents;
     return sum + Math.round(home * (s.unit === 'week' ? 52 / 12 / s.every : s.unit === 'year' ? 1 / 12 / s.every : 1 / s.every));
   }, 0);
   return `<div class="cols">
-    <div class="card cc sticky"><div class="muted small">自动记账</div><div class="big num">${money(monthly)}</div><div class="muted small">每月支出约 · ${list.filter((s) => !s.paused).length} 项进行中</div>
-      <div style="margin-top:12px"><button class="pill" data-act="sc-new">＋ 新建</button></div></div>
-    <div class="card">${rows || '<span class="muted">房租、订阅这类，到期自动记</span>'}</div>
+    <div class="card cc sticky"><div class="muted small">${tr('自动记账', 'Recurring')}</div><div class="big num">${money(monthly)}</div><div class="muted small">${tr(`每月支出约 · ${list.filter((s) => !s.paused).length} 项进行中`, `Approx. monthly spend · ${list.filter((s) => !s.paused).length} active`)}</div>
+      <div style="margin-top:12px"><button class="pill" data-act="sc-new">${tr('＋ 新建', '＋ New')}</button></div></div>
+    <div class="card">${rows || `<span class="muted">${tr('房租、订阅这类，到期自动记', 'Rent, subscriptions… logged when due')}</span>`}</div>
   </div>${state.schedEdit ? schedDialog() : ''}`;
 }
 
@@ -101,22 +101,22 @@ function schedDialog() {
   const cats = [...state.data.category.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   const tops = cats.filter((c) => !c.parentId && !!c.isIncome === (e.kind === KIND.INCOME));
   const catOpts = tops.map((t) => [t, ...cats.filter((c) => c.parentId === t.id)].map((c) => `<option value="${c.id}" ${c.id === e.categoryId ? 'selected' : ''}>${c.parentId ? '　· ' : ''}${h(c.name)}</option>`).join('')).join('');
-  const accOpts = (sel, skip) => `<option value="0">选择账户</option>` + usable.filter((a) => a.id !== skip).map((a) => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${h(a.name)}</option>`).join('');
-  const freqs = SCHED_FREQS.some(([u, n]) => u === e.unit && n === e.every) ? SCHED_FREQS : [...SCHED_FREQS, [e.unit, e.every, schedLabel(e)]];
+  const accOpts = (sel, skip) => `<option value="0">${tr('选择账户', 'Choose account')}</option>` + usable.filter((a) => a.id !== skip).map((a) => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${h(a.name)}</option>`).join('');
+  const base = schedFreqs(), freqs = base.some(([u, n]) => u === e.unit && n === e.every) ? base : [...base, [e.unit, e.every, schedLabel(e)]];
   const transfer = e.kind === KIND.TRANSFER;
-  return `<div class="modal" data-bg="sc"><div class="card grid" role="dialog" aria-label="自动记账">
-    <div class="between"><b style="font-size:18px">${e._isNew ? '新建自动记账' : '自动记账'}</b>${e._isNew ? '' : '<button class="btn link danger" data-act="sc-delete">删除</button>'}</div>
-    ${seg('sc-kind', [[0, '支出'], [1, '收入'], [2, '转账']], e.kind)}
-    <label class="f">名称<input id="sc-name" value="${h(e.name)}" placeholder="如 房租"></label>
-    <label class="f">金额（${account ? acctCur(account) : HOME}）<input id="sc-amount" inputmode="decimal" value="${h(e._amount)}" placeholder="0.00"></label>
-    ${transfer ? '' : `<label class="f">分类<select id="sc-cat"><option value="0">选择分类</option>${catOpts}</select></label>`}
-    ${transfer ? `<div class="two"><label class="f">转出账户<select id="sc-account">${accOpts(e.accountId)}</select></label>
-      <label class="f">转入账户<select id="sc-to">${accOpts(e.toAccountId, e.accountId)}</select></label></div>` : `<label class="f">账户<select id="sc-account">${accOpts(e.accountId)}</select></label>`}
-    <div class="two"><label class="f">频率<select id="sc-freq">${freqs.map(([u, n, l]) => `<option value="${u}:${n}" ${u === e.unit && n === e.every ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <label class="f">下次<input id="sc-next" type="date" value="${dayISO(e.next)}"></label></div>
-    <label class="sc-check"><input type="checkbox" id="sc-paused" ${e.paused ? 'checked' : ''}> 暂停</label>
+  return `<div class="modal" data-bg="sc"><div class="card grid" role="dialog" aria-label="${tr('自动记账', 'Recurring')}">
+    <div class="between"><b style="font-size:18px">${e._isNew ? tr('新建自动记账', 'New recurring') : tr('自动记账', 'Recurring')}</b>${e._isNew ? '' : `<button class="btn link danger" data-act="sc-delete">${tr('删除', 'Delete')}</button>`}</div>
+    ${seg('sc-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')], [2, tr('转账', 'Transfer')]], e.kind)}
+    <label class="f">${tr('名称', 'Name')}<input id="sc-name" value="${h(e.name)}" placeholder="${tr('如 房租', 'e.g. Rent')}"></label>
+    <label class="f">${tr(`金额（${account ? acctCur(account) : HOME}）`, `Amount (${account ? acctCur(account) : HOME})`)}<input id="sc-amount" inputmode="decimal" value="${h(e._amount)}" placeholder="0.00"></label>
+    ${transfer ? '' : `<label class="f">${tr('分类', 'Category')}<select id="sc-cat"><option value="0">${tr('选择分类', 'Choose category')}</option>${catOpts}</select></label>`}
+    ${transfer ? `<div class="two"><label class="f">${tr('转出账户', 'From')}<select id="sc-account">${accOpts(e.accountId)}</select></label>
+      <label class="f">${tr('转入账户', 'To')}<select id="sc-to">${accOpts(e.toAccountId, e.accountId)}</select></label></div>` : `<label class="f">${tr('账户', 'Account')}<select id="sc-account">${accOpts(e.accountId)}</select></label>`}
+    <div class="two"><label class="f">${tr('频率', 'Frequency')}<select id="sc-freq">${freqs.map(([u, n, l]) => `<option value="${u}:${n}" ${u === e.unit && n === e.every ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">${tr('下次', 'Next')}<input id="sc-next" type="date" value="${dayISO(e.next)}"></label></div>
+    <label class="sc-check"><input type="checkbox" id="sc-paused" ${e.paused ? 'checked' : ''}> ${tr('暂停', 'Paused')}</label>
     ${state.schedError ? `<p class="err">${h(state.schedError)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="sc-cancel">取消</button><button class="btn primary" data-act="sc-save">保存</button></div>
+    <div class="between"><button class="btn" data-act="sc-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="sc-save">${tr('保存', 'Save')}</button></div>
   </div></div>`;
 }
 
@@ -137,9 +137,9 @@ function schedCollect() {
 async function schedSaveEditing() {
   schedCollect();
   const e = state.schedEdit, cents = parseCents(e._amount), cat = state.data.category.get(e.categoryId), transfer = e.kind === KIND.TRANSFER;
-  const err = !e.name.trim() ? '请填名称' : cents == null ? '请填金额' : !state.data.account.has(e.accountId) ? '请选账户'
-    : transfer ? (!state.data.account.has(e.toAccountId) || e.toAccountId === e.accountId ? '请选转入账户' : '')
-    : !cat || !!cat.isIncome !== (e.kind === KIND.INCOME) ? '请选分类' : '';
+  const err = !e.name.trim() ? tr('请填名称', 'Enter a name') : cents == null ? tr('请填金额', 'Enter an amount') : !state.data.account.has(e.accountId) ? tr('请选账户', 'Choose an account')
+    : transfer ? (!state.data.account.has(e.toAccountId) || e.toAccountId === e.accountId ? tr('请选转入账户', 'Choose the "To" account') : '')
+    : !cat || !!cat.isIncome !== (e.kind === KIND.INCOME) ? tr('请选分类', 'Choose a category') : '';
   if (err) { state.schedError = err; return; }
   const s = schedOf({ ...e, name: e.name.trim(), cents, categoryId: transfer ? 0 : e.categoryId, toAccountId: transfer ? e.toAccountId : 0, anchor: dayToDate(e.next).getUTCDate() });
   await schedSave([...schedList().filter((x) => x.id !== s.id), s]);
@@ -148,7 +148,7 @@ async function schedSaveEditing() {
 }
 
 MOD.pages.schedules = () => schedView();
-MOD.me.push({ key: 'schedules', name: '自动记账', icon: 'calendar', order: 30 });
+MOD.me.push({ key: 'schedules', get name() { return tr('自动记账', 'Recurring'); }, icon: 'calendar', order: 30 });
 
 MOD.actions.push(async (act, v) => {
   if (!act.startsWith('sc-')) return false;
@@ -166,7 +166,7 @@ MOD.actions.push(async (act, v) => {
       case 'sc-save': await schedSaveEditing(); break;
       case 'sc-delete': {
         const e = state.schedEdit;
-        if (!confirm(`删除「${e.name}」？已记的账单不会删。`)) return true;
+        if (!confirm(tr(`删除「${e.name}」？已记的账单不会删。`, `Delete "${e.name}"? Past entries are kept.`))) return true;
         await schedSave(schedList().filter((x) => x.id !== e.id)); state.schedEdit = null;
         break;
       }

@@ -5,6 +5,23 @@
 'use strict';
 
 /** 和手机端约定好的固定 id（手机端 Sync.SHARED 同一张表），value 的格式也和手机端存的一样。 */
+// ---------------------------------------------------------------- 语言：中文 / English
+// 界面文字一律写成 tr('中文', 'English')。选择存在浏览器里；没选过就跟系统语言走。
+let LANG = (() => { try { const v = JSON.parse(localStorage.getItem('hl.lang')); if (v === 'zh' || v === 'en') return v; } catch { /* 读不到就按系统 */ } return /^zh/i.test(navigator.language) ? 'zh' : 'en'; })();
+document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+const tr = (zh, en) => (LANG === 'en' ? en : zh);
+function setLang(l) {
+  LANG = l === 'en' ? 'en' : 'zh';
+  try { localStorage.setItem('hl.lang', JSON.stringify(LANG)); } catch { /* 隐私模式存不了 */ }
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+  document.title = tr('辉记账本', 'HuiLedger');
+  // 旧的提示是按旧语言写的，换语言就清掉
+  if (typeof state !== 'undefined') { state.error = ''; state.notice = ''; }
+  render();
+}
+/** 语言切换的小开关（登录页右上角、"我的"页都用它）。 */
+const langSwitch = () => `<div class="lang-sw" role="group" aria-label="Language"><button class="${LANG === 'zh' ? 'on' : ''}" data-act="lang" data-v="zh">中</button><button class="${LANG === 'en' ? 'on' : ''}" data-act="lang" data-v="en">EN</button></div>`;
+
 const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10 };
 
 const shared = {

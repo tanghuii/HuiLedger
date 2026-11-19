@@ -49,7 +49,7 @@ function budgetPace(n, total) {
   // 换了月份才放一次"长出来"的动画，别的操作重画时不再闪
   const key = `${state.ledgerId}-${state.month.y}-${state.month.m}`, grow = BUD.grownKey !== key;
   BUD.grownKey = key;
-  const svg = `<svg viewBox="0 0 ${W} ${H}" class="bud-chart ${grow ? 'grow' : ''}" role="img" aria-label="累计花费">
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="bud-chart ${grow ? 'grow' : ''}" role="img" aria-label="${tr('累计花费', 'Cumulative spending')}">
     <defs><linearGradient id="bud-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".28"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>
     <line x1="0" y1="${y(total)}" x2="${W}" y2="${y(total)}" stroke="var(--muted)" stroke-opacity=".35" stroke-width="1"/>
     <line x1="0" y1="${y(0)}" x2="${W}" y2="${y(total)}" stroke="var(--muted)" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="8 8"/>
@@ -58,9 +58,9 @@ function budgetPace(n, total) {
     <path class="line" d="M${pts.join(' L')}" pathLength="1" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     ${upTo > 0 ? `<circle class="dot" cx="${lastX}" cy="${y(cum[upTo - 1])}" r="4.5" fill="var(--primary)"/>` : ''}</svg>`;
   const diff = forecast - total;
-  return `<div class="card"><b class="muted small">本月花费走势</b>${svg}
-    <div class="between small muted"><span>1</span><span>虚线：匀速花完</span><span>${days}</span></div>
-    ${current ? `<div class="${diff > 0 ? 'out' : 'in'}" style="font-weight:600;margin-top:6px">预计月底花 ${money(forecast)}，${diff > 0 ? '超 ' + money(diff) : '剩 ' + money(-diff)}</div>` : ''}</div>`;
+  return `<div class="card"><b class="muted small">${tr('本月花费走势', 'Spending this month')}</b>${svg}
+    <div class="between small muted"><span>1</span><span>${tr('虚线：匀速花完', 'Dashed: even pace')}</span><span>${days}</span></div>
+    ${current ? `<div class="${diff > 0 ? 'out' : 'in'}" style="font-weight:600;margin-top:6px">${tr(`预计月底花 ${money(forecast)}，${diff > 0 ? '超 ' + money(diff) : '剩 ' + money(-diff)}`, `Month-end forecast ${money(forecast)}, ${diff > 0 ? money(diff) + ' over' : money(-diff) + ' left'}`)}</div>` : ''}</div>`;
 }
 
 function budgetView() {
@@ -68,18 +68,18 @@ function budgetView() {
   // 左边：大圆环
   let head;
   if (total <= 0) {
-    head = `<div class="card grid">${monthBar()}<div><b>还没设月度预算</b><div class="muted">本月已支出 ${money(spent)}</div></div>
-      <div><button class="btn primary" data-act="bud-edit" data-v="total">设置预算</button></div></div>`;
+    head = `<div class="card grid">${monthBar()}<div><b>${tr('还没设月度预算', 'No monthly budget yet')}</b><div class="muted">${tr('本月已支出', 'Spent this month')} ${money(spent)}</div></div>
+      <div><button class="btn primary" data-act="bud-edit" data-v="total">${tr('设置预算', 'Set budget')}</button></div></div>`;
   } else {
     const left = total - spent, ratio = spent / total;
     const color = left < 0 ? 'var(--expense)' : ratio > 0.8 ? 'var(--amber)' : 'var(--primary)';
     const daysLeft = n.current ? n.days - n.todayDay + 1 : 0;
     head = `<div class="card grid">${monthBar()}
-      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? '还剩' : '超支'}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">已用 ${Math.round(ratio * 100)}%</div>`)}
-      <div class="bud-stats"><div><div class="muted small">预算</div><div class="num">${money(total)}</div></div>
-        <div><div class="muted small">已花</div><div class="num out">${money(spent)}</div></div>
-        <div><div class="muted small">每天可用</div><div class="num">${daysLeft > 0 && left > 0 ? money(Math.floor(left / daysLeft)) : '—'}</div></div></div>
-      <div><button class="btn" data-act="bud-edit" data-v="total">改预算</button></div></div>`;
+      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? tr('还剩', 'Left') : tr('超支', 'Over')}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">${tr('已用', 'Used')} ${Math.round(ratio * 100)}%</div>`)}
+      <div class="bud-stats"><div><div class="muted small">${tr('预算', 'Budget')}</div><div class="num">${money(total)}</div></div>
+        <div><div class="muted small">${tr('已花', 'Spent')}</div><div class="num out">${money(spent)}</div></div>
+        <div><div class="muted small">${tr('每天可用', 'Per day')}</div><div class="num">${daysLeft > 0 && left > 0 ? money(Math.floor(left / daysLeft)) : '—'}</div></div></div>
+      <div><button class="btn" data-act="bud-edit" data-v="total">${tr('改预算', 'Edit budget')}</button></div></div>`;
   }
   // 右边：走势，分类预算
   const tops = [...state.data.category.values()].filter((c) => !c.parentId && !c.isIncome).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
@@ -94,15 +94,15 @@ function budgetView() {
     return `<div class="row click" data-act="bud-edit" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}
       <div class="main"><div class="between"><span class="title">${h(c.name)}</span><span class="num muted small" style="font-weight:500">${money(used)} / ${money(b)}</span></div>
         <div class="bar bud-bar" style="background:color-mix(in srgb, ${color} 15%, transparent)"><i style="width:${Math.min(100, ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${color} 65%, transparent), ${color})"></i></div>
-        <div class="small ${used > b ? 'out' : ratio > 0.8 ? 'amber' : 'muted'}" style="${used > b ? 'font-weight:600' : ''}">${used <= b ? '还剩 ' + money(b - used) : '超支 ' + money(used - b)}</div></div></div>`;
+        <div class="small ${used > b ? 'out' : ratio > 0.8 ? 'amber' : 'muted'}" style="${used > b ? 'font-weight:600' : ''}">${used <= b ? tr('还剩 ' + money(b - used), money(b - used) + ' left') : tr('超支 ' + money(used - b), money(used - b) + ' over')}</div></div></div>`;
   }).join('');
   const otherRows = others.map((g) => `<div class="row ${g.top ? 'click' : ''}" ${g.top ? `data-act="bud-edit" data-v="${g.top.id}"` : ''}>${iconTile(g.top?.icon ?? 'tag')}
-      <div class="main"><div class="between"><span class="title">${h(g.top?.name ?? '未分类')}</span><span class="num">${money(g.cents)}</span></div>
+      <div class="main"><div class="between"><span class="title">${h(g.top?.name ?? tr('未分类', 'Uncategorized'))}</span><span class="num">${money(g.cents)}</span></div>
         <div class="bar thin"><i style="width:${Math.min(100, g.cents * 100 / Math.max(1, spent)).toFixed(1)}%;background:${(ICONS[g.top?.icon] ?? ICONS.tag).c}"></i></div></div></div>`).join('');
-  const picker = free.length ? `<select class="mini" data-change="bud-pick" aria-label="设分类预算"><option value="">＋ 分类预算</option>${free.map((c) => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select>` : '';
-  const catCard = `<div class="card"><div class="between"><b class="muted small">分类预算</b>${picker}</div>
-    ${!budgetedRows && !otherRows ? '<p class="muted" style="margin:8px 0 0">暂无支出</p>' : ''}${budgetedRows}
-    ${budgetedRows && otherRows ? '<div class="muted small" style="margin-top:8px">没设预算的</div>' : ''}${otherRows}</div>`;
+  const picker = free.length ? `<select class="mini" data-change="bud-pick" aria-label="${tr('设分类预算', 'Set category budget')}"><option value="">${tr('＋ 分类预算', '＋ Category budget')}</option>${free.map((c) => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select>` : '';
+  const catCard = `<div class="card"><div class="between"><b class="muted small">${tr('分类预算', 'Category budgets')}</b>${picker}</div>
+    ${!budgetedRows && !otherRows ? `<p class="muted" style="margin:8px 0 0">${tr('暂无支出', 'No spending yet')}</p>` : ''}${budgetedRows}
+    ${budgetedRows && otherRows ? `<div class="muted small" style="margin-top:8px">${tr('没设预算的', 'No budget')}</div>` : ''}${otherRows}</div>`;
   return `<div class="cols"><div class="grid sticky">${head}</div><div class="grid">${total > 0 ? budgetPace(n, total) : ''}${catCard}</div></div>${budgetDialog()}`;
 }
 
@@ -111,12 +111,12 @@ function budgetDialog() {
   if (BUD.edit == null) return '';
   const isTotal = BUD.edit === 'total', cat = isTotal ? null : state.data.category.get(BUD.edit);
   const cur = isTotal ? BUD.total() : BUD.catOf(BUD.edit);
-  return `<div class="modal bl-modal"><div class="bl-back" data-act="bud-cancel"></div><div class="card grid" role="dialog" aria-label="预算">
-    <div class="row" style="padding:0">${isTotal ? iconTile('target') : iconTile(cat?.icon ?? 'tag')}<b style="font-size:18px">${isTotal ? '每月预算' : h(cat?.name ?? '') + ' 每月预算'}</b></div>
-    <label class="f">金额（${HOME}）<input id="bud-input" inputmode="decimal" value="${budCentsInput(cur)}" placeholder="留空 = 不设" style="font-size:22px;font-weight:700" autocomplete="off"></label>
+  return `<div class="modal bl-modal"><div class="bl-back" data-act="bud-cancel"></div><div class="card grid" role="dialog" aria-label="${tr('预算', 'Budget')}">
+    <div class="row" style="padding:0">${isTotal ? iconTile('target') : iconTile(cat?.icon ?? 'tag')}<b style="font-size:18px">${isTotal ? tr('每月预算', 'Monthly budget') : h(cat?.name ?? '') + tr(' 每月预算', ' monthly budget')}</b></div>
+    <label class="f">${tr(`金额（${HOME}）`, `Amount (${HOME})`)}<input id="bud-input" inputmode="decimal" value="${budCentsInput(cur)}" placeholder="${tr('留空 = 不设', 'Empty = none')}" style="font-size:22px;font-weight:700" autocomplete="off"></label>
     ${BUD.err ? `<p class="err" style="margin:0">${h(BUD.err)}</p>` : ''}
-    <div class="between">${cur > 0 ? '<button class="btn link danger" data-act="bud-clear">清除</button>' : '<span></span>'}
-      <div style="display:flex;gap:8px"><button class="btn" data-act="bud-cancel">取消</button><button class="btn primary" data-act="bud-save">保存</button></div></div>
+    <div class="between">${cur > 0 ? `<button class="btn link danger" data-act="bud-clear">${tr('清除', 'Clear')}</button>` : '<span></span>'}
+      <div style="display:flex;gap:8px"><button class="btn" data-act="bud-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="bud-save">${tr('保存', 'Save')}</button></div></div>
   </div></div>`;
 }
 
@@ -146,14 +146,14 @@ function budgetHomeCard() {
   for (const t of txs) if (t.kind === KIND.EXPENSE && L.counts(t)) { const k = L.top(t.categoryId)?.id ?? -1; byTop.set(k, (byTop.get(k) ?? 0) + L.net(t)); }
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
   return `<div class="card click bud-home" data-act="tab" data-v="budget">
-    <div class="between"><span class="muted small">${current ? '本月预算' : m + '月预算'}</span><span class="num ${over ? 'out' : ''}" style="font-size:18px">${over ? '超支 ' + money(-left) : '还剩 ' + money(left)}</span></div>
+    <div class="between"><span class="muted small">${current ? tr('本月预算', 'Budget this month') : tr(m + '月预算', MONTH_EN[m - 1] + ' budget')}</span><span class="num ${over ? 'out' : ''}" style="font-size:18px">${over ? tr('超支 ' + money(-left), money(-left) + ' over') : tr('还剩 ' + money(left), money(left) + ' left')}</span></div>
     <div class="bar" style="margin:8px 0 6px;background:color-mix(in srgb, ${bar} 15%, transparent)"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div>
-    <div class="between small muted"><span>已花 ${money(spent)} / ${money(total)}</span>${daysLeft > 0 && !over ? `<span>每天 ${money(Math.floor(left / daysLeft))}</span>` : ''}</div>
-    ${overCats.length ? `<div class="small out" style="font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">超支：${h(overCats.join('、'))}</div>` : ''}</div>`;
+    <div class="between small muted"><span>${tr('已花', 'Spent')} ${money(spent)} / ${money(total)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每天 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))}/day`)}</span>` : ''}</div>
+    ${overCats.length ? `<div class="small out" style="font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tr('超支：', 'Over: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</div>`;
 }
 
 MOD.pages.budget = () => budgetView();
-MOD.me.push({ key: 'budget', name: '预算', icon: 'target', order: 10 });
+MOD.me.push({ key: 'budget', get name() { return tr('预算', 'Budget'); }, icon: 'target', order: 10 });
 MOD.homeCards.push(() => budgetHomeCard());
 
 MOD.actions.push(async (act, v, el) => {
@@ -165,7 +165,7 @@ MOD.actions.push(async (act, v, el) => {
     case 'bud-save': {
       const text = document.getElementById('bud-input')?.value.trim() ?? '';
       const cents = text ? parseCents(text) : 0;
-      if (cents == null) { BUD.err = '金额不对'; break; }
+      if (cents == null) { BUD.err = tr('金额不对', 'Invalid amount'); break; }
       await budgetSave(cents);
       break;
     }

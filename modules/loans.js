@@ -58,11 +58,11 @@ function loanData() {
 /** 借款账户里的一笔：从我的钱包看，钱出去是 -，回来是 +。点开看详情、能改能删。 */
 function loanTxRow(t, acc, side, act = "view") {
   const e = effect(acc, t), other = state.data.account.get(t.accountId === acc.id ? t.toAccountId : t.accountId);
-  const label = e > 0 ? (side === 2 ? '我还款' : '借出') : (side === 2 ? '借入' : '收到还款');
+  const label = e > 0 ? (side === 2 ? tr('我还款', 'I repaid') : tr('借出', 'Lent')) : (side === 2 ? tr('借入', 'Borrowed') : tr('收到还款', 'Repayment'));
   const foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
   const sub = [dayISO(t.date), other?.name, t.note].filter(Boolean).map(h).join(' · ');
   return `<div class="row click" data-act="${act}" data-v="${t.id}">${accountTile(other)}
-    <div class="main"><div class="title">${side ? label : (e > 0 ? "转入借款" : "转出借款")}</div><div class="sub">${sub}</div></div>
+    <div class="main"><div class="title">${side ? label : (e > 0 ? tr('转入借款', 'Into loans') : tr('转出借款', 'Out of loans'))}</div><div class="sub">${sub}</div></div>
     <div class="right"><div class="num ${e > 0 ? 'out' : 'in'}">${e > 0 ? '-' : '+'}${foreign ? money(t.origCents, t.currency) : money(Math.abs(e), acctCur(acc))}</div>${foreign ? `<div class="small muted">≈ ${money(t.amountCents)}</div>` : ''}</div></div>`;
 }
 
@@ -77,45 +77,45 @@ function loansView() {
   if (current) {
     // 一个人的明细
     const due = dues[current.person];
-    body = `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="loan-back">‹ 借款</button></div>
+    body = `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="loan-back">${tr('‹ 借款', '‹ Loans')}</button></div>
       <div class="card grid"><div class="row" style="padding:0">${loanAvatar(current.person)}<b style="font-size:18px;min-width:0;overflow:hidden;text-overflow:ellipsis">${h(current.person)}</b></div>
-        <div><div class="muted small">${current.done ? '已还清' : '剩余未还'}</div>
+        <div><div class="muted small">${current.done ? tr('已还清', 'Paid off') : tr('剩余未还', 'Outstanding')}</div>
           <div class="big ${current.done ? 'in' : 'amber'}">${money(Math.max(0, current.left))}</div>
-          <div class="muted small">${lend ? '借出' : '借入'} ${money(current.total)} · 已还 ${money(current.back)}</div></div>
-        <div class="ln-btns"><button class="btn primary" data-act="loan-add" data-v="repay">${lend ? '＋ 收到还款' : '＋ 我还了一笔'}</button><button class="btn" data-act="loan-add" data-v="more">${lend ? '＋ 再借出' : '＋ 再借入'}</button></div>
-        <div class="ln-due">${due == null ? '<button class="btn link" style="padding:0" data-act="loan-due-add">＋ 到期日</button>'
-          : `<span class="muted small">到期日</span><input type="date" data-change="loan-due" value="${dayISO(due)}" aria-label="到期日">${!current.done && now > due ? `<span class="small out">逾期 ${now - due} 天</span>` : ''}<button class="btn link danger" data-act="loan-due-clear">清除</button>`}</div></div></div>
+          <div class="muted small">${lend ? tr('借出', 'Lent') : tr('借入', 'Borrowed')} ${money(current.total)} · ${tr('已还', 'Repaid')} ${money(current.back)}</div></div>
+        <div class="ln-btns"><button class="btn primary" data-act="loan-add" data-v="repay">${lend ? tr('＋ 收到还款', '＋ Repayment') : tr('＋ 我还了一笔', '＋ I repaid')}</button><button class="btn" data-act="loan-add" data-v="more">${lend ? tr('＋ 再借出', '＋ Lend more') : tr('＋ 再借入', '＋ Borrow more')}</button></div>
+        <div class="ln-due">${due == null ? `<button class="btn link" style="padding:0" data-act="loan-due-add">${tr('＋ 到期日', '＋ Due date')}</button>`
+          : `<span class="muted small">${tr('到期日', 'Due')}</span><input type="date" data-change="loan-due" value="${dayISO(due)}" aria-label="${tr('到期日', 'Due date')}">${!current.done && now > due ? `<span class="small out">${tr(`逾期 ${now - due} 天`, `${now - due} days overdue`)}</span>` : ''}<button class="btn link danger" data-act="loan-due-clear">${tr('清除', 'Clear')}</button>`}</div></div></div>
       <div class="card">${current.list.map((t) => loanTxRow(t, acc, LOAN.side)).join('')}</div></div>`;
   } else if (LOAN.loose && loose.length) {
-    body = `<div class="grid" style="max-width:760px;width:100%;margin:0 auto"><div class="between"><button class="btn" data-act="loan-back">‹ 借款</button><span class="muted small">点一笔，指给某人</span></div>
+    body = `<div class="grid" style="max-width:760px;width:100%;margin:0 auto"><div class="between"><button class="btn" data-act="loan-back">${tr('‹ 借款', '‹ Loans')}</button><span class="muted small">${tr('点一笔，指给某人', 'Tap one to assign it')}</span></div>
       <div class="card">${loose.map((t) => loanTxRow(t, acc, 0, "loan-assign")).join("")}</div></div>`;
   } else {
     const total = loans.reduce((s, l) => s + l.total, 0), back = loans.reduce((s, l) => s + l.back, 0);
     const p = total > 0 ? Math.min(1, Math.max(0, back / total)) : 0, r = 34, len = 2 * Math.PI * r;
     const ring = `<div class="ln-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="9"/>
       ${p > 0 ? `<circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(len * p).toFixed(2)} ${len.toFixed(2)}"/>` : ''}</svg>
-      <div><b class="num">${Math.round(p * 100)}%</b><div class="muted" style="font-size:10px">已还</div></div></div>`;
+      <div><b class="num">${Math.round(p * 100)}%</b><div class="muted" style="font-size:10px">${tr('已还', 'repaid')}</div></div></div>`;
     const sumCard = `<div class="card cc" style="--cc:${lend ? '#1FA98A' : '#7B6CF6'}">
-      <div class="row" style="padding:0"><div class="main"><div class="muted small">剩余未还</div><div class="big">${money(Math.max(0, total - back))}</div><div class="muted small">共 ${loans.length} 人</div></div>${ring}</div>
-      <div class="between" style="margin-top:10px">${[[lend ? '总借出' : '总借入', total], ['已还', back], ['剩余', Math.max(0, total - back)]].map(([k, c]) => `<div><div class="muted small">${k}</div><div class="num">${money(c)}</div></div>`).join('')}</div>
-      <div style="margin-top:12px"><button class="pill" data-act="loan-add" data-v="new">${lend ? '＋ 借出' : '＋ 借入'}</button></div></div>`;
-    const looseCard = loose.length ? `<div class="card click" data-act="loan-loose"><div class="between"><div><b style="font-weight:500">未归属</b><div class="muted small">${loose.length} 笔没指定对方</div></div>
+      <div class="row" style="padding:0"><div class="main"><div class="muted small">${tr('剩余未还', 'Outstanding')}</div><div class="big">${money(Math.max(0, total - back))}</div><div class="muted small">${tr(`共 ${loans.length} 人`, `${loans.length} ${loans.length === 1 ? 'person' : 'people'}`)}</div></div>${ring}</div>
+      <div class="between" style="margin-top:10px">${[[lend ? tr('总借出', 'Total lent') : tr('总借入', 'Total borrowed'), total], [tr('已还', 'Repaid'), back], [tr('剩余', 'Left'), Math.max(0, total - back)]].map(([k, c]) => `<div><div class="muted small">${k}</div><div class="num">${money(c)}</div></div>`).join('')}</div>
+      <div style="margin-top:12px"><button class="pill" data-act="loan-add" data-v="new">${lend ? tr('＋ 借出', '＋ Lend') : tr('＋ 借入', '＋ Borrow')}</button></div></div>`;
+    const looseCard = loose.length ? `<div class="card click" data-act="loan-loose"><div class="between"><div><b style="font-weight:500">${tr('未归属', 'Unassigned')}</b><div class="muted small">${tr(`${loose.length} 笔没指定对方`, `${loose.length} without a person`)}</div></div>
       <span class="num">${money(loose.reduce((s, t) => s + effect(acc, t), 0), acctCur(acc))}</span></div></div>` : '';
     const active = loans.filter((l) => !l.done), settled = loans.filter((l) => l.done);
     const card = (l) => {
       const late = dues[l.person] != null ? now - dues[l.person] : 0;
-      const status = l.done ? `<div class="num muted" style="text-decoration:line-through">${money(l.total)}</div><div class="small in">已还清</div>`
-        : `<div class="num">${money(l.left)}</div>${late > 0 ? `<div class="small out">已逾期 ${late} 天</div>` : `<div class="small muted">${dues[l.person] != null ? dayISO(dues[l.person]) + ' 到期' : '剩余未还'}</div>`}`;
+      const status = l.done ? `<div class="num muted" style="text-decoration:line-through">${money(l.total)}</div><div class="small in">${tr('已还清', 'Paid off')}</div>`
+        : `<div class="num">${money(l.left)}</div>${late > 0 ? `<div class="small out">${tr(`已逾期 ${late} 天`, `${late} days overdue`)}</div>` : `<div class="small muted">${dues[l.person] != null ? tr(dayISO(dues[l.person]) + ' 到期', 'Due ' + dayISO(dues[l.person])) : tr('剩余未还', 'Outstanding')}</div>`}`;
       return `<div class="card click ln-card" data-act="loan-open" data-v="${h(l.person)}"><div class="row" style="padding:0">${loanAvatar(l.person)}
         <div class="main"><div class="title">${h(l.person)}</div>
           ${l.total > 0 ? `<div class="bar ln-bar"><i style="width:${(Math.min(1, l.back / l.total) * 100).toFixed(1)}%"></i></div>` : ''}
-          <div class="sub">${lend ? '借出' : '借入'} ${money(l.total)} · ${dayISO(l.last)}</div></div>
+          <div class="sub">${lend ? tr('借出', 'Lent') : tr('借入', 'Borrowed')} ${money(l.total)} · ${dayISO(l.last)}</div></div>
         <div class="right">${status}</div></div></div>`;
     };
-    body = `<div class="cols"><div class="grid sticky"><div class="card" style="padding:8px">${seg('loan-side', [[1, '借出'], [2, '借入']], LOAN.side)}</div>${sumCard}</div>
-      <div class="grid">${looseCard}${!loans.length && !loose.length ? '<div class="card muted">还没有借款</div>' : ''}
+    body = `<div class="cols"><div class="grid sticky"><div class="card" style="padding:8px">${seg('loan-side', [[1, tr('借出', 'Lent')], [2, tr('借入', 'Borrowed')]], LOAN.side)}</div>${sumCard}</div>
+      <div class="grid">${looseCard}${!loans.length && !loose.length ? `<div class="card muted">${tr('还没有借款', 'No loans yet')}</div>` : ''}
         ${active.map(card).join('')}
-        ${settled.length ? `<button class="btn link ln-done" data-act="loan-done">已结清 ${settled.length} 人 ${LOAN.showDone ? '▴' : '▾'}</button>` : ''}
+        ${settled.length ? `<button class="btn link ln-done" data-act="loan-done">${tr(`已结清 ${settled.length} 人`, `Settled (${settled.length})`)} ${LOAN.showDone ? '▴' : '▾'}</button>` : ''}
         ${LOAN.showDone ? settled.map(card).join('') : ''}</div></div>`;
   }
   return body + loanAddDialog(acc) + loanAssignDialog();
@@ -126,21 +126,21 @@ function loanAddDialog(acc) {
   const a = LOAN.add;
   if (!a) return '';
   const lend = LOAN.side === 1;
-  const title = a.repay && lend ? '收到还款' : a.repay ? '我还了一笔' : lend ? '借出' : '借入';
+  const title = a.repay && lend ? tr('收到还款', 'Repayment') : a.repay ? tr('我还了一笔', 'I repaid') : lend ? tr('借出', 'Lend') : tr('借入', 'Borrow');
   const accounts = [...state.data.account.values()].filter((x) => x.id !== acc?.id && !x.archived).sort((x, y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0) || x.id - y.id);
   const sel = accounts.some((x) => x.id === a.accountId) ? a.accountId : accounts[0]?.id;
   const cur = acctCur(state.data.account.get(sel) ?? {});
   const people = loanPeople();
   return `<div class="modal bl-modal"><div class="bl-back" data-act="loan-cancel"></div><div class="card grid" role="dialog" aria-label="${title}">
     <b style="font-size:18px">${title}${a.person ? ` · ${h(a.person)}` : ''}</b>
-    ${a.person ? '' : `<label class="f">对方<input id="ln-name" list="ln-people" autocomplete="off" value="${h(a.name ?? '')}"><datalist id="ln-people">${people.map((p) => `<option value="${h(p)}">`).join('')}</datalist></label>
+    ${a.person ? '' : `<label class="f">${tr('对方', 'Person')}<input id="ln-name" list="ln-people" autocomplete="off" value="${h(a.name ?? '')}"><datalist id="ln-people">${people.map((p) => `<option value="${h(p)}">`).join('')}</datalist></label>
       ${people.length ? `<div class="chips" style="margin:0">${people.slice(0, 12).map((p) => `<button class="chip" data-act="loan-pick" data-v="${h(p)}">${h(p)}</button>`).join('')}</div>` : ''}`}
-    <label class="f">金额（${cur}）<input id="ln-amount" inputmode="decimal" placeholder="0.00" value="${h(a.amount ?? '')}" style="font-size:22px;font-weight:700" autocomplete="off"></label>
-    <div class="two"><label class="f">账户<select id="ln-account" data-change="loan-account">${accounts.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${h(x.name)}</option>`).join('')}</select></label>
-      <label class="f">日期<input id="ln-date" type="date" value="${dayISO(a.date ?? today())}"></label></div>
-    <label class="f">备注（可空）<input id="ln-note" autocomplete="off" value="${h(a.note ?? '')}"></label>
+    <label class="f">${tr(`金额（${cur}）`, `Amount (${cur})`)}<input id="ln-amount" inputmode="decimal" placeholder="0.00" value="${h(a.amount ?? '')}" style="font-size:22px;font-weight:700" autocomplete="off"></label>
+    <div class="two"><label class="f">${tr('账户', 'Account')}<select id="ln-account" data-change="loan-account">${accounts.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${h(x.name)}</option>`).join('')}</select></label>
+      <label class="f">${tr('日期', 'Date')}<input id="ln-date" type="date" value="${dayISO(a.date ?? today())}"></label></div>
+    <label class="f">${tr('备注（可空）', 'Note (optional)')}<input id="ln-note" autocomplete="off" value="${h(a.note ?? '')}"></label>
     ${LOAN.err ? `<p class="err" style="margin:0">${h(LOAN.err)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="loan-cancel">取消</button><button class="btn primary" data-act="loan-save">保存</button></div>
+    <div class="between"><button class="btn" data-act="loan-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="loan-save">${tr('保存', 'Save')}</button></div>
   </div></div>`;
 }
 
@@ -148,13 +148,13 @@ function loanAddDialog(acc) {
 function loanAssignDialog() {
   if (LOAN.assign == null) return '';
   const people = loanPeople();
-  return `<div class="modal bl-modal"><div class="bl-back" data-act="loan-cancel"></div><div class="card grid" role="dialog" aria-label="归到谁名下">
-    <b style="font-size:18px">归到谁名下</b>
-    ${seg('loan-assign-side', [[1, '借出'], [2, '借入']], LOAN.assignSide)}
-    <label class="f">对方<input id="ln-name" list="ln-people" autocomplete="off"><datalist id="ln-people">${people.map((p) => `<option value="${h(p)}">`).join('')}</datalist></label>
+  return `<div class="modal bl-modal"><div class="bl-back" data-act="loan-cancel"></div><div class="card grid" role="dialog" aria-label="${tr('归到谁名下', 'Assign to')}">
+    <b style="font-size:18px">${tr('归到谁名下', 'Assign to')}</b>
+    ${seg('loan-assign-side', [[1, tr('借出', 'Lent')], [2, tr('借入', 'Borrowed')]], LOAN.assignSide)}
+    <label class="f">${tr('对方', 'Person')}<input id="ln-name" list="ln-people" autocomplete="off"><datalist id="ln-people">${people.map((p) => `<option value="${h(p)}">`).join('')}</datalist></label>
     ${people.length ? `<div class="chips" style="margin:0">${people.slice(0, 12).map((p) => `<button class="chip" data-act="loan-pick" data-v="${h(p)}">${h(p)}</button>`).join('')}</div>` : ''}
     ${LOAN.err ? `<p class="err" style="margin:0">${h(LOAN.err)}</p>` : ''}
-    <div class="between"><button class="btn" data-act="loan-cancel">取消</button><button class="btn primary" data-act="loan-assign-save">保存</button></div>
+    <div class="between"><button class="btn" data-act="loan-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="loan-assign-save">${tr('保存', 'Save')}</button></div>
   </div></div>`;
 }
 
@@ -191,7 +191,7 @@ function loanCollect() {
 }
 
 MOD.pages.loans = () => loansView();
-MOD.me.push({ key: 'loans', name: '借款', icon: 'people', order: 11 });
+MOD.me.push({ key: 'loans', get name() { return tr('借款', 'Loans'); }, icon: 'people', order: 11 });
 
 MOD.actions.push(async (act, v) => {
   if (!act.startsWith('loan-')) return false;
@@ -212,9 +212,9 @@ MOD.actions.push(async (act, v) => {
     case 'loan-save': {
       loanCollect();
       const a = LOAN.add, person = (a.person || a.name || '').trim(), cents = parseCents(a.amount ?? ''), account = state.data.account.get(a.accountId) ?? state.data.account.get(Number(document.getElementById('ln-account')?.value));
-      if (!person) { LOAN.err = '请填对方'; break; }
-      if (cents == null) { LOAN.err = '请填金额'; break; }
-      if (!account) { LOAN.err = '请选账户'; break; }
+      if (!person) { LOAN.err = tr('请填对方', 'Enter a person'); break; }
+      if (cents == null) { LOAN.err = tr('请填金额', 'Enter an amount'); break; }
+      if (!account) { LOAN.err = tr('请选账户', 'Choose an account'); break; }
       try {
         await addLoan(person, LOAN.side, a.repay, cents, account, a.date ?? today(), a.note ?? '');
         store.set('hl.lastAccount', account.id);
@@ -226,7 +226,7 @@ MOD.actions.push(async (act, v) => {
     case 'loan-assign-side': LOAN.assignSide = Number(v); { const keep = document.getElementById('ln-name')?.value ?? ''; render(); const el = document.getElementById('ln-name'); if (el) el.value = keep; } return true;
     case 'loan-assign-save': {
       const name = (document.getElementById('ln-name')?.value ?? '').trim(), t = state.data.tx.get(LOAN.assign);
-      if (!name) { LOAN.err = '请填对方'; break; }
+      if (!name) { LOAN.err = tr('请填对方', 'Enter a person'); break; }
       try { if (t) await saveRecord('tx', { ...t, loanPerson: name, loanSide: LOAN.assignSide }); LOAN.assign = null; LOAN.err = ''; } catch (e) { LOAN.err = e.message; }
       break;
     }
