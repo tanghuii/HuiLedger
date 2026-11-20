@@ -341,8 +341,11 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .sc-pause { padding: 0 !important; font-size: 12px; }
 .bk-danger { background: var(--expense) !important; color: #fff !important; }
 .mg-item + .mg-item { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.mg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px 6px; max-height: 360px; overflow: auto; padding: 2px; }
-.mg-ig { grid-column: 1 / -1; padding: 8px 4px 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.mg-icons { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px 6px; align-content: start; padding: 2px; }
+.mg-igs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 1px 0; }
+.mg-igs::-webkit-scrollbar { display: none; }
+.mg-igs button { flex: none; padding: 6px 12px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.mg-igs button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
 .mg-icon-cur { display: flex; align-items: center; gap: 8px; } .mg-icon-cur b { color: var(--primary); font-size: 14px; font-weight: 500; } .mg-icon-cur .tile.sm { width: 24px; height: 24px; }
 .mg-icons button { border: 0; background: none; border-radius: 13px; padding: 3px; cursor: pointer; display: grid; place-items: center; }
 .mg-icons button.on { background: color-mix(in srgb, var(--primary) 24%, transparent); outline: 2px solid var(--primary); }

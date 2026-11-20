@@ -225,12 +225,22 @@ function mgCategoryDialog(e) {
 
 /** 图标的名字（中文 / 英文），没有名字时返回 key。 */
 const mgIconName = (k) => { const n = typeof ICON_NAMES !== 'undefined' ? ICON_NAMES[k] : null; return n ? (LANG === 'en' ? n[1] : n[0]) : k; };
-/** 选图标：按大类分组，每组上面一行大类名；上面一行显示选中的图标和名字（点哪个就显示哪个，和手机端一样）。 */
+/** 选图标：最上面一排大类名，点哪个就只显示那一类的图标（默认是选中的图标所在的那一类）；
+ * 再上面一行显示选中的图标和名字（点哪个就显示哪个，和手机端一样）。 */
 function mgIconPicker(cur) {
-  const groups = typeof ICON_GROUPS !== 'undefined' ? ICON_GROUPS : [['', '', mgIcons()]];
+  const groups = typeof ICON_GROUPS !== 'undefined' ? ICON_GROUPS : [['图标', 'Icons', mgIcons()]];
+  const e = mgState().edit;
+  // 新建从第一类（餐饮）开始；修改时打开它现在图标所在的那一类，并把那个大类名滚到看得见的地方
+  if (e && e.ig == null) {
+    e.ig = e.isNew ? 0 : Math.max(0, groups.findIndex((g) => g[2].includes(cur)));
+    setTimeout(() => document.querySelector('.mg-igs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 0);
+  }
+  const gi = Math.min(e?.ig ?? 0, groups.length - 1);
   const btn = (k) => `<button class="${k === cur ? 'on' : ''}" data-act="mg-icon" data-v="${k}" aria-label="${h(mgIconName(k))}" title="${h(mgIconName(k))}">${iconTile(k)}</button>`;
+  const rows = Math.max(...groups.map((g) => Math.ceil(g[2].length / 6)));
   return `<div class="mg-icon-cur"><span class="muted small">${tr('图标', 'Icon')}</span>${iconTile(cur, 'sm')}<b>${h(mgIconName(cur))}</b></div>
-    <div class="mg-icons">${groups.map(([zh, en, keys]) => `${zh ? `<div class="mg-ig">${h(LANG === 'en' ? en : zh)}</div>` : ''}${keys.filter((k) => ICONS[k]).map(btn).join('')}`).join('')}</div>`;
+    <div class="mg-igs" role="tablist">${groups.map(([zh, en], i) => `<button class="${i === gi ? 'on' : ''}" role="tab" aria-selected="${i === gi}" data-act="mg-ig" data-v="${i}">${h(LANG === 'en' ? en : zh)}</button>`).join('')}</div>
+    <div class="mg-icons" style="min-height:${rows * 50}px">${groups[gi][2].filter((k) => ICONS[k]).map(btn).join('')}</div>`;
 }
 
 /** 删分类（同手机端 deleteCategory）：子分类的账单并回上级；一级分类连同子分类一起删，账单并入同类的"其他"。 */
@@ -395,6 +405,7 @@ MOD.actions.push(async (act, v) => {
         break;
       }
       case 'mg-icon': mgCollect(); m.edit.obj.icon = v; break;
+      case 'mg-ig': mgCollect(); m.edit.ig = id; break;
       case 'mg-cat-delete': {
         const c = m.edit.obj, n = allTxs().filter((t) => t.categoryId === c.id || state.data.category.get(t.categoryId)?.parentId === c.id).length;
         if (!await uiConfirm(tr(`删除「${c.name}」？`, `Delete "${c.name}"?`), { ok: tr('删除', 'Delete'), danger: true,
