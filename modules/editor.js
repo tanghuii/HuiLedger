@@ -5,7 +5,8 @@
 // 3. 多选：长按一行（手指、鼠标都行，电脑上也可以右键），批量改项目、资金来源、分类、报销状态，或者一起删
 // app.js 的 render() 在 state.editing 不为空时画 editorView()；txRow() 也在这里。
 // 撤销提示、多选操作条、删除确认画在 #app 外面的一层（#ed-layer），整页重画不影响它们。
-// 给别的页面用的：startEdit(tx)、startEditWith({ date, accountId, kind, categoryId })、startOffset(expense, '补贴' | '退款' | '代付收回')、
+// 关联支出 / 退款报销的面板和打分在 modules/links.js。
+// 给别的页面用的：startEdit(tx)、startEditWith({ date, accountId, kind, categoryId, toAccountId, note, amount, currency, project, fund })、startOffset(expense, '补贴' | '退款' | '代付收回' | '报销')、
 // txRow(t, L, showDate, viewAccount)、edToast(text, undo)。地址带 ?new 或 #new 打开时直接进记账页（主屏幕快捷方式用）。
 'use strict';
 
@@ -197,6 +198,13 @@ function startEditWith(o = {}) {
   if (o.accountId && state.data.account.has(Number(o.accountId))) e.accountId = Number(o.accountId);
   if (o.ledgerId && state.data.ledger.has(Number(o.ledgerId))) e.ledgerId = Number(o.ledgerId);
   if (o.offsetOf) e._offs = [[Number(o.offsetOf), '']];
+  // 信用卡还款（links.js）：转入账户、备注、金额（分，按 currency 或转出账户的币种）
+  if (o.toAccountId && state.data.account.has(Number(o.toAccountId))) e.toAccountId = Number(o.toAccountId);
+  if (o.note) e.note = String(o.note);
+  if (o.currency) { e._cur = o.currency; e._curPicked = true; }
+  if (o.amount > 0) e._amount = edInput(Math.round(o.amount));
+  if (o.project) e.project = String(o.project);
+  if (o.fund) e.fund = String(o.fund);
   render();
 }
 
@@ -207,15 +215,18 @@ function startEditWith(o = {}) {
 async function startOffset(expense, kindName = '补贴') {
   if (typeof expense !== 'object') expense = state.data.tx.get(Number(expense));
   if (!expense) return;
-  const zh = { subsidy: '补贴', refund: '退款', paidback: '代付收回' }[String(kindName).toLowerCase().replace(/[\s_-]/g, '')] ?? String(kindName);
+  const zh = { subsidy: '补贴', refund: '退款', paidback: '代付收回', claim: '报销', reimbursement: '报销' }[String(kindName).toLowerCase().replace(/[\s_-]/g, '')] ?? String(kindName);
   const en = DEFAULT_INCOME.find(([z]) => z === zh)?.[1];
   const cats = [...state.data.category.values()];
   let cat = cats.find((c) => !c.parentId && c.isIncome && c.name === zh) ?? (en ? cats.find((c) => !c.parentId && c.isIncome && c.name === en) : null);
   if (!cat) {
-    cat = { id: newId(), name: zh, icon: iconKey(zh), isIncome: true, sortOrder: cats.length, parentId: 0 };
+    cat = { id: newId(), name: zh, icon: zh === '报销' ? 'receipt' : iconKey(zh), isIncome: true, sortOrder: cats.length, parentId: 0 };
     try { await saveRecord('category', cat); } catch (err) { state.error = err.message; render(); return; }
   }
-  startEditWith({ kind: KIND.INCOME, categoryId: cat.id, accountId: expense.accountId, date: expense.date, ledgerId: expense.ledgerId, offsetOf: expense.id });
+  // 报销：带上这笔支出的项目、资金来源（存好后支出标成已报销，见 links.js lkSyncClaims）
+  const claim = zh === '报销';
+  startEditWith({ kind: KIND.INCOME, categoryId: cat.id, accountId: expense.accountId, date: expense.date, ledgerId: expense.ledgerId, offsetOf: expense.id,
+    project: claim ? expense.project : '', fund: claim ? expense.fund : '' });
 }
 
 /** 这笔收入每笔抵扣的金额（分）：填了的按填的，留空的拿剩下的全部（EditScreen offsetAmounts）。 */
@@ -263,29 +274,27 @@ function edOffsetCard(e, L) {
       <div class="ed-offline"><label class="ed-offamt ${bad ? 'bad' : ''}"><span>${h(edSym(HOME))}</span><input class="ed-offin" data-i="${i}" value="${h(text)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${tr('留空 = 剩下的全部', 'Empty = the rest')}" aria-label="${tr('抵扣金额', 'Amount')}"></label>
         <button class="btn link muted" data-act="ed-off-rm" data-v="${i}">${tr('移除', 'Remove')}</button></div></div>`;
   }).join('');
-  return `<div class="ed-box ed-offs"><div class="muted small">${tr('抵扣支出（补贴、退款）', 'Offsets expenses (subsidy, refund)')}</div>${rows}
+  // "选择"打开面板：智能推荐 + 搜索全部（links.js）；有推荐时按钮上带个数
+  const n = typeof lkSuggest === 'function' ? lkSuggest(lkFromEditing(e), 'exp', new Set((e._offs ?? []).map(([id]) => id))).length : 0;
+  return `<div class="ed-box ed-offs"><div class="muted small">${tr('关联支出', 'Linked expenses')}</div>${rows}
     <div class="small ed-offsum">${edOffSum(e)}</div>
-    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}</button></div>`;
+    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}${n ? `<span class="lk-n">${n}</span>` : ''}</button></div>`;
 }
+/** 记账页里这笔收入是"报销"（关联的支出不抵扣，只标已报销）。 */
+const edIsClaim = (e) => e.kind === KIND.INCOME && edCats(e).top?.name === '报销';
 function edOffSum(e) {
   if (!(e._offs ?? []).length) return '';
   const { home, given } = edCheck(e);
   if (home == null) return '';
+  if (edIsClaim(e)) return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已关联 ${money(given)}`, `${money(given)} linked`)}</span>`;
   return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已抵扣 ${money(given)}，剩余 ${money(Math.max(0, home - given))} 算收入`, `${money(given)} offset, ${money(Math.max(0, home - given))} left as income`)}</span>`;
 }
 
-/** 支出：列出抵扣它的补贴、退款，也可以直接加一笔。 */
+/** 支出：退款 · 报销 · 代付收回（已关联的、选择、新建），画法在 links.js 的 lkExpenseBox。 */
 function edLinkedCard(e, L) {
   const orig = state.data.tx.get(e.id);
-  if (!orig || orig.kind !== KIND.EXPENSE) return '';
-  const linked = [...state.data.tx.values()].filter((t) => L.parts(t).some(([id]) => id === orig.id)).sort((a, b) => a.date - b.date);
-  const off = L.offsets.get(orig.id) ?? 0;
-  const head = linked.length
-    ? tr(`补贴 / 退款 ${money(off)}，实际支出 ${money(orig.amountCents - off)}`, `Subsidy / refund ${money(off)}, net ${money(orig.amountCents - off)}`)
-    : tr('补贴 / 退款 / 代付收回', 'Subsidy / refund / paid back');
-  return `<div class="ed-box ed-offs"><div class="muted small">${head}</div>
-    ${linked.map((t) => txRow(t, L).replace('data-act="view"', 'data-act="ed-open"')).join('')}
-    <div class="ed-offbtns"><button class="btn link" data-act="ed-offset" data-v="补贴">${tr('＋ 补贴', '＋ Subsidy')}</button><button class="btn link" data-act="ed-offset" data-v="退款">${tr('＋ 退款', '＋ Refund')}</button><button class="btn link" data-act="ed-offset" data-v="代付收回">${tr('＋ 代付收回', '＋ Paid back')}</button></div></div>`;
+  if (!orig || orig.kind !== KIND.EXPENSE || typeof lkExpenseBox !== 'function') return '';
+  return lkExpenseBox(orig, L, true);
 }
 
 function editorView() {
@@ -351,20 +360,8 @@ function edPopList(e) {
     const list = codes.filter((c) => !q || `${c}  ${edSym(c)}`.toLowerCase().includes(q));
     return list.map((c) => opt('cur', c, `${c}　<span class="muted">${h(edSym(c))}</span>`, c === cur, `<span class="ed-flag">${edFlag(c)}</span>`)).join('') || none;
   }
-  if (p === 'offset') {
-    // 候选：这笔收入之前 150 天到之后 62 天的支出；已经选了的支出是什么分类，同分类的排最前，其余离得近的排前面
-    const L = computeLookup(), cat = state.data.category, day = e.date;
-    const orig = e._isNew ? null : state.data.tx.get(e.id), ledger = orig?.ledgerId ?? e.ledgerId;
-    const chosen = new Set((e._offs ?? []).map(([id]) => state.data.tx.get(id)?.categoryId).filter((x) => x != null));
-    const picked = new Set((e._offs ?? []).map(([id]) => id));
-    const names = (t) => [cat.get(t.categoryId), L.top(t.categoryId)].filter(Boolean).flatMap((c) => [c.name, edCatName(c)]);
-    const list = [...state.data.tx.values()]
-      .filter((t) => t.kind === KIND.EXPENSE && t.ledgerId === ledger && t.date >= day - 150 && t.date <= day + 62)
-      .filter((t) => !q || String(t.note ?? '').toLowerCase().includes(q) || names(t).some((n) => String(n).toLowerCase().includes(q)))
-      .sort((a, b) => (chosen.has(a.categoryId) ? 0 : 1) - (chosen.has(b.categoryId) ? 0 : 1) || Math.abs(a.date - day) - Math.abs(b.date - day))
-      .slice(0, 80);
-    return list.map((t) => `<div class="ed-offpick ${picked.has(t.id) ? 'on' : ''}" data-act="ed-off-add" data-v="${t.id}"><div class="muted ed-offdate">${dayISO(t.date)}</div>${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>`).join('') || none;
-  }
+  // 关联支出 / 关联收入：智能推荐 + 搜索全部（links.js）
+  if ((p === 'offset' || p === 'links') && typeof lkEditorSheet === 'function') return lkEditorSheet(e);
   return '';
 }
 
@@ -382,8 +379,9 @@ function edPop(e) {
     body = edPopList(e);
   } else if (p === 'cur') {
     title = tr('币种', 'Currency'); search = true; body = edPopList(e);
-  } else if (p === 'offset') {
-    title = tr('抵扣哪笔支出', 'Which expense?'); search = true; cls = 'tall'; body = edPopList(e);
+  } else if (p === 'offset' || p === 'links') {
+    // 推荐在上、搜索框在中间、结果在下面（搜索框不放标题栏）
+    title = p === 'offset' ? tr('关联支出', 'Linked expenses') : tr('退款 · 报销 · 代付收回', 'Refund · claim · paid back'); cls = 'tall lk-pop'; body = edPopList(e);
   } else if (p === 'equiv') {
     // 折合主货币：留空就按账单那天的汇率算；没有汇率时必须自己填
     const cents = edCalc(e._amount), cur = edCur(e), r = edRate(cur, edRatesOn(e.date));
@@ -495,7 +493,10 @@ async function saveEditing(again = false) {
   // 新记的一笔存好了：屏幕上沿划过一颗小流星（modules/cosmos.js）
   const star = () => { if (e._isNew && typeof plShootingStar === 'function') plShootingStar(); };
   try {
+    const before = state.data.tx.get(t.id) ?? null;
     await saveRecord('tx', t);
+    // 报销收入：新关联的支出标成已报销，不再关联的改回待报销（links.js）
+    if (typeof lkSyncClaims === 'function') await lkSyncClaims(before, t);
     store.set('hl.lastAccount', t.accountId);
     if (t.project) rememberName('hl.projects', t.project);
     if (t.fund) rememberName('hl.funds', t.fund);
@@ -557,7 +558,7 @@ function txRow(t, L, showDate = false, viewAccount = null) {
   const linkedName = targets.length > 1 ? tr(`${targets.length} 笔支出`, `${targets.length} expenses`) : linked ? edCatName(cat.get(linked.categoryId)) || linked.note || '' : '';
   const extra = [
     offset > 0 ? tr(`原 ${money(t.amountCents)} · 抵 ${money(offset)}`, `${money(t.amountCents)} − ${money(offset)}`) : '',
-    linked ? tr(`抵扣 ${h(linkedName)}`, `Offsets ${h(linkedName)}`) : '',
+    linked ? (L.claim?.(t) ? tr(`关联 ${h(linkedName)}`, `For ${h(linkedName)}`) : tr(`抵扣 ${h(linkedName)}`, `Offsets ${h(linkedName)}`)) : '',
     foreign || inAcc ? `≈ ${money(t.amountCents)}` : '',
   ].filter(Boolean).map((x) => `<div class="small muted ed-rx">${x}</div>`).join('');
   // 多选时前面多一个勾；"row click" 和 data-act="view" 这两段别处（txRowStatic）会替换，不要改写法
@@ -908,6 +909,13 @@ document.addEventListener('input', (ev) => {
   } else if (el.id === 'ed-q') {
     // 搜索框：只换下面的列表，输入框不动（拼音选字时也不打断）
     e._q = el.value;
+    // 关联面板：只换搜索结果那一块（推荐和搜索框不动）
+    const res = el.closest('.ed-popcard')?.querySelector('.lk-res');
+    if (res && typeof lkResults === 'function') {
+      const side = e._pick === 'offset' ? 'exp' : 'inc';
+      res.innerHTML = lkResults({ side, subj: lkFromEditing(e), picked: side === 'exp' ? new Set((e._offs ?? []).map(([id]) => id)) : lkLinkedIncomes(e.id), q: e._q, act: side === 'exp' ? 'ed-off-add' : 'ed-lk-add' });
+      return;
+    }
     const box = el.closest('.ed-popcard')?.querySelector('.ed-opts');
     if (box) box.innerHTML = edPopList(e);
   } else if (el.classList.contains('ed-offin')) {
@@ -969,15 +977,14 @@ MOD.changes.push(async (ev) => {
 function edAddOffset(e, id) {
   const t = state.data.tx.get(id);
   if (!t || e._offs.some(([x]) => x === id)) return;
-  const L = computeLookup(), { home } = edCheck(e), total = home ?? 0;
+  const { home } = edCheck(e), total = home ?? 0, claim = edIsClaim(e);
   const given = edOffAmounts(e, home).reduce((s, [, c]) => s + c, 0);
-  // 默认给它"还没被抵扣的部分"，不超过这笔收入还没分出去的钱
-  const want = Math.max(0, L.net(t));
+  // 默认给它"还没被盖住的部分"（不算这笔收入自己存过的那份；报销和退款补贴分开算，links.js lkOpen），不超过这笔收入还没分出去的钱
+  const want = Math.max(0, lkOpen(t, claim, e.id));
   if (e._offs.length === 1 && String(e._offs[0][1]).trim() === '') {
     // 第二笔加进来时，把第一笔的"留空"固定成它当时的金额，两笔才分得开
-    const first = state.data.tx.get(e._offs[0][0]), saved = e._isNew ? null : state.data.tx.get(e.id);
-    const mine = saved ? L.parts(saved).find(([x]) => x === first?.id)?.[1] ?? 0 : 0;
-    const firstGive = Math.min(total, first ? Math.max(0, L.net(first) + mine) : 0);
+    const first = state.data.tx.get(e._offs[0][0]);
+    const firstGive = Math.min(total, first ? Math.max(0, lkOpen(first, claim, e.id)) : 0);
     e._offs[0][1] = edInput(firstGive);
     e._offs.push([id, edInput(Math.max(0, Math.min(total - firstGive, want)))]);
   } else e._offs.push([id, e._offs.length ? edInput(Math.max(0, Math.min(total - given, want))) : '']);

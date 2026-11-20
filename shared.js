@@ -148,11 +148,14 @@ const DEFAULT_EXPENSE = [
 const DEFAULT_INCOME = [['工资', 'Salary'], ['奖金', 'Bonus'], ['外快兼职', 'Side jobs'], ['投资收益', 'Investments'], ['利息', 'Interest'], ['补贴', 'Allowance'],
   ['消费返现', 'Cashback'], ['代付收回', 'Paid back'], ['报销', 'Reimbursement'], ['退款', 'Refund'], ['礼金', 'Gift money'], ['其他', 'Other']];
 
-/** 新账号（云端什么都没有）时写入默认账本、现金账户和全部分类。 */
+/** 新账号的三个默认账户（和手机端 seed 同样的 id、类型、顺序）：现金、支付宝、微信。名字能认出银行 logo（app.js 的 brandOf）。 */
+const DEFAULT_ACCOUNTS = [[1, '现金', 'Cash', 3], [2, '支付宝', 'Alipay', 0], [3, '微信', 'WeChat Pay', 0]];
+
+/** 新账号（云端什么都没有）时写入默认账本、默认账户和全部分类。 */
 async function seedDefaults() {
   const rows = [], add = (kind, data) => rows.push({ kind, id: data.id, data, deleted: false });
   add('ledger', { id: 1, name: tr('日常账本', 'Daily') });
-  add('account', { id: 1, name: tr('现金', 'Cash'), type: 3, initialCents: 0, sortOrder: 0, currency: '', archived: false, checkedAt: 0 });
+  DEFAULT_ACCOUNTS.forEach(([id, zh, en, type], i) => add('account', { id, name: tr(zh, en), type, initialCents: 0, sortOrder: i, currency: '', archived: false, checkedAt: 0 }));
   let id = 0, order = 0;
   const cat = (zh, en, isIncome, parentId) => { id++; add('category', { id, name: tr(zh, en), icon: iconKey(zh), isIncome, sortOrder: order++, parentId }); return id; };
   for (const [zh, en, subs] of DEFAULT_EXPENSE) { const p = cat(zh, en, false, 0); for (const [z, e] of subs) cat(z, e, false, p); }

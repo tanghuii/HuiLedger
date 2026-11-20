@@ -1,0 +1,32 @@
+/* links：关联支出 / 退款报销的面板和卡片、信用卡"还款"按钮（modules/links.js） */
+
+/* 面板：智能推荐 → 搜索框 → 结果 */
+.lk-h { padding: 6px 2px 0; font-weight: 600; }
+.lk-search { flex: none; margin: 2px 0 4px; }
+.lk-res { display: grid; gap: 2px; grid-template-columns: minmax(0, 1fr); }
+.lk-date { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lk-chip { flex: none; font-size: 11px; line-height: 18px; padding: 0 8px; border-radius: 999px; font-weight: 600;
+  background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
+.lk-pick.on { cursor: default; }
+.lk-modal .lk-card { height: 86vh; display: grid; gap: 8px; align-content: start; grid-template-columns: minmax(0, 1fr); overscroll-behavior: contain; }
+.lk-modal .ed-opts { grid-template-columns: minmax(0, 1fr); }
+
+/* 卡片：已关联的几笔（右下角"移除"）、选择 + 新建 */
+.lk-box { display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr); }
+.dt-links { border-radius: 16px; padding: 12px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.dt-links > .muted.small:first-child { font-size: 11px; }
+.lk-net { margin-left: 8px; }
+.lk-linked { display: grid; grid-template-columns: minmax(0, 1fr); }
+.lk-linked .row.click { margin: 0 -8px; }
+.lk-rmline { display: flex; justify-content: flex-end; margin-top: -6px; }
+.lk-rmline .btn.link { padding: 2px 0; font-size: 13px; }
+.lk-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding-top: 4px; }
+.lk-btns .btn.link { padding: 4px 0; font-weight: 600; }
+.lk-pickbtn { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; font-weight: 600; color: var(--primary); font-size: 14px; }
+.lk-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--primary); color: var(--on-primary); font-size: 11px; font-weight: 700; line-height: 1; }
+
+/* 信用卡详情：余额右边的"还款"，设了还款日时下面一行小字 */
+.lk-balrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lk-balrow .bal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-paybox { flex: none; display: grid; justify-items: center; gap: 4px; }
+.pg-pill.lk-pay { padding: 0 22px; font-size: 15px; box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--primary) 70%, transparent); }

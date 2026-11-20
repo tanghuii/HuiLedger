@@ -147,6 +147,9 @@ div.hm-li { cursor: default; }
 .hm-cl2 { display: flex; align-items: center; gap: 12px; }
 .hm-cl2 .tile { width: 34px; height: 34px; border-radius: 11px; }
 .btn.link.hm-outl { color: var(--expense); }
+.hm-delrow { display: flex; justify-content: flex-end; margin-top: 2px; }
+.hm-delrow .hm-del { font-size: 13px; opacity: .8; }
+#hm-del-word { width: 100%; font-size: 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--field); color: var(--text); }
 .hm-fxbusy .card { width: min(320px, 100%); }
 .hm-pbar { margin-top: 0; background: color-mix(in srgb, var(--primary) 14%, transparent); }
 .hm-pbar i { background: var(--primary); transition: width .3s ease; }

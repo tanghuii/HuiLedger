@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#8e7cf8">
 <meta property="og:title" content="行星记账 · Planet Ledger">
 <meta property="og:description" content="九大行星陪你记账：一笔几秒，AI 帮你整理账单，手机和网页同步。免费。">
-<meta property="og:image" content="https://tanghuii.github.io/HuiLedger/icons/icon-512.png">
-<meta property="og:url" content="https://tanghuii.github.io/HuiLedger/download/">
+<meta property="og:image" content="https://planet.tanghui.app/icons/icon-512.png">
+<meta property="og:url" content="https://planet.tanghui.app/download/">
 <link rel="icon" type="image/png" href="../icons/favicon-32.png">
 <link rel="apple-touch-icon" href="../icons/planets/brand-180.png">
 <style>
@@ -183,7 +183,7 @@ footer a { color: inherit; }
       <p class="en" data-zh="Planet Ledger" data-en="行星记账">Planet Ledger</p>
       <p class="lead" data-zh="九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。" data-en="Nine little planets keep you company while you track money. Log an entry in seconds, let AI sort your statements, and sync between phone and web. Free, no ads.">九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。</p>
       <div class="btns">
-        <a class="btn primary" id="dl-android" href="https://github.com/tanghuii/HuiLedger/releases/latest">
+        <a class="btn primary" id="dl-android" href="https://planet.tanghui.app/download/latest.apk">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.2 9.5h9.6c.6 0 1 .4 1 1v6.3c0 .6-.4 1-1 1h-.7v2.4a1.1 1.1 0 0 1-2.2 0v-2.4h-3.8v2.4a1.1 1.1 0 0 1-2.2 0v-2.4h-.7c-.6 0-1-.4-1-1v-6.3c0-.6.4-1 1-1Zm-2.8 0a1.1 1.1 0 0 1 1.1 1.1v4.6a1.1 1.1 0 0 1-2.2 0v-4.6c0-.6.5-1.1 1.1-1.1Zm15.2 0a1.1 1.1 0 0 1 1.1 1.1v4.6a1.1 1.1 0 0 1-2.2 0v-4.6c0-.6.5-1.1 1.1-1.1ZM8.6 4.1l-1-1.7a.3.3 0 0 1 .5-.3l1 1.8A6.6 6.6 0 0 1 12 3.3c1 0 2 .2 2.9.6l1-1.8a.3.3 0 0 1 .5.3l-1 1.7a5.4 5.4 0 0 1 2.8 4.5H5.8a5.4 5.4 0 0 1 2.8-4.5Zm1 2.2a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Zm4.8 0a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Z"/></svg>
           <span><span data-zh="下载安卓版" data-en="Get it for Android">下载安卓版</span><small id="dl-meta" data-zh="最新版 · APK" data-en="Latest · APK">最新版 · APK</small></span>
         </a>
@@ -273,7 +273,7 @@ footer a { color: inherit; }
   </footer>
 </div>
 
-<script src="../planets.js?v=20261120135946"></script>
+<script src="../planets.js?v=20261120170239"></script>
 <script>
 'use strict';
 // 语言：跟着浏览器，右上角可以切换
@@ -326,7 +326,24 @@ function updateMeta() {
     meta.textContent = `v${v} · ${(apk.size / 1048576).toFixed(0)} MB`;
   }
 }
-fetch('https://api.github.com/repos/tanghuii/HuiLedger/releases/latest').then((r) => (r.ok ? r.json() : null)).then((j) => { release = j; updateMeta(); }).catch(() => {});
+// 一律用我们自己的地址 planet.tanghui.app（中国大陆也能用，经 Cloudflare 缓存）；它取不到时才用 GitHub 备份
+const PLANET = 'https://planet.tanghui.app';
+const onPlanet = location.hostname === 'planet.tanghui.app';
+and.href = PLANET + '/download/latest.apk';
+web.href = onPlanet ? '/' : PLANET + '/';
+// 「所有版本」在 GitHub 上，大陆可能打不开：在自己的地址上不显示
+if (onPlanet) document.querySelector('footer a[href*="github.com"]')?.remove();
+function showVersion(v, size) {
+  document.getElementById('ver').textContent = 'v' + v;
+  document.getElementById('dl-meta').textContent = 'v' + v + (size ? ` · ${(size / 1048576).toFixed(0)} MB` : ' · APK');
+}
+fetch(PLANET + '/update.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
+  if (j?.versionName) { showVersion(j.versionName); return; }
+  throw new Error('no planet');
+}).catch(() => fetch('https://api.github.com/repos/tanghuii/HuiLedger/releases/latest').then((r) => (r.ok ? r.json() : null)).then((j) => {
+  // 自己的地址不通：用 GitHub 的版本信息和下载链接
+  release = j; updateMeta();
+}).catch(() => {}));
 
 // 背景里的小星星
 const sky = document.querySelector('.sky');

@@ -122,13 +122,36 @@ function flagOf(cur) {
 
 // ---------------------------------------------------------------- 云端
 
+// ---- 连云端：统一走我们自己的地址 planet.tanghui.app（Cloudflare Worker，见 cloudflare/worker.js，中国大陆也能连）；它不通时自动直连 supabase.co
+const CLOUD_RELAY = 'https://planet.tanghui.app';
+/** 依次要试的云端地址：上次能用的那个在前。只有内置的云端项目才有中转。 */
+function cloudBases() {
+  const direct = state.cfg.url.replace(/\/+$/, '');
+  if (!CLOUD.url || direct !== CLOUD.url.replace(/\/+$/, '')) return [direct];
+  // 平时都走 planet.tanghui.app；它连不上时才直连 supabase.co（并记住，下次先直连）
+  return store.get('hl.apiBase', '') === 'direct' ? [direct, CLOUD_RELAY] : [CLOUD_RELAY, direct];
+}
+/** 和 fetch 一样，只是网络不通时换下一个地址再试；成功的那个记下来，下次先用它。 */
+async function cloudFetch(path, init) {
+  const bases = cloudBases();
+  let lastErr;
+  for (const base of bases) {
+    try {
+      const res = await fetch(base + path, init);
+      if (bases.length > 1) store.set('hl.apiBase', base === CLOUD_RELAY ? 'relay' : 'direct');
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
 async function api(method, path, body, { auth = true, prefer } = {}) {
-  const { url, key } = state.cfg;
+  const { key } = state.cfg;
   const headers = { apikey: key, 'Content-Type': 'application/json', Authorization: `Bearer ${auth ? await accessToken() : key}` };
   if (prefer) headers.Prefer = prefer;
   let res;
   try {
-    res = await fetch(url.replace(/\/+$/, '') + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    res = await cloudFetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   } catch { throw Object.assign(new Error(tr('连不上云端，请检查网络。', 'Can\'t reach the cloud. Check your connection.')), { offline: true }); }
   const text = await res.text();
   const json = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
@@ -223,11 +246,13 @@ function computeLookup() {
       : t.offsetOf > 0 ? [[t.offsetOf, t.amountCents]] : [];
     return list.filter(([id]) => txs.get(id)?.kind === KIND.EXPENSE);
   };
-  const offsets = new Map();
-  for (const t of txs.values()) for (const [id, c] of parts(t)) offsets.set(id, (offsets.get(id) ?? 0) + c);
-  const rest = (t) => Math.max(0, t.amountCents - parts(t).reduce((s, p) => s + p[1], 0));
-  const net = (t) => (t.kind === KIND.EXPENSE ? t.amountCents - (offsets.get(t.id) ?? 0) : t.kind === KIND.INCOME ? rest(t) : t.amountCents);
   const isReimburse = (t) => (t.kind === KIND.EXPENSE ? t.reimburse !== 0 : t.kind === KIND.INCOME && top(t.categoryId)?.name === '报销');
+  // "报销"收入关联的支出只是记一下是哪几笔报回来了，不抵扣：支出的净额不变，这笔收入也整笔算"报销收入"（两边本来就不进总收支）
+  const claim = (t) => t.kind === KIND.INCOME && isReimburse(t);
+  const offsets = new Map();
+  for (const t of txs.values()) if (!claim(t)) for (const [id, c] of parts(t)) offsets.set(id, (offsets.get(id) ?? 0) + c);
+  const rest = (t) => (claim(t) ? t.amountCents : Math.max(0, t.amountCents - parts(t).reduce((s, p) => s + p[1], 0)));
+  const net = (t) => (t.kind === KIND.EXPENSE ? t.amountCents - (offsets.get(t.id) ?? 0) : t.kind === KIND.INCOME ? rest(t) : t.amountCents);
   const isRefund = (t) => t.kind === KIND.INCOME && ['退款', '代付收回', '代付退还'].includes(top(t.categoryId)?.name);
   const isOffset = (t) => parts(t).length > 0;
   const counts = (t) => !t.excluded && !isReimburse(t) && !isRefund(t) && (!isOffset(t) || rest(t) > 0);
@@ -246,7 +271,7 @@ function computeLookup() {
     r.expense -= r.refund;
     return r;
   };
-  return { top, parts, offsets, net, isReimburse, isRefund, isOffset, counts, totals };
+  return { top, parts, offsets, net, isReimburse, isRefund, isOffset, counts, totals, claim };
 }
 
 function monthTxs() {
@@ -571,7 +596,8 @@ function settingsView() {
   const cloud = `<div class="card hm-sc">
     <div class="hm-cl2">${iconTile('layers')}<div class="hm-grow"><b>${tr('云端同步', 'Cloud sync')}</b><div class="muted hm-sub2">${h(state.session?.email ?? '')}</div></div></div>
     <div class="hm-btns"><button class="btn primary" data-act="reload" ${hm.syncing ? 'disabled' : ''}>${hm.syncing ? tr('正在同步…', 'Syncing…') : tr('立即同步', 'Sync now')}</button><button class="btn link hm-outl" data-act="hm-signout">${tr('退出登录', 'Sign out')}</button></div>
-    ${status ? `<div class="muted hm-sub2">${status}</div>` : ''}</div>`;
+    ${status ? `<div class="muted hm-sub2">${status}</div>` : ''}
+    <div class="hm-delrow"><button class="btn link hm-outl hm-del" data-act="hm-delete">${tr('注销账户', 'Delete account')}</button></div></div>`;
 
   // 版本（App 的"软件更新"）：网页是打开时自动拿最新的，有新版本时顶上会弹一条"点击刷新"
   const canCheck = !!navigator.serviceWorker?.controller;
@@ -586,6 +612,7 @@ function settingsView() {
     ${extra(typeof lockSettingsHtml === 'function' ? lockSettingsHtml : null)}${extra(typeof remindersSettingsHtml === 'function' ? remindersSettingsHtml : null)}
     <div class="card hm-list">
       ${MOD.pages.appearance ? row('paint', tr('外观', 'Appearance'), 'data-act="tab" data-v="appearance"') : ''}
+      ${typeof obOpen === 'function' ? row('sparkle', tr('使用向导', 'Setup guide'), 'data-act="ob-open"') : ''}
       ${MOD.pages.manage ? row('bank', tr('账户', 'Accounts'), 'data-act="hm-go" data-v="accounts"') : ''}
       ${modRow(mod('schedules'))}${modRow(mod('loans'))}
       ${MOD.me.filter((m) => !covered.includes(m.key)).map(modRow).join('')}
@@ -608,6 +635,59 @@ MOD.changes.push(async (ev) => {
 });
 MOD.me.push({ key: 'settings', get name() { return tr('设置', 'Settings'); }, icon: 'wrench', order: 95 });
 
+// ---- 注销账户：云端的数据和登录账号都删掉，这台设备上存的也全部清空
+/** 确认框：要打出「注销」两个字（英文 DELETE）才能点。返回 true / false。 */
+function hmDeleteConfirm() {
+  const word = tr('注销', 'DELETE');
+  return new Promise((done) => {
+    const box = document.createElement('div');
+    box.className = 'modal ui-confirm';
+    box.innerHTML = `<div class="card grid" role="alertdialog" aria-modal="true">
+      <b style="font-size:17px">${tr('注销账户？', 'Delete your account?')}</b>
+      <div class="muted small">${tr('云端和这台设备上的所有账单、账户、设置都会永久删除，不能恢复。需要的话先在「数据安全」里备份。', 'Every entry, account and setting in the cloud and on this device is deleted for good. Back up first under Data safety if you need it.')}</div>
+      <div class="small">${tr(`输入「${word}」确认`, `Type "${word}" to confirm`)}</div>
+      <input id="hm-del-word" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+      <div class="between"><button class="btn" data-x="0">${tr('取消', 'Cancel')}</button><button class="btn danger-fill" data-x="1" disabled>${tr('永久注销', 'Delete forever')}</button></div></div>`;
+    const input = box.querySelector('#hm-del-word'), ok = box.querySelector('[data-x="1"]');
+    input.addEventListener('input', () => { ok.disabled = input.value.trim().toUpperCase() !== word.toUpperCase(); });
+    box.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-x]');
+      if (!b && ev.target !== box) return;
+      if (b && b.disabled) return;
+      box.remove(); done(b?.dataset.x === '1');
+    });
+    document.body.appendChild(box);
+    setTimeout(() => input.focus(), 50);
+  });
+}
+/** 这台设备上存的全部清掉：本地存储里的所有设置和密钥、离线快照、待上传的修改。 */
+async function hmWipeLocal() {
+  try { Object.keys(localStorage).filter((k) => k.startsWith('hl.')).forEach((k) => localStorage.removeItem(k)); } catch { /* 隐私模式 */ }
+  try { snap._db && (await snap._db).close(); } catch { /* 没开过 */ }
+  snap._db = null;
+  try { await new Promise((ok) => { const r = indexedDB.deleteDatabase('huiledger'); r.onsuccess = r.onerror = r.onblocked = () => ok(); }); } catch { /* 没有就算了 */ }
+}
+async function hmDeleteAccount() {
+  if (!state.session || !await hmDeleteConfirm()) return;
+  state.notice = ''; state.error = '';
+  let partial = false;
+  try {
+    // 后台要先装好 delete_my_account()（supabase/delete-account.sql）；没装时退一步：至少把云端的数据删光
+    try { await api('POST', '/rest/v1/rpc/delete_my_account', {}); } catch (e) {
+      if (!/404|PGRST202|delete_my_account/i.test(e.message)) throw e;
+      await api('DELETE', `/rest/v1/records?user_id=eq.${encodeURIComponent(state.session.user)}`, null, { prefer: 'return=minimal' });
+      partial = true;
+    }
+  } catch (e) { state.error = tr('没能注销：', "Couldn't delete: ") + e.message; render(); return; }
+  await hmWipeLocal();
+  state.session = null;
+  for (const m of Object.values(state.data)) m.clear();
+  state.tab = 'ledger';
+  state.notice = partial ? tr('数据已全部删除。登录账号还在，请联系管理员删除。', 'All data is deleted. The sign-in account still exists; ask the admin to remove it.')
+    : tr('账户已注销，所有数据都已删除。', 'Account deleted. All data is gone.');
+  render();
+}
+
 // 首页和"我的"上新加的按钮
 MOD.actions.push(async (act, v) => {
   if (!act.startsWith('hm-')) return false;
@@ -617,6 +697,7 @@ MOD.actions.push(async (act, v) => {
       if (await uiConfirm(tr('退出登录？', 'Sign out?'), { ok: tr('退出', 'Sign out'), danger: true })) signOut();
       return true;
     }
+    case 'hm-delete': hmDeleteAccount(); return true;
     case 'hm-menu-x': state.hmMenu = false; state.hmCurMenu = false; break;
     // 设置 → 货币
     case 'hm-cur': if (!state.hmFx?.busy) state.hmCurMenu = !state.hmCurMenu; break;
@@ -1077,7 +1158,7 @@ app.addEventListener('click', async (ev) => {
         }
         if (mode === 'reset') {
           // 邮件链接带来的临时登录：改好密码就直接进去，不用再输一遍
-          const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recover.access_token}` }, body: JSON.stringify({ password: pass }) });
+          const res = await cloudFetch('/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recover.access_token}` }, body: JSON.stringify({ password: pass }) });
           if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? tr('新密码不能和旧密码一样。', 'New password must differ from the old one.') : res.status === 401 || res.status === 403 ? tr('链接已失效，请重新点"忘记密码"。', 'The link has expired. Use "Forgot password" again.') : `${res.status} ${j.msg || ''}`); }
           const user = await res.json().catch(() => null);
           saveSession({ ...state.recover, user: user ?? state.recover.user });
@@ -1181,7 +1262,7 @@ app.addEventListener('change', async (ev) => {
   const tokens = { access_token: access, refresh_token: p.get('refresh_token'), expires_in: Number(p.get('expires_in')) || 3600 };
   try {
     // 用链接带来的凭证问一下是谁
-    const res = await fetch(state.cfg.url.replace(/\/+$/, '') + '/auth/v1/user', { headers: { apikey: state.cfg.key, Authorization: `Bearer ${access}` } });
+    const res = await cloudFetch('/auth/v1/user', { headers: { apikey: state.cfg.key, Authorization: `Bearer ${access}` } });
     if (!res.ok) throw new Error(String(res.status));
     const user = await res.json();
     if (p.get('type') === 'recovery') {

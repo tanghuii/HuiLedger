@@ -174,10 +174,11 @@ function detailView() {
     </div>
     <div class="cell"><div class="muted">${tr('备注', 'Note')}</div><div class="note ${t.note ? '' : 'muted'}">${h(t.note) || tr('无', 'None')}</div></div>
     <div class="cells">${cells}</div>
+    ${typeof lkExpenseBox === 'function' ? (t.kind === KIND.EXPENSE ? lkExpenseBox(t, L, false) : t.kind === KIND.INCOME ? lkIncomeBox(t, L) : '') : `
     ${linked.length ? `<div><div class="muted small">${tr('它抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
-    ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}
-    ${t.kind === KIND.EXPENSE && typeof startOffset === 'function' ? `<div class="dt-offs">${[['补贴', tr('＋ 补贴', '＋ Subsidy')], ['退款', tr('＋ 退款', '＋ Refund')], ['代付收回', tr('＋ 代付收回', '＋ Paid back')]].map(([k, n]) => `<button class="btn link" data-act="view-offset" data-v="${k}">${n}</button>`).join('')}</div>` : ''}
+    ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}`}
     </div>
+    ${typeof lkDetailSheet === 'function' ? lkDetailSheet() : ''}
     <div class="dt-foot"><div class="btns3"><button class="btn danger" data-act="view-delete">${tr('删除', 'Delete')}</button><button class="btn" data-act="view-copy">${tr('复制', 'Copy')}</button><button class="btn primary" data-act="edit" data-v="${t.id}">${tr('修改', 'Edit')}</button></div></div>
   </div>`;
 }
@@ -198,16 +199,20 @@ document.addEventListener('keydown', (ev) => {
 
 // ---------------------------------------------------------------- 搜索：所有账本、所有时间
 
+/** 全局搜索拿来比对的那一串字（小写）：备注、标签、分类、账户、账本、项目、金额、日期……（links.js 的"搜索全部"也用它） */
+function searchText(t, L) {
+  const acc = state.data.account, cat = state.data.category;
+  const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), iso = dayISO(t.date), d = dayToDate(t.date);
+  return [t.note, t.tags, leaf?.name, top?.name, cn(leaf, ''), cn(top, ''), acc.get(t.accountId)?.name, acc.get(t.toAccountId)?.name, state.data.ledger.get(t.ledgerId)?.name, t.project, t.fund,
+    (t.amountCents / 100).toFixed(2), t.origCents ? (t.origCents / 100).toFixed(2) : '', t.currency, iso, `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`, `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`,
+    ['支出 expense', '收入 income', '转账 transfer'][t.kind], L.isReimburse(t) ? '报销 reimburse' : '', t.excluded ? '不计 excluded' : '',
+    `${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()} ${d.getUTCFullYear()}`].filter(Boolean).join(' ').toLowerCase();
+}
+
 function searchView() {
-  const L = computeLookup(), acc = state.data.account, cat = state.data.category;
+  const L = computeLookup();
   const words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
-  const text = (t) => {
-    const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), iso = dayISO(t.date), d = dayToDate(t.date);
-    return [t.note, t.tags, leaf?.name, top?.name, cn(leaf, ''), cn(top, ''), acc.get(t.accountId)?.name, acc.get(t.toAccountId)?.name, state.data.ledger.get(t.ledgerId)?.name, t.project, t.fund,
-      (t.amountCents / 100).toFixed(2), t.origCents ? (t.origCents / 100).toFixed(2) : '', t.currency, iso, `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`, `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`,
-      ['支出 expense', '收入 income', '转账 transfer'][t.kind], L.isReimburse(t) ? '报销 reimburse' : '', t.excluded ? '不计 excluded' : '',
-      `${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()} ${d.getUTCFullYear()}`].filter(Boolean).join(' ').toLowerCase();
-  };
+  const text = (t) => searchText(t, L);
   // 胶囊形的搜索框：左边放大镜，有字时右边一个清除
   const box = `<div class="between"><div class="sbox">${SEARCH_SVG}<input id="q" value="${h(state.q)}" placeholder="${tr('备注、分类、账户、标签、金额、日期', 'Note, category, account, tag, amount, date')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('搜索', 'Search')}">
       ${state.q ? `<button class="x" data-act="search-clear" aria-label="${tr('清除', 'Clear')}">✕</button>` : ''}</div><button class="btn" data-act="search-close">${tr('取消', 'Cancel')}</button></div>`;
@@ -466,11 +471,14 @@ function accountDetailView() {
   const type = ACCOUNT_TYPE_NAMES()[a.type ?? 0] ?? '';
   const stat = (label, cents) => `<div><div class="small muted">${label}</div><div class="num">${show(cents)}</div></div>`;
   const right = `<button class="pg-pill" data-act="acc-add" data-v="${a.id}">${pgIcon('plus')}<span>${tr('记一笔', 'Add')}</span></button><button class="round pg-round" data-act="acc-settings" data-v="${a.id}" aria-label="${tr('账户设置', 'Account settings')}">${pgIcon('wrench')}</button>`;
+  // 信用卡：余额右边一个"还款"（links.js），设了还款日就在按钮下面写"还款日 X 号"
+  const due = a.type === 2 && typeof lkDueDay === 'function' ? lkDueDay(a) : 0;
+  const pay = a.type === 2 && typeof lkStartRepay === 'function' ? `<div class="lk-paybox"><button class="pg-pill lk-pay" data-act="acc-pay" data-v="${a.id}">${tr('还款', 'Pay off')}</button>${due ? `<div class="small muted">${tr(`还款日 ${due} 号`, `Due day ${due}`)}</div>` : ''}</div>` : '';
   const card = `<div class="card cc acard" style="--cc:${accountFace(a)}">
       <div class="row" style="padding:0"><span class="logo-w lg">${accountTile(a)}</span><div class="main"><div class="title acard-name">${h(a.name)}</div><div class="small muted">${tr(`${type}账户`, `${type} account`)}</div></div>
         <span class="small muted acard-cur"><span class="flag">${flagOf(cur)}</span>${cur}</span></div>
       <div class="small muted acard-lbl">${tr('余额', 'Balance')}</div>
-      <div class="big bal">${show(balance)}</div>
+      ${pay ? `<div class="lk-balrow"><div class="big bal">${show(balance)}</div>${pay}</div>` : `<div class="big bal">${show(balance)}</div>`}
       ${notes ? `<div class="small muted">${notes}</div>` : ''}
       <div class="stats3">${stat(tr('初始余额', 'Opening'), a.initialCents ?? 0)}${stat(tr('累计流入', 'Total in'), flow(list, 1))}${stat(tr('累计流出', 'Total out'), flow(list, -1))}</div>
       <div class="acard-btns"><button class="pill" data-act="acc-settings" data-v="${a.id}">${tr('账户设置', 'Settings')}</button><button class="pill" data-act="acc-fix" data-v="${a.id}">${tr('修正当前余额', 'Correct balance')}</button></div></div>`;
