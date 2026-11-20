@@ -341,7 +341,7 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .sc-pause { padding: 0 !important; font-size: 12px; }
 .bk-danger { background: var(--expense) !important; color: #fff !important; }
 .mg-item + .mg-item { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.mg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; padding: 2px; }
+.mg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; max-height: 340px; overflow: auto; padding: 2px; }
 .mg-icons button { border: 0; background: none; border-radius: 13px; padding: 3px; cursor: pointer; display: grid; place-items: center; }
 .mg-icons button.on { background: color-mix(in srgb, var(--primary) 24%, transparent); outline: 2px solid var(--primary); }
 .mg-icons .tile { width: 34px; height: 34px; border-radius: 11px; }
