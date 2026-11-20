@@ -15,13 +15,17 @@ const AI_PROVIDERS = {
   },
   deepseek: {
     name: 'DeepSeek', keyK: 'hl.deepseekKey', modelK: 'hl.deepseekModel', listK: 'hl.aiModels.deepseek', ph: 'sk-…',
-    models: [{ id: 'deepseek-chat', name: '' }, { id: 'deepseek-reasoner', name: '' }],
+    models: [{ id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash' }, { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }],
   },
 };
 const AI_MODEL_DEFAULT = AI_PROVIDERS.claude.models[0].id;
 const aiProvider = () => (store.get('hl.aiProvider', '') === 'deepseek' ? 'deepseek' : 'claude');
 const aiKey = (p = aiProvider()) => store.get(AI_PROVIDERS[p].keyK, '') || '';
-const aiModel = (p = aiProvider()) => store.get(AI_PROVIDERS[p].modelK, '') || AI_PROVIDERS[p].models[0].id;
+// 旧的 deepseek-chat / deepseek-reasoner 已经不在 DeepSeek 的列表里了，换成现在的 deepseek-flash
+const aiDeepseekModel = (m) => (!m || m === 'deepseek-chat' || m === 'deepseek-reasoner' ? 'deepseek-flash' : m);
+const aiModel = (p = aiProvider()) => { const m = store.get(AI_PROVIDERS[p].modelK, '') || AI_PROVIDERS[p].models[0].id; return p === 'deepseek' ? aiDeepseekModel(m) : m; };
+/** DeepSeek 里能看图片的模型（官方文档：deepseek-flash 支持图片输入，deepseek-v4-pro 不支持）。 */
+const aiDeepseekSeesImages = (m = aiModel('deepseek')) => /flash/.test(m);
 /** 可选的模型：上次刷新到的列表（没刷新过是默认的几个）；之前存的模型不在里面也留着。 */
 function aiModelList(p, chosen = aiModel(p)) {
   const saved = store.get(AI_PROVIDERS[p].listK, null);
@@ -32,8 +36,14 @@ function aiModelList(p, chosen = aiModel(p)) {
 class AiError extends Error {}
 
 /** DeepSeek 只认文字：要发图片或 PDF 时在发送之前就停下。 */
-const aiNoFilesMsg = () => tr('DeepSeek 不能读图片和 PDF，请在 AI 设置里换成 Claude', "DeepSeek can't read images or PDFs. Switch to Claude in AI settings.");
-function aiCheckFiles() { if (aiProvider() === 'deepseek') throw new AiError(aiNoFilesMsg()); }
+const aiNoFilesMsg = () => tr('DeepSeek 不能读 PDF，请在 AI 设置里换成 Claude', "DeepSeek can't read PDFs. Switch to Claude in AI settings.");
+const aiNoImagesMsg = () => tr('这个 DeepSeek 模型不能读图片，请选 deepseek-flash 或换成 Claude', "This DeepSeek model can't read images. Pick deepseek-flash or switch to Claude.");
+/** 发之前检查：kind = 'pdf' | 'image'。DeepSeek 读不了 PDF；图片只有 deepseek-flash 能读。 */
+function aiCheckFiles(kind = 'pdf') {
+  if (aiProvider() !== 'deepseek') return;
+  if (kind === 'image') { if (!aiDeepseekSeesImages()) throw new AiError(aiNoImagesMsg()); return; }
+  throw new AiError(aiNoFilesMsg());
+}
 
 const aiNetErr = () => new AiError(tr('网络连接失败，请检查网络后重试。', 'Connection failed. Check your network and try again.'));
 /** 两家共用的错误说法。 */
@@ -91,19 +101,27 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
 
 /**
  * DeepSeek（OpenAI 那种 chat/completions 接口）：只收文字。JSON 的格式写进 system，打开 json_object 模式；
- * 模型不认 response_format 就去掉再发一次。max_tokens 按模型的上限压一下（chat 8K，reasoner 64K）。
+ * 模型不认 response_format 就去掉再发一次。图片（只有 deepseek-flash 能看）用 image_url 的 data URL 发。
  */
 async function aiDeepseekJson(system, content, schema, maxTokens) {
-  const parts = typeof content === 'string' ? [content] : content.map((b) => { if (b.type !== 'text') throw new AiError(aiNoFilesMsg()); return b.text; });
   const model = aiModel('deepseek'), key = aiKey('deepseek');
+  // 只有文字时 content 是一个字符串；有图片时是 [文字, image_url…] 的列表（data URL）
+  let user;
+  if (typeof content === 'string') user = content;
+  else if (content.every((b) => b.type === 'text')) user = content.map((b) => b.text).join('\n\n');
+  else user = content.map((b) => {
+    if (b.type === 'text') return { type: 'text', text: b.text };
+    if (b.type === 'image' && b.source?.type === 'base64') { if (!aiDeepseekSeesImages(model)) throw new AiError(aiNoImagesMsg()); return { type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } }; }
+    throw new AiError(aiNoFilesMsg());
+  });
   const body = {
     model,
     messages: [
       { role: 'system', content: `${system}\n\n只输出 JSON（一个 json 对象），不要任何别的文字。它必须符合这个 JSON Schema：\n${JSON.stringify(schema)}` },
-      { role: 'user', content: parts.join('\n\n') },
+      { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: Math.min(maxTokens, /reasoner/i.test(model) ? 64000 : 8192),
+    max_tokens: Math.min(maxTokens, 393216), // 官方上限 384K
     stream: false,
   };
   const send = (b) => fetch('https://api.deepseek.com/chat/completions', {
@@ -838,7 +856,7 @@ async function aiReadStatements(files, target, onProgress) {
       if (f.size > 30 * 1024 * 1024) throw new AiError(tr(`「${name}」超过 30 MB，请拆开再试。`, `"${name}" is over 30 MB. Split it and retry.`));
       jobs.push({ name, content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await aiBase64(f) } }, { type: 'text', text: '读出这份账单里的全部交易。' }] });
     } else if (type.startsWith('image/') || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(name)) {
-      aiCheckFiles();
+      aiCheckFiles('image');
       jobs.push({ name, content: [...await aiImageBlocks(f), { type: 'text', text: '读出这份账单里的全部交易。' }] });
     } else {
       const text = /\.xlsx?$/i.test(name) || /spreadsheet|ms-excel/.test(type) ? await aiXlsxText(f) : await aiFileText(f);

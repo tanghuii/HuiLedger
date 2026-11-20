@@ -472,7 +472,7 @@ async function impImageBlocks(file) {
 async function impJobsFor(file, name) {
   const lower = name.toLowerCase(), mime = file.type ?? '';
   if (mime.startsWith('image/')) {
-    aiCheckFiles(); // DeepSeek 读不了图片：发之前就停
+    aiCheckFiles('image'); // DeepSeek 只有 deepseek-flash 能读图片：别的模型发之前就停
     // 一张长截图切出来的几片相邻且有重叠，尽量放在同一次请求里
     const blocks = await impImageBlocks(file), jobs = [];
     for (let i = 0; i < blocks.length; i += 6) jobs.push({ blocks: blocks.slice(i, i + 6), name: '', header: '', lines: [], fallback: null });
