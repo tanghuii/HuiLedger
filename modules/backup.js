@@ -26,11 +26,11 @@ function bkDump() {
   return JSON.stringify(o);
 }
 
-/** 读备份文件：不是辉记账本的备份就抛错；返回规范化后的数据和条数（同 Sync.peek）。 */
+/** 读备份文件：不是本 App 的备份就抛错（文件里的标记还是 'HuiLedger'，和手机端、旧备份一致，别改）；返回规范化后的数据和条数（同 Sync.peek）。 */
 function bkPeek(text) {
   let o;
   try { o = JSON.parse(text); } catch { o = null; }
-  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('不是辉记账本的备份', 'Not a HuiLedger backup'));
+  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('不是行星账本的备份', 'Not a Planet Ledger backup'));
   const data = {};
   for (const k of BK_KINDS) {
     data[k] = o[k].map(HL_JSON[k]);
@@ -41,7 +41,7 @@ function bkPeek(text) {
 
 async function bkDownload() {
   const d = new Date(), p = (n) => String(n).padStart(2, '0');
-  const name = `HuiLedger-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  const name = `PlanetLedger-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
   const blob = new Blob([bkDump()], { type: 'application/json' });
   // 装在 iPhone 主屏幕上时，下载链接不好用：走系统分享，存到"文件"
   const file = typeof File === 'function' ? new File([blob], name, { type: 'application/json' }) : null;

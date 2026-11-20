@@ -27,12 +27,13 @@ const BUD = {
 
 const budCentsInput = (c) => (c > 0 ? (c / 100).toFixed(2) : '');
 
-/** 大圆环：fraction 是用掉的比例，中间放内容。 */
+/** 大圆环：fraction 是用掉的比例，中间放内容。进度的头上坐着一颗小月亮（跟着圆环一起长出来）。 */
 function budgetRing(fraction, color, inner, grow = false) {
-  const size = 190, w = 16, r = (size - w) / 2;
+  const size = 190, w = 16, r = (size - w) / 2, c = size / 2, a = Math.min(1, Math.max(0, fraction)) * 360;
+  const moon = `<g class="bud-moon${grow ? ' grow' : ''}" style="--a:${a.toFixed(1)}deg"><circle cx="${c + r}" cy="${c}" r="7.5" style="fill:#fff;stroke:${color};stroke-width:2.5"/><circle cx="${c + r + 2.2}" cy="${c - 2}" r="1.9" style="fill:${color};fill-opacity:.22"/></g>`;
   return `<div class="bud-ring"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true">
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-opacity=".14" stroke-width="${w}"/>
-    ${pgArc(size / 2, size / 2, r, fraction, color, w, grow)}</svg>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-opacity=".14" stroke-width="${w}"/>
+    ${pgArc(c, c, r, fraction, color, w, grow)}${moon}</svg>
     <div class="in-ring">${inner}</div></div>`;
 }
 

@@ -1,4 +1,4 @@
-// 辉记账本网页版。没有构建步骤：纯 JS，直接连 Supabase。
+// 行星账本网页版。没有构建步骤：纯 JS，直接连 Supabase。
 // 数据和手机端同一套：云端 records 表里每行一条账单 / 分类 / 账户 / 账本，内容在 data 里。
 // 这里把全部数据读进内存，统计口径和手机端保持一致（见 computeLookup）。
 'use strict';
@@ -299,7 +299,7 @@ function render() {
   const tabOn = (k) => (k === 'ledger' ? state.tab === 'ledger' && !cal : k === 'calendar' ? cal : state.tab === k);
   app.innerHTML = `<div class="wrap hm-t-${h(state.tab)}${cal ? ' hm-cal' : ''}${hm.scrolled ? ' hm-scrolled' : ''}${entering && !viewing ? ' hm-enter' : ''}${opening ? ' dt-enter' : ''}${leaving ? ' dt-leave' : ''}${viewing ? ' dt-on' : ''}">
     <div class="top${main ? '' : ' hm-sub'}${state.tab === 'ledger' && !cal ? ' hm-shim' : ''}">
-      <h1><span class="hm-d">${tr('辉记账本', 'HuiLedger')}</span><span class="hm-p">${h(title)}</span></h1>
+      <h1><span class="hm-d">${tr('行星账本', 'Planet Ledger')}</span><span class="hm-p">${h(title)}</span>${typeof plTwinkle === 'function' ? plTwinkle() : ''}</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${tabOn(k) ? 'on' : ''}" data-act="tab" data-v="${k}"${k === 'ledger' ? ' data-list="1"' : ''}>${n}</button>`).join('')}</div>
       <button class="search" data-act="search-open">${SEARCH_SVG}<span>${tr('搜索全部账单', 'Search all')}</span></button>
@@ -317,10 +317,10 @@ function render() {
   ${state.tab === 'ledger' && !state.loading && !viewing ? `<button class="fab" data-act="new" aria-label="${tr('记一笔', 'Add')}">+</button>` : ''}
   ${navIdx != null && !searching && !viewing ? `<nav class="bottom-nav"><i class="hm-pill" style="--i:${navIdx}" data-i="${navIdx}"></i>
     ${[['ledger', tr('明细', 'Ledger'), 'list'], ['stats', tr('统计', 'Stats'), 'pie']].map(navBtn).join('')}
-    <button class="nav-add" data-act="new" aria-label="${tr('记一笔', 'Add')}">${hmSvg(ICONS.plus.d)}</button>
+    <button class="nav-add" data-act="new" aria-label="${tr('记一笔', 'Add')}">${hmSvg(ICONS.plus.d)}${typeof plNavOrbit === 'function' ? plNavOrbit() : ''}</button>
     ${[['accounts', tr('资产', 'Assets'), 'wallet'], ['me', tr('我的', 'Me'), 'user']].map(navBtn).join('')}
   </nav>` : ''}
-  ${state.aiSettings ? aiSettingsView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+  ${state.aiSettings ? aiSettingsView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}${typeof plSheet === 'function' ? plSheet() : ''}`;
   if (opening) window.scrollTo(0, 0);
   if (leaving) { hm.viewY = null; window.scrollTo(0, y); }
   hmAfter();
@@ -334,7 +334,7 @@ function hmTrack() {
   if (cur !== hm.prev) {
     if (HM_MAIN.includes(cur)) hm.back = {};
     else if (hm.prev && hm.back[hm.prev] !== cur) hm.back[cur] = hm.prev;
-    state.hmMenu = false; state.hmCurMenu = false; state.hmSwMsg = null;
+    state.hmMenu = false; state.hmCurMenu = false; state.hmSwMsg = null; state.plMPick = false; state.plSheet = false;
     if (!state.hmFx?.busy) state.hmFx = null;
   }
   hm.prev = cur;
@@ -463,7 +463,7 @@ function hmBudgetPage(t) {
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
   return `<section class="hm-page" data-act="tab" data-v="budget">${label}
     <div class="hm-big num${over ? ' out' : ''}" style="font-size:30px">${over ? tr('超支 ' + money(-left), 'Over by ' + money(-left)) : tr('还剩 ' + money(left), money(left) + ' left')}</div>
-    <div class="hm-bar"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div>
+    <div class="hm-barw"><div class="hm-bar"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div><b class="pl-bmoon" style="left:${(ratio * 100).toFixed(1)}%" aria-hidden="true"></b></div>
     <div class="hm-bl muted"><span>${tr(`已花 ${money(spent)} / ${money(total)}`, `${money(spent)} of ${money(total)}`)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每天还能花 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))} / day`)}</span>` : ''}</div>
     ${overCats.length ? `<div class="hm-oc out">${tr('超支分类：', 'Over budget: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</section>`;
 }
@@ -505,8 +505,8 @@ function meView() {
     ? `<label class="hm-cell">${icon(it)}<span class="hm-cl">${h(it.name)}</span><input type="file" id="patch-file" accept=".csv,text/csv" hidden></label>`
     : `<button class="hm-cell" data-act="${it.act ?? 'tab'}" data-v="${h(it.v ?? '')}">${icon(it)}<span class="hm-cl">${h(it.name)}</span></button>`;
   return `<div class="grid hm-me">
-    <div class="card cc hm-prof"><i class="hm-bub" aria-hidden="true"></i>
-      <div class="hm-prow"><div class="hm-av">${tr('我', 'Me')}</div><div class="hm-grow"><div class="hm-name">${h(name)}</div><div class="muted hm-lname">${h(state.data.ledger.get(state.ledgerId)?.name ?? '')}</div></div></div>
+    <div class="card cc hm-prof">
+      <div class="hm-prow">${typeof plAvatar === 'function' ? plAvatar() : `<div class="hm-av">${tr('我', 'Me')}</div>`}<div class="hm-grow"><div class="hm-name">${h(name)}</div><div class="muted hm-lname">${h(state.data.ledger.get(state.ledgerId)?.name ?? '')}</div></div></div>
       <div class="hm-stats">${stats.map(([v, l]) => `<div><b class="num">${h(v)}</b><span class="muted">${l}</span></div>`).join('')}</div>
     </div>
     <div class="card hm-gridcard"><div class="hm-grid">${items.map(cell).join('')}</div></div>
@@ -680,8 +680,8 @@ function loginView() {
     <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>` : '';
   return `<div class="wrap"><div class="card login grid" style="position:relative">
     ${langSwitch()}
-    <h1 style="margin:0">${tr('辉记账本', 'HuiLedger')}</h1>
-    <div class="muted">${heading}</div>
+    <div class="pl-head">${typeof plLoginHero === 'function' ? plLoginHero() : ''}<h1 style="margin:0">${tr('行星账本', 'Planet Ledger')}</h1>
+    <div class="muted">${heading}</div></div>
     ${state.notice ? `<p class="ok">${h(state.notice)}</p>` : ''}
     ${CLOUD.url ? '' : `<label class="f">${tr('Supabase 项目地址', 'Supabase project URL')}<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
     <label class="f">${tr('公开密钥（anon / publishable）', 'Public key (anon / publishable)')}<input id="l-key" type="password" value="${h(c.key)}" autocomplete="off"></label>`}
@@ -702,9 +702,11 @@ function loginView() {
   </div></div>`;
 }
 
-function monthBar() {
+/** 月份切换。planet：首页用，年月旁边加这个月的星（"土星月"），点开能换。 */
+function monthBar({ planet = false } = {}) {
   const { y, m } = state.month;
-  return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="${tr('上个月', 'Previous month')}">${hmSvg(ICONS.back.d)}</button><b>${ymLabel(y, m)}</b><button class="round" data-act="month" data-v="1" aria-label="${tr('下个月', 'Next month')}">${hmSvg(ICONS.forward.d)}</button></div>`;
+  const mid = planet && typeof plMonthTag === 'function' ? `<span class="pl-mc"><b>${ymLabel(y, m)}</b>${plMonthTag(y, m)}</span>` : `<b>${ymLabel(y, m)}</b>`;
+  return `<div class="month"><button class="round" data-act="month" data-v="-1" aria-label="${tr('上个月', 'Previous month')}">${hmSvg(ICONS.back.d)}</button>${mid}<button class="round" data-act="month" data-v="1" aria-label="${tr('下个月', 'Next month')}">${hmSvg(ICONS.forward.d)}</button></div>`;
 }
 
 // 账单行 txRow() 在 modules/editor.js（侧滑、多选都在那边）
@@ -714,13 +716,13 @@ function summaryCard(t) {
   const reimb = (t.reimbursable || t.reimbursed ? `<div class="amber hm-rl"><span>${tr('可报销支出 ', 'Claimable ') + money(t.reimbursable)}</span><span>${tr('报销收入 ', 'Reimbursed ') + money(t.reimbursed)}</span></div>` : '')
     + (t.refund || t.excluded ? `<div class="muted hm-rl"><span>${t.refund ? tr('退款 ', 'Refunds ') + money(t.refund) : ''}</span><span>${t.excluded ? tr('不计 ', 'Not counted ') + money(t.excluded) : ''}</span></div>` : '');
   const month = `<section class="hm-page">
-    <div class="hm-top1"><div class="hm-grow"><div class="muted hm-lbl">${tr('本月结余', 'Net this month')}</div><div class="hm-big num">${money(t.income - t.expense)}</div></div>${typeof coinFace === 'function' ? coinFace(t.income >= t.expense, 58) : hmFace(t.income >= t.expense)}</div>
+    <div class="hm-top1"><div class="hm-grow"><div class="muted hm-lbl">${tr('本月结余', 'Net this month')}</div><div class="hm-big num">${money(t.income - t.expense)}</div></div>${typeof plFace === 'function' ? plFace(t.income >= t.expense, 58) : typeof coinFace === 'function' ? coinFace(t.income >= t.expense, 58) : hmFace(t.income >= t.expense)}</div>
     <div class="hm-cells"><div><div class="muted hm-lbl2">${tr('支出', 'Expense')}</div><div class="num out hm-val">${money(t.expense)}</div></div><div><div class="muted hm-lbl2">${tr('收入', 'Income')}</div><div class="num in hm-val">${money(t.income)}</div></div></div>
     ${reimb}</section>`;
   const dots = [0, 1, 2].map((i) => `<button class="${i === (state.hmPage ?? 0) ? 'on' : ''}" data-act="hm-dot" data-v="${i}" aria-label="${i + 1} / 3"></button>`).join('');
   // 列表往下滚时卡片收成一行（本月结余 + 金额 + 小金币），回到顶上再展开；两套内容都在，CSS 负责收放
-  const happy = t.income >= t.expense, face = (n) => (typeof coinFace === 'function' ? coinFace(happy, n) : hmFace(happy));
-  return `<div class="card cc hm-sum${hm.mini ? ' mini' : ''}"><i class="hm-bub" aria-hidden="true"></i>
+  const happy = t.income >= t.expense, face = (n) => (typeof plFace === 'function' ? plFace(happy, n) : typeof coinFace === 'function' ? coinFace(happy, n) : hmFace(happy));
+  return `<div class="card cc hm-sum${hm.mini ? ' mini' : ''}">
     <div class="hm-fold hm-full"><div>
       <div class="hm-pager">${month}${hmBudgetPage(t)}${hmWorthPage()}</div>
       <div class="hm-dots">${dots}</div>
@@ -748,7 +750,7 @@ function ledgerView() {
   }).join('');
   // 预算已经是汇总卡片的第二页，不再单独放一张预算卡
   const extra = MOD.homeCards.map((f) => { try { return f(); } catch (e) { console.warn(e); return ''; } }).filter((x) => x && !x.includes('bud-home')).join('');
-  return `<div class="cols hm-home"><div class="grid sticky hm-head">${monthBar()}${summaryCard(totals)}${hmQuick()}${extra}</div>
+  return `<div class="cols hm-home"><div class="grid sticky hm-head">${monthBar({ planet: true })}${summaryCard(totals)}${hmQuick()}${extra}</div>
     <div class="grid hm-days">${list || (typeof emptyState === 'function' ? emptyState('receipt', tr('这个月还没有账单', 'Nothing this month yet')) : `<div class="hm-empty muted">${hmSvg(ICONS.receipt.d)}<span>${tr('这个月还没有账单', 'Nothing this month yet')}</span></div>`)}</div></div>`;
 }
 

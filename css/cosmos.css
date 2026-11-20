@@ -1,0 +1,129 @@
+/* 行星账本的星球（modules/cosmos.js）：首页的本月行星和"土星月"、选星球、登录页小星系、彩色卡片的星环装饰、
+   底栏 ＋ 的轨道、流星、预算环上的小月亮。颜色用 style.css 的变量，各外观跟着变；系统要求少动画时都停住。 */
+
+svg.planet { display: block; flex: none; overflow: visible; }
+
+/* ---------------------------------------------------------------- 彩色卡片：星环、两颗小月亮、几颗小星（代替原来漂浮的圆） */
+.card.cc::before, .card.cc::after, .face::before { display: none; }
+.pl-dc { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.card > .pl-dc, .face > .pl-dc { position: absolute; }
+.pl-dc i { position: absolute; display: block; }
+.pl-sys { width: 0; height: 0; animation: pl-drift 26s ease-in-out infinite; }
+.pl-sys.still { animation: none; }
+.pl-ring { box-sizing: border-box; border: solid rgba(255, 255, 255, .14); border-radius: 50%; }
+.pl-spin { inset: 0; animation: pl-spin 18s linear infinite; }
+.pl-moon { left: 100%; top: 50%; border-radius: 50%; }
+.pl-moon.m1 { animation: pl-un1 18s linear infinite; }
+.pl-moon.m2 { animation: pl-un2 11s linear infinite; }
+.pl-spk { background: #fff; opacity: .55; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: pl-twinkle 3s ease-in-out infinite; }
+@keyframes pl-drift { 0%, 100% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(-9px, 7px) rotate(3deg); } }
+@keyframes pl-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+@keyframes pl-un1 { from { transform: rotate(0) scaleY(2.5); } to { transform: rotate(-360deg) scaleY(2.5); } }
+@keyframes pl-un2 { from { transform: rotate(0) scaleY(3.125); } to { transform: rotate(-360deg) scaleY(3.125); } }
+@keyframes pl-twinkle { 0%, 100% { opacity: .2; transform: scale(.7); } 50% { opacity: .9; transform: scale(1); } }
+
+/* ---------------------------------------------------------------- 首页：月份旁边的小星球 + "土星月"，点开一排九颗换这个月的星 */
+.pl-mc { position: relative; z-index: 8; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+.pl-mc > b { white-space: nowrap; }
+.pl-mtag { display: inline-flex; }
+.pl-ml { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 4px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 12.5px; line-height: 18px; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s, transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.pl-ml:active { transform: scale(.94); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.pl-ml[aria-expanded="true"] { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text); }
+.pl-tw2 { font-style: normal; font-size: 10px; color: var(--primary); animation: pl-blink 2.4s ease-in-out infinite; }
+.pl-mpop {
+  /* 摆在年月那一组的正下方（那一组本来就在屏幕中间），九颗一排放得下 */
+  position: absolute; z-index: 51; top: calc(100% + 8px); left: 50%; translate: -50% 0;
+  display: flex; gap: 2px; padding: 6px; border-radius: 18px; background: color-mix(in srgb, var(--bg) 90%, transparent); border: 1px solid var(--stroke);
+  backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 18px 40px -12px rgba(30, 20, 90, .38), inset 0 1px 0 var(--shine); animation: hm-drop .18s ease-out;
+}
+.pl-mpop button, .pl-row button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.pl-mpop button:active, .pl-row button:active { transform: scale(.88); }
+.pl-mpop button.on, .pl-row button.on { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 0 0 0 2px var(--primary); }
+
+/* ---------------------------------------------------------------- 选自己的星球：3×3，选中的垫主题色、右上角打勾 */
+.pl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 420px; }
+.pl-opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 4px 8px; border: 1px solid var(--line); border-radius: 16px; background: none; color: var(--text); font-size: 13px; line-height: 18px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.pl-opt span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-opt:active { transform: scale(.95); }
+.pl-opt.on { border: 2px solid var(--primary); padding: 9px 3px 7px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; }
+.pl-opt.on::after { content: "✓"; position: absolute; top: 5px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font-size: 11px; font-weight: 700; line-height: 1; }
+.pl-modal .card { width: min(400px, 100%); }
+.pl-sh { font-size: 17px; }
+
+/* 外观页：本月行星、一排九颗、接下来五个月 */
+.pl-now { display: flex; align-items: center; gap: 12px; }
+.pl-now b { font-size: 16px; font-weight: 600; }
+.pl-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px; }
+.pl-next { display: flex; justify-content: space-between; gap: 6px; padding-top: 2px; }
+.pl-next span { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.pl-next small { font-size: 11px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- "我的"头像：白色圆底上的星球 */
+.hm-av.pl-av { padding: 0; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.hm-av.pl-av:active { transform: scale(.9); }
+
+/* ---------------------------------------------------------------- 登录页：品牌星在中间转，三颗小星斜着绕（压扁的平面里转，星球自己再撑回圆的） */
+.login .pl-head { display: grid; justify-items: center; gap: 2px; text-align: center; }
+/* 小星系不挡右上角的 中 / EN */
+.login > .lang-sw { z-index: 2; }
+.pl-hero { display: grid; place-items: center; width: 100%; height: 124px; margin-top: 8px; pointer-events: none; }
+.pl-ls { position: relative; width: 0; height: 0; transform: rotate(-12deg) scaleY(.34); }
+.pl-core { position: absolute; z-index: 1; left: -48px; top: -48px; transform: scaleY(2.941) rotate(12deg); }
+.pl-sat { position: absolute; left: 0; top: 0; width: 0; height: 0; animation: pl-sat 24s linear infinite; }
+.pl-sat > span { position: absolute; left: -10px; top: -10px; transform: scaleY(2.941) rotate(12deg); }
+@keyframes pl-sat {
+  0% { transform: rotate(0) translateX(74px) rotate(0); z-index: 2; }
+  49.9% { z-index: 2; }
+  50% { z-index: 0; }
+  99.9% { z-index: 0; }
+  100% { transform: rotate(360deg) translateX(74px) rotate(-360deg); z-index: 2; }
+}
+
+/* ---------------------------------------------------------------- 首页标题后面一颗一闪一闪的小星 */
+.top h1 .pl-tw { display: inline-block; width: .38em; height: .38em; margin-left: .18em; vertical-align: .62em; fill: var(--t2, #ff5c9a); animation: pl-blink 2.6s ease-in-out infinite; }
+@keyframes pl-blink { 0%, 100% { opacity: .25; transform: scale(.7); } 50% { opacity: 1; transform: scale(1); } }
+@media (max-width: 720px) { :root .wrap > .top:not(.hm-shim) h1 .pl-tw { display: none; } }
+
+/* ---------------------------------------------------------------- 底栏的 ＋：细轨道和小月亮（.bottom-nav .nav-add svg 的样式不要套到它身上） */
+.bottom-nav .nav-add { overflow: visible; }
+.bottom-nav .nav-add svg.pl-orbit { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; transform: none; pointer-events: none; fill: none; stroke: none; }
+.pl-orbit-r { fill: none; stroke: color-mix(in srgb, var(--primary) 35%, transparent); stroke-width: 1.2; }
+.pl-orbit-m { fill: color-mix(in srgb, var(--primary) 55%, #fff); stroke: color-mix(in srgb, var(--primary) 70%, transparent); stroke-width: .8; }
+
+/* ---------------------------------------------------------------- 记完一笔：一颗小流星斜着划过屏幕上沿 */
+.pl-shoot { position: fixed; z-index: 90; left: 0; top: calc(env(safe-area-inset-top) + 14px); width: 120px; height: 2.5px; pointer-events: none; opacity: 0; animation: pl-shoot .7s cubic-bezier(.3, .1, .45, 1) forwards; }
+.pl-shoot i { position: absolute; inset: 0; border-radius: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 75%, #fff)); box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 40%, transparent); }
+.pl-shoot b { position: absolute; right: -7px; top: 50%; margin-top: -8px; font-size: 17px; line-height: 16px; font-weight: 400; color: color-mix(in srgb, var(--primary) 20%, #fff); text-shadow: 0 0 4px var(--primary), 0 0 12px var(--primary); }
+@keyframes pl-shoot {
+  0% { opacity: 0; transform: translate(-130px, 0) rotate(10deg); }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(100vw, calc(18vw + 10px)) rotate(10deg); }
+}
+
+/* ---------------------------------------------------------------- 预算：圆环的进度头上一颗小月亮；首页预算页的进度条也一样 */
+.bud-ring svg { overflow: visible; }
+.bud-moon { transform-origin: 95px 95px; transform: rotate(var(--a, 0deg)); }
+.bud-moon.grow { animation: bud-moon .8s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes bud-moon { from { transform: rotate(0deg); } }
+.hm-barw { position: relative; margin-top: 10px; }
+.hm-barw .hm-bar { margin-top: 0; }
+.pl-bmoon { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 64% 36%, rgba(120, 110, 160, .22) 0 1.6px, transparent 2.2px), #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .3), 0 2px 6px rgba(20, 10, 60, .25); transition: left .7s ease-out; }
+
+/* ---------------------------------------------------------------- 复盘第一张：这个月的星 + "土星月" */
+.ai-splanet { display: flex; align-items: center; gap: 10px; }
+.ai-splanet span { font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, .92); }
+.ai-story .ai-splanet svg.planet { margin: -10px 0 -10px -6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-dc, .pl-dc i, .pl-tw2, .top h1 .pl-tw, .pl-sat, .pl-mpop, .bud-moon.grow { animation: none !important; }
+  .pl-spk { opacity: .55; }
+  .pl-sat:nth-child(2) { transform: rotate(150deg) translateX(74px) rotate(-150deg); z-index: 2; }
+  .pl-sat:nth-child(3) { transform: rotate(270deg) translateX(74px) rotate(-270deg); }
+  .pl-sat:nth-child(4) { transform: rotate(30deg) translateX(74px) rotate(-30deg); z-index: 2; }
+  .hm-av.pl-av, .pl-opt, .pl-ml, .pl-mpop button, .pl-row button { transition: none; }
+  .pl-bmoon { transition: none; }
+}

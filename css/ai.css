@@ -104,8 +104,6 @@
 .ai-story { flex: 0 0 100%; min-width: 0; height: 210px; box-sizing: border-box; scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden; isolation: isolate;
   display: flex; flex-direction: column; padding: 22px; border-radius: 26px; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2)); }
 .ai-story > i { position: absolute; pointer-events: none; z-index: -1; }
-.ai-b1 { width: 84%; aspect-ratio: 1; left: 53%; top: 5%; margin-top: -42%; border-radius: 50%; background: rgba(255, 255, 255, .10); animation: bubbleA 14s ease-in-out infinite; animation-delay: var(--d, 0s); }
-.ai-b2 { width: 50%; aspect-ratio: 1; left: -15%; top: 105%; margin-top: -25%; border-radius: 50%; background: rgba(255, 255, 255, .07); animation: bubbleB 14s ease-in-out infinite; animation-delay: var(--d, 0s); }
 .ai-sh { inset: 0; background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .10) 50%, transparent 62%) no-repeat; background-size: 250% 100%; animation: sheen 8.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
 .ai-sbox { width: 44px; height: 44px; border-radius: 14px; background: rgba(255, 255, 255, .22); display: grid; place-items: center; flex: none; }
 .ai-sbox .ai-ic { width: 24px; height: 24px; color: #fff; }

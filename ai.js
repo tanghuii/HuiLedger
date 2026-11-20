@@ -1,4 +1,4 @@
-// 辉记账本网页版：要用到 AI 的那些功能（一句话记账 / 问账本、月度复盘、对账），以及净资产曲线、修正余额。
+// 行星账本网页版：要用到 AI 的那些功能（一句话记账 / 问账本、月度复盘、对账），以及净资产曲线、修正余额。
 // 和手机端一一对应：AskScreen.kt、InsightScreens.kt（ReviewScreen / NetWorthCard）、ReconcileScreen.kt + ai/Reconcile.kt、
 // AccountsScreen.kt 的修正余额弹窗 + LedgerViewModel.checkBalance。
 // 这个页面没有服务器，所以是浏览器直接连 Claude API：密钥只存在这个浏览器的本地存储里，请求直接发给 api.anthropic.com。
@@ -525,7 +525,8 @@ function aiStories(y, m, r, L) {
   const dlt = now.expense - prev.expense;
   const line1 = [prev.expense > 0 ? (dlt >= 0 ? tr(`比上月多 ${money(dlt)}`, `${money(dlt)} more than last month`) : tr(`比上月少 ${money(-dlt)}`, `${money(-dlt)} less than last month`)) : '',
     r.days > 0 ? tr(`平均每天 ${money(avg)}`, `${money(avg)} a day`) : ''].filter(Boolean).join(tr('，', ', '));
-  out.push({ c: ['#7B6CF6', '#4E8DF5'], icon: 'receipt', kicker: tr(`${label}，你一共花了`, `In ${label} you spent`), big: money(now.expense), line: line1 });
+  // 第一张（封面）：这个月的主题行星 + "土星月"
+  out.push({ c: ['#7B6CF6', '#4E8DF5'], icon: 'receipt', planet: typeof plOfMonth === 'function' ? plOfMonth(y, m) : null, kicker: tr(`${label}，你一共花了`, `In ${label} you spent`), big: money(now.expense), line: line1 });
   if (r.top5.length) {
     const [id, c] = r.top5[0], pct = Math.round(c * 100 / Math.max(1, now.expense));
     out.push({ c: ['#FF8A5B', '#F2557A'], icon: state.data.category.get(id)?.icon ?? 'tag', kicker: tr('钱主要花在了', 'Most of it went to'), big: aiCatNameOf(id), line: tr(`${money(c)}，占 ${pct}%`, `${money(c)}, ${pct}% of spending`) });
@@ -564,8 +565,8 @@ function reviewView({ switcher = true } = {}) {
   if (r.spends.length) {
     const stories = aiStories(y, m, r, L);
     parts.push(`<div class="ai-stories"><div class="ai-pager" data-n="${stories.length}">${stories.map((s, i) => `<section class="ai-story" style="--c1:${s.c[0]};--c2:${s.c[1]};--d:${-(i * 3.7).toFixed(1)}s" aria-roledescription="${tr('卡片', 'card')}" aria-label="${i + 1} / ${stories.length}">
-        <i class="ai-b1" aria-hidden="true"></i><i class="ai-b2" aria-hidden="true"></i><i class="ai-sh" aria-hidden="true"></i>
-        <span class="ai-sbox">${aiIcon(s.icon)}</span><span class="ai-sgap"></span>
+        <i class="ai-sh" aria-hidden="true"></i>
+        ${s.planet ? `<span class="ai-splanet">${planetSvg(s.planet, { px: 64 })}<span>${h(tr(s.planet.zh + '月', s.planet.en + ' month'))}</span></span>` : `<span class="ai-sbox">${aiIcon(s.icon)}</span>`}<span class="ai-sgap"></span>
         <div class="ai-sk">${h(s.kicker)}</div><div class="ai-sb${/\d/.test(s.big) ? ' num' : ''}">${h(s.big)}</div>${s.line ? `<div class="ai-sl">${h(s.line)}</div>` : ''}</section>`).join('')}</div>
       <div class="ai-dots" aria-hidden="true">${stories.map((_, i) => `<i class="${i === state.reviewPage ? 'on' : ''}"></i>`).join('')}</div></div>`);
     // 重画以后翻回刚才看的那一张
@@ -960,7 +961,7 @@ async function aiAction(act, v) {
     case 'ask-save': {
       const m = state.chat[Number(v)], tx = m && aiDraftTx(m);
       if (!tx) return true;
-      try { await saveRecord('tx', tx); m.savedId = tx.id; m.editing = false; } catch (e) { state.error = e.message; }
+      try { await saveRecord('tx', tx); m.savedId = tx.id; m.editing = false; if (typeof plShootingStar === 'function') plShootingStar(); } catch (e) { state.error = e.message; }
       break;
     }
     case 'noop': return true;

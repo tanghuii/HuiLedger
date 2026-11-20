@@ -1,4 +1,4 @@
-/* 辉记账本网页版。配色跟手机端的"液态玻璃"外观一致，随系统深浅色切换。 */
+/* 行星账本网页版。配色跟手机端的"液态玻璃"外观一致，随系统深浅色切换。 */
 /* 数字用 Inter（SIL OFL，授权写在字体文件里），和手机端一样 */
 @font-face { font-family: "Inter Num"; src: url("fonts/inter_regular.otf") format("opentype"); font-weight: 100 500; font-display: swap; }
 @font-face { font-family: "Inter Num"; src: url("fonts/inter_semibold.otf") format("opentype"); font-weight: 600 900; font-display: swap; }
@@ -154,7 +154,7 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
   .modal .card { background: linear-gradient(rgba(244, 245, 253, .92), rgba(244, 245, 253, .92)) padding-box, linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box; }
 }
 
-/* 彩色卡片：渐变底（浅 → 本色 → 深）、两团半透明的圆做花纹、白字。--cc 是卡片的颜色 */
+/* 彩色卡片：渐变底（浅 → 本色 → 深）、白字。--cc 是卡片的颜色。上面的星环装饰在 css/cosmos.css（原来是两团半透明的圆） */
 .card.cc, .face {
   --cc: var(--card-tint); color: #fff; border: 0; overflow: hidden;
   background: linear-gradient(180deg, rgba(255, 255, 255, .14), transparent 45%),
@@ -162,8 +162,6 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
   backdrop-filter: none; -webkit-backdrop-filter: none;
   box-shadow: 0 14px 30px -16px color-mix(in srgb, var(--cc) 80%, transparent);
 }
-.card.cc::before { content: ""; position: absolute; inset: auto; width: 84%; aspect-ratio: 1; right: -40%; top: -40%; border-radius: 50%; background: rgba(255, 255, 255, .10); pointer-events: none; mix-blend-mode: normal; opacity: 1; }
-.card.cc::after { content: ""; position: absolute; inset: auto; width: 52%; aspect-ratio: 1; left: -20%; bottom: -30%; border-radius: 50%; background: rgba(255, 255, 255, .07); pointer-events: none; mix-blend-mode: normal; opacity: 1; background-image: none; }
 .cc .muted, .face .muted { color: var(--on-card-soft); }
 .cc .out { color: var(--on-card-out); } .cc .in { color: var(--on-card-in); } .cc .amber { color: #FFE2A8; }
 .cc .round { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .3); color: #fff; }
@@ -174,7 +172,6 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 /* 账户列表：每个账户一张迷你卡面 */
 .faces { display: grid; gap: 8px; margin-top: 8px; }
 .face { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 18px; cursor: pointer; transition: transform .2s cubic-bezier(.2, .9, .3, 1.3), filter .2s; }
-.face::before { content: ""; position: absolute; width: 150px; height: 150px; border-radius: 50%; right: -40px; top: -86px; background: rgba(255, 255, 255, .08); pointer-events: none; }
 .face > * { position: relative; }
 .face:hover { transform: translateY(-2px); filter: brightness(1.05); }
 .face .name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -266,9 +263,7 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .payer { background: color-mix(in srgb, color-mix(in srgb, var(--pc) 75%, #fff) 28%, transparent); color: color-mix(in srgb, var(--pc) 28%, #fff); } }
 :root[data-theme="dark"] .payer { background: color-mix(in srgb, color-mix(in srgb, var(--pc) 75%, #fff) 28%, transparent); color: color-mix(in srgb, var(--pc) 28%, #fff); }
 
-/* 彩色卡片动效：两团圆慢慢漂动、轻轻呼吸，一道淡淡的光每隔几秒扫过 */
-@keyframes bubbleA { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(-4%, 7%) scale(1.06); } 66% { transform: translate(3%, -4%) scale(.96); } }
-@keyframes bubbleB { 0%, 100% { transform: translate(0, 0) scale(1); } 40% { transform: translate(6%, -8%) scale(1.07); } 75% { transform: translate(-3%, 4%) scale(.95); } }
+/* 彩色卡片动效：一道淡淡的光每隔几秒扫过（星环、小月亮、小星的动画在 css/cosmos.css） */
 @keyframes sheen { 0%, 55% { background-position: 160% 0, 0 0, 0 0; } 100% { background-position: -60% 0, 0 0, 0 0; } }
 .card.cc {
   background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .11) 50%, transparent 62%),
@@ -277,13 +272,8 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
   background-size: 250% 100%, auto, auto; background-repeat: no-repeat;
   animation: sheen 9s ease-in-out infinite;
 }
-.card.cc::before { animation: bubbleA 18s ease-in-out infinite; }
-.card.cc::after { animation: bubbleB 15s ease-in-out infinite; }
-.face::before { animation: bubbleA 16s ease-in-out infinite; }
-.card.cc:nth-child(2n)::before, .face:nth-child(2n)::before { animation-delay: -6s; }
-.card.cc:nth-child(3n)::before, .face:nth-child(3n)::before { animation-delay: -11s; }
 .card.cc:nth-child(2n) { animation-delay: -3s; }
-@media (prefers-reduced-motion: reduce) { .card.cc, .card.cc::before, .card.cc::after, .face::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .card.cc { animation: none; } }
 
 /* ---------------------------------------------------------------- 手机上（主屏幕 App）：底部导航栏、"我的"页 */
 .bottom-nav { display: none; }

@@ -101,7 +101,7 @@ const rmCards = () => Object.entries(shared.get('cardDue', {}) ?? {})
 
 function rmIcs() {
   const hr = rmPrefs().hour, stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HuiLedger//Reminders//' + (LANG === 'en' ? 'EN' : 'ZH'), 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PlanetLedger//Reminders//' + (LANG === 'en' ? 'EN' : 'ZH'), 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
   for (const { a, day } of rmCards()) {
     const first = today() + rmDaysUntil(day);
     // 29–31 号：那个月没有这一天就落在月底（和手机端一样）
@@ -123,7 +123,7 @@ function rmIcs() {
 
 async function rmExportIcs() {
   if (!rmCards().length) { xsToast(tr('还没有设还款日', 'No payment days set')); return; }
-  const name = 'huiledger-due.ics', text = rmIcs();
+  const name = 'PlanetLedger-due.ics', text = rmIcs();
   const file = new File([text], name, { type: 'text/calendar' });
   // iPhone 上用分享面板；不行就直接下载
   if (navigator.canShare?.({ files: [file] })) {

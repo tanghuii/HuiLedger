@@ -3,50 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>辉记账本 · HuiLedger</title>
+<title>行星账本 · Planet Ledger</title>
 <meta name="theme-color" content="#e4e8fb">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="辉记账本">
+<meta name="apple-mobile-web-app-title" content="行星账本">
 <meta name="format-detection" content="telephone=no">
 <script>try{var s=JSON.parse(localStorage.getItem('hl.style'));if(s)document.documentElement.dataset.style=s;}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="apple-touch-icon" href="icons/planets/brand-180.png">
+<!-- 主屏幕图标 = 自己的星球（记在 hl.planet）；越早换越好，"添加到主屏幕"时 Safari 取的是这时的图标 -->
+<script>try{var p=JSON.parse(localStorage.getItem('hl.planet'));if(/^(mercury|venus|earth|mars|jupiter|saturn|uranus|neptune|pluto)$/.test(p))document.querySelector('link[rel="apple-touch-icon"]').href='icons/planets/'+p+'-180.png';}catch(e){}</script>
 <link rel="icon" type="image/png" href="icons/favicon-32.png">
-<link rel="stylesheet" href="style.css?v=20261120101201">
-<link rel="stylesheet" href="css/home.css?v=20261120101201">
-<link rel="stylesheet" href="css/stats.css?v=20261120101201">
-<link rel="stylesheet" href="css/tags.css?v=20261120101201">
-<link rel="stylesheet" href="css/import.css?v=20261120101201">
-<link rel="stylesheet" href="css/tidy.css?v=20261120101201">
-<link rel="stylesheet" href="css/extras.css?v=20261120101201">
-<link rel="stylesheet" href="css/editor.css?v=20261120101201">
-<link rel="stylesheet" href="css/ai.css?v=20261120101201">
-<link rel="stylesheet" href="css/themes.css?v=20261120101201">
+<link rel="stylesheet" href="style.css?v=20261120123130">
+<link rel="stylesheet" href="css/home.css?v=20261120123130">
+<link rel="stylesheet" href="css/stats.css?v=20261120123130">
+<link rel="stylesheet" href="css/tags.css?v=20261120123130">
+<link rel="stylesheet" href="css/import.css?v=20261120123130">
+<link rel="stylesheet" href="css/tidy.css?v=20261120123130">
+<link rel="stylesheet" href="css/extras.css?v=20261120123130">
+<link rel="stylesheet" href="css/editor.css?v=20261120123130">
+<link rel="stylesheet" href="css/ai.css?v=20261120123130">
+<link rel="stylesheet" href="css/cosmos.css?v=20261120123130">
+<link rel="stylesheet" href="css/themes.css?v=20261120123130">
 </head>
 <body>
 <div id="app"></div>
-<script src="config.js?v=20261120101201"></script>
-<script src="shared.js?v=20261120101201"></script>
-<script src="icons.js?v=20261120101201"></script>
-<script src="more.js?v=20261120101201"></script>
-<script src="ai.js?v=20261120101201"></script>
+<script src="config.js?v=20261120123130"></script>
+<script src="shared.js?v=20261120123130"></script>
+<script src="planets.js?v=20261120123130"></script>
+<script src="icons.js?v=20261120123130"></script>
+<script src="more.js?v=20261120123130"></script>
+<script src="ai.js?v=20261120123130"></script>
 <!-- 功能模块（和手机端对齐的那些页面），各自往 MOD 里登记 -->
-<script src="modules/budget.js?v=20261120101201"></script>
-<script src="modules/loans.js?v=20261120101201"></script>
-<script src="modules/schedules.js?v=20261120101201"></script>
-<script src="modules/backup.js?v=20261120101201"></script>
-<script src="modules/manage.js?v=20261120101201"></script>
-<script src="modules/editor.js?v=20261120101201"></script>
-<script src="modules/art.js?v=20261120101201"></script>
-<script src="modules/tags.js?v=20261120101201"></script>
-<script src="modules/import.js?v=20261120101201"></script>
-<script src="modules/tidy.js?v=20261120101201"></script>
-<script src="modules/lock.js?v=20261120101201"></script>
-<script src="modules/reminders.js?v=20261120101201"></script>
-<script src="modules/voice.js?v=20261120101201"></script>
-<script src="modules/appearance.js?v=20261120101201"></script>
-<script src="app.js?v=20261120101201"></script>
+<script src="modules/budget.js?v=20261120123130"></script>
+<script src="modules/loans.js?v=20261120123130"></script>
+<script src="modules/schedules.js?v=20261120123130"></script>
+<script src="modules/backup.js?v=20261120123130"></script>
+<script src="modules/manage.js?v=20261120123130"></script>
+<script src="modules/editor.js?v=20261120123130"></script>
+<script src="modules/art.js?v=20261120123130"></script>
+<script src="modules/cosmos.js?v=20261120123130"></script>
+<script src="modules/tags.js?v=20261120123130"></script>
+<script src="modules/import.js?v=20261120123130"></script>
+<script src="modules/tidy.js?v=20261120123130"></script>
+<script src="modules/lock.js?v=20261120123130"></script>
+<script src="modules/reminders.js?v=20261120123130"></script>
+<script src="modules/voice.js?v=20261120123130"></script>
+<script src="modules/appearance.js?v=20261120123130"></script>
+<script src="app.js?v=20261120123130"></script>
 </body>
 </html>

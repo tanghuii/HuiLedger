@@ -49,7 +49,7 @@ function lkPaint() {
   const pin = lk.cfg.kind === 'pin';
   lk.layer.innerHTML = `<div class="lk-box">
       <div class="lk-ic">${LK_GLYPH}</div>
-      <div class="lk-t">${tr('辉记账本已锁定', 'HuiLedger is locked')}</div>
+      <div class="lk-t">${tr('行星账本已锁定', 'Planet Ledger is locked')}</div>
       ${pin ? `<input class="lk-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" enterkeyhint="go" aria-label="${tr('密码', 'PIN')}" placeholder="${tr('密码', 'PIN')}">` : ''}
       <div class="lk-err" aria-live="polite"></div>
       <button class="btn primary lk-go">${tr('解锁', 'Unlock')}</button>
@@ -69,7 +69,7 @@ function lkShow(cover = false) {
     lk.layer.addEventListener('input', (ev) => { const p = ev.target; if (!p.classList.contains('lk-pin')) return; p.value = p.value.replace(/\D/g, '').slice(0, 6); if (p.value.length === (lk.cfg.len || 6)) lkTryPin(); });
   }
   if (!lk.layer.isConnected) { lkPaint(); document.body.appendChild(lk.layer); }
-  lk.layer.setAttribute('aria-label', tr('辉记账本已锁定', 'HuiLedger is locked'));
+  lk.layer.setAttribute('aria-label', tr('行星账本已锁定', 'Planet Ledger is locked'));
   lk.layer.classList.toggle('lk-cover', cover);
   document.body.classList.add('lk-locked');
   // 键盘和读屏也碰不到下面的内容
@@ -204,8 +204,8 @@ async function lkEnable() {
     try {
       const cred = await navigator.credentials.create({ publicKey: {
         challenge: lkRand(32),
-        rp: { name: tr('辉记账本', 'HuiLedger') },
-        user: { id: lkRand(16), name: tr('辉记账本', 'HuiLedger'), displayName: tr('辉记账本 应用锁', 'HuiLedger app lock') },
+        rp: { name: tr('行星账本', 'Planet Ledger') },
+        user: { id: lkRand(16), name: tr('行星账本', 'Planet Ledger'), displayName: tr('行星账本 应用锁', 'Planet Ledger app lock') },
         pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
         authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
         timeout: 60000, attestation: 'none',

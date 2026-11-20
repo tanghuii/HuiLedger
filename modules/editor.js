@@ -492,6 +492,8 @@ async function saveEditing(again = false) {
   t.offsetParts = t.kind !== KIND.INCOME || !offs.length || (offs.length === 1 && offs[0][1] === c.home) ? '' : offs.map(([id, x]) => `${id}:${x}`).join(',');
   t.note = String(t.note ?? '').trim();
   t.tags = edTags(e).join(' ');
+  // 新记的一笔存好了：屏幕上沿划过一颗小流星（modules/cosmos.js）
+  const star = () => { if (e._isNew && typeof plShootingStar === 'function') plShootingStar(); };
   try {
     await saveRecord('tx', t);
     store.set('hl.lastAccount', t.accountId);
@@ -502,9 +504,13 @@ async function saveEditing(again = false) {
       state.editing = { ...e, id: newId(), createdAt: Date.now(), _amount: '', note: '', _pick: null, _equiv: '', _offs: [], _q: '' };
       render();
       edToast(tr('已保存，接着记下一笔', 'Saved. Next one.'));
+      star();
       return;
     }
     state.editing = null;
+    render();
+    star();
+    return;
   } catch (err) { state.error = err.message; }
   render();
 }

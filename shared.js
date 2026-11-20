@@ -1,4 +1,4 @@
-// 辉记账本网页版的公共底座：最先加载，只放定义，不碰页面。
+// 行星账本网页版的公共底座：最先加载，只放定义，不碰页面。
 // 1. 和手机端共享的设置（预算、自动记账……）：云端 records 表里 kind = 'setting' 的那几行
 // 2. 功能模块的登记处：各个模块文件把自己的页面、按钮动作、"我的"页入口登记到 MOD 里，app.js 统一分发
 // 3. 离线：数据快照存在 IndexedDB，断网时的修改先排队，联网后自动补传
@@ -18,7 +18,7 @@ function setLang(l) {
   LANG = LANG_MODE === 'auto' ? sysLang() : LANG_MODE;
   try { localStorage.setItem('hl.lang', JSON.stringify(LANG_MODE)); } catch { /* 隐私模式存不了 */ }
   document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
-  document.title = tr('辉记账本', 'HuiLedger');
+  document.title = tr('行星账本', 'Planet Ledger');
   // 旧的提示是按旧语言写的，换语言就清掉
   if (typeof state !== 'undefined') { state.error = ''; state.notice = ''; }
   render();
@@ -28,7 +28,7 @@ addEventListener('languagechange', () => { if (LANG_MODE === 'auto' && sysLang()
 /** 语言切换的小开关（登录页右上角、"我的"页都用它）。 */
 const langSwitch = () => `<div class="lang-sw" role="group" aria-label="Language"><button class="${LANG === 'zh' ? 'on' : ''}" data-act="lang" data-v="zh">中</button><button class="${LANG === 'en' ? 'on' : ''}" data-act="lang" data-v="en">EN</button></div>`;
 
-const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11 };
+const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11, planet: 12, monthPlanet: 13 };
 
 const shared = {
   /** 读一项共享设置；云端还没有就用 def。 */

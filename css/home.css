@@ -41,10 +41,7 @@
 
 /* ---------------------------------------------------------------- 汇总卡片（左右滑三页） */
 .hm-sum { padding: 18px; }
-/* 三团装饰圆的位置和 App 的 ColorCard 一样：右上角一个大的、左下角一个、中间偏右下一个小的 */
-.card.cc.hm-sum::before, .card.cc.hm-prof::before { width: 84%; left: 56%; right: auto; top: 2%; margin-top: -42%; }
-.card.cc.hm-sum::after, .card.cc.hm-prof::after { width: 52%; left: -20%; bottom: auto; top: 108%; margin-top: -26%; }
-.card .hm-bub { position: absolute; width: 14%; aspect-ratio: 1; left: 55%; top: 78%; margin-top: -7%; border-radius: 50%; background: rgba(255, 255, 255, .06); pointer-events: none; animation: bubbleB 13s ease-in-out infinite; }
+/* 卡片上的星环装饰在 css/cosmos.css */
 .hm-pager {
   display: flex; align-items: flex-start; gap: 24px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; transition: height .3s ease;
@@ -251,5 +248,5 @@ div.hm-li { cursor: default; }
   .wrap.hm-enter > *, .bottom-nav button.hop svg { animation: none; }
   .hm-pill, .hm-pager, .hm-dots button, .hm-bar i, .hm-sum, .hm-fold { transition: none; }
   .hm-upd { animation: none; }
-  .card .hm-bub, .hm-menu { animation: none; }
+  .hm-menu { animation: none; }
 }
