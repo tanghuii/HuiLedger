@@ -220,7 +220,17 @@ function mgCategoryDialog(e) {
   return `<div class="between"><b style="font-size:18px">${title}</b>${canDelete ? `<button class="btn link danger" data-act="mg-cat-delete">${tr('删除', 'Delete')}</button>` : ''}</div>
     ${isSub ? `<div class="muted small">${h(state.data.category.get(c.parentId)?.name ?? '')}</div>` : ''}
     <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(c.name)}"></label>
-    <div class="mg-icons">${mgIcons().map((k) => `<button class="${k === c.icon ? 'on' : ''}" data-act="mg-icon" data-v="${k}" aria-label="${k}">${iconTile(k)}</button>`).join('')}</div>`;
+    ${mgIconPicker(c.icon)}`;
+}
+
+/** 图标的名字（中文 / 英文），没有名字时返回 key。 */
+const mgIconName = (k) => { const n = typeof ICON_NAMES !== 'undefined' ? ICON_NAMES[k] : null; return n ? (LANG === 'en' ? n[1] : n[0]) : k; };
+/** 选图标：按大类分组，每组上面一行大类名；上面一行显示选中的图标和名字（点哪个就显示哪个，和手机端一样）。 */
+function mgIconPicker(cur) {
+  const groups = typeof ICON_GROUPS !== 'undefined' ? ICON_GROUPS : [['', '', mgIcons()]];
+  const btn = (k) => `<button class="${k === cur ? 'on' : ''}" data-act="mg-icon" data-v="${k}" aria-label="${h(mgIconName(k))}" title="${h(mgIconName(k))}">${iconTile(k)}</button>`;
+  return `<div class="mg-icon-cur"><span class="muted small">${tr('图标', 'Icon')}</span>${iconTile(cur, 'sm')}<b>${h(mgIconName(cur))}</b></div>
+    <div class="mg-icons">${groups.map(([zh, en, keys]) => `${zh ? `<div class="mg-ig">${h(LANG === 'en' ? en : zh)}</div>` : ''}${keys.filter((k) => ICONS[k]).map(btn).join('')}`).join('')}</div>`;
 }
 
 /** 删分类（同手机端 deleteCategory）：子分类的账单并回上级；一级分类连同子分类一起删，账单并入同类的"其他"。 */
