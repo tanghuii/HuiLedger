@@ -191,7 +191,7 @@ function plShootingStar() {
   setTimeout(() => el.remove(), 900);
 }
 
-// ---------------------------------------------------------------- 彩色卡片的装饰：一道很淡的星环、两颗绕着它转的小月亮、几颗一闪一闪的小星
+// ---------------------------------------------------------------- 彩色卡片的装饰：一道很淡的星环、一颗沿着环线转的小星、几颗一闪一闪的小星
 // 代替原来漂浮的圆；卡片的颜色和光泽不变。同一张卡片每次画出来位置都一样（按卡片的样子算种子）。
 // 全是 CSS 动画（只动 transform 和 opacity），系统要求少动画时停在原地。
 
@@ -211,13 +211,16 @@ function plDecorHtml(W, H, seed) {
   const cx = W * (0.86 + r() * 0.06), cy = H * (small ? 0.1 : 0.04 + r() * 0.06);
   const rx = W * (small ? 0.36 : 0.44), ry = rx * 0.3, sw = Math.max(1.5, H * (small ? 0.05 : 0.028)), tilt = -(10 + r() * 8);
   const ring = `<i class="pl-ring" style="left:${f(-rx)}px;top:${f(-ry)}px;width:${f(2 * rx)}px;height:${f(2 * ry)}px;border-width:${f(sw)}px;transform:rotate(${f(tilt)}deg)"></i>`;
-  // 小月亮：斜的椭圆轨道（一个压扁的平面），月亮自己反着压回来，所以一直是圆的
-  const moon = (R, k, cls, rad, alpha, dur) => {
-    const a0 = 105 + r() * 55, d = lag(dur), tl = tilt - 4 + r() * 10;
-    return `<i class="pl-orb" style="left:${f(-R)}px;top:${f(-R)}px;width:${f(2 * R)}px;height:${f(2 * R)}px;transform:rotate(${f(tl)}deg) scaleY(${k})">`
-      + `<i class="pl-spin" style="transform:rotate(${f(a0)}deg);animation-duration:${dur}s;animation-delay:${d}"><i class="pl-moon ${cls}" style="width:${f(2 * rad)}px;height:${f(2 * rad)}px;margin:${f(-rad)}px;background:rgba(255,255,255,${alpha});transform:rotate(${f(-a0)}deg) scaleY(${cls === 'm1' ? 2.5 : 3.125});animation-duration:${dur}s;animation-delay:${d}"></i></i></i>`;
-  };
-  const moons = moon(W * (small ? 0.42 : 0.5), 0.4, 'm1', Math.max(2, H * 0.04), 0.28, 18) + moon(W * (small ? 0.26 : 0.3), 0.32, 'm2', Math.max(1.5, H * 0.025), 0.24, 11);
+  // 环上的星：轨道和环同一个圆心、同样大小和倾斜（取环线的正中），所以正好压在环线上走，18 秒一圈。
+  // 轨道是一个压扁的圆（scaleY = k），星自己反着转、反着压回来，所以一直是正的。隔半圈还有一颗小点：环一大半在卡片外，总有一颗看得见
+  const R1 = rx - sw / 2, R2 = ry - sw / 2, k = R2 / R1, d = lag(18), sr = Math.max(4, Math.min(8, H * 0.05)), dr = Math.max(1.2, sw * 0.9);
+  const undo = `transform:scaleY(${f(1 / k)}) rotate(${f(-tilt)}deg)`, anim = `animation-delay:${d}`;
+  const rider = (side, inner) => `<i class="pl-ride${side}" style="${anim}"><i style="${undo}">${inner}</i></i>`;
+  const moons = `<i class="pl-orb" style="left:${f(-R1)}px;top:${f(-R1)}px;width:${f(2 * R1)}px;height:${f(2 * R1)}px;transform:rotate(${f(tilt)}deg) scaleY(${+k.toFixed(4)})">`
+    + `<i class="pl-spin" style="${anim}">`
+    + rider('', `<i class="pl-glow" style="left:${f(-sr * 1.8)}px;top:${f(-sr * 1.8)}px;width:${f(sr * 3.6)}px;height:${f(sr * 3.6)}px"></i><i class="pl-star" style="left:${f(-sr)}px;top:${f(-sr)}px;width:${f(2 * sr)}px;height:${f(2 * sr)}px"></i>`)
+    + rider(' b', `<i class="pl-dot" style="left:${f(-dr)}px;top:${f(-dr)}px;width:${f(2 * dr)}px;height:${f(2 * dr)}px"></i>`)
+    + '</i></i>';
   let spk = '';
   const n = small ? 4 : 4 + Math.floor(r() * 3);
   for (let i = 0; i < n; i++) {

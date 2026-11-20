@@ -80,14 +80,19 @@ nav .logo img { width: 34px; height: 34px; border-radius: 10px; }
 .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
 
 /* 首屏右边：转着的品牌星 + 绕着它的几颗小行星 */
-.orbit { position: relative; aspect-ratio: 1; max-width: 420px; width: 100%; margin: 0 auto; }
+.orbit { position: relative; aspect-ratio: 1; max-width: 420px; width: 100%; margin: 0 auto; container-type: inline-size; }
 .orbit .sun { position: absolute; inset: 22%; display: grid; place-items: center; animation: bob 6s ease-in-out infinite; }
 .orbit .sun svg { width: 100%; height: 100%; filter: drop-shadow(0 20px 30px rgba(80, 60, 200, .35)); }
-.orbit .ring { position: absolute; inset: 2%; border-radius: 50%; border: 1.5px dashed color-mix(in srgb, var(--primary) 35%, transparent); transform: rotateX(68deg) rotateZ(-12deg); }
-.orbit .rot { position: absolute; inset: 2%; animation: spin 24s linear infinite; }
-.orbit .rot.r2 { inset: 12%; animation-duration: 17s; animation-direction: reverse; }
-.orbit .moon { position: absolute; width: 18%; height: 18%; left: 41%; top: -9%; animation: spin 24s linear infinite reverse; }
-.orbit .r2 .moon { width: 15%; height: 15%; animation-duration: 17s; animation-direction: normal; top: auto; bottom: -7.5%; left: 42%; }
+.orbit .ring { position: absolute; inset: 2%; border-radius: 50%; border: 1.5px dashed color-mix(in srgb, var(--primary) 35%, transparent); transform: rotate(-12deg) scaleY(.375); }
+/* 两颗星沿着同一道环走（隔半圈）：轨道和环一样大、一样斜；星反着转、反着压回来，所以一直是圆的。转到前半圈时盖在中间的星球上面 */
+.orbit .sun { z-index: 2; }
+.orbit .trk { position: absolute; inset: 2%; z-index: 1; transform: rotate(-12deg) scaleY(.375); animation: front 24s linear infinite; }
+.orbit .trk.r2, .orbit .r2 .rot, .orbit .r2 .moon { animation-delay: -12s; }
+.orbit .rot { position: absolute; inset: 0; animation: spin 24s linear infinite; }
+.orbit .moon { position: absolute; left: 50%; top: 0; width: 0; height: 0; animation: spin 24s linear infinite reverse; }
+.orbit .moon > div { position: absolute; width: 18cqw; height: 18cqw; left: -9cqw; top: -9cqw; transform: scaleY(2.6667) rotate(12deg); }
+.orbit .r2 .moon > div { width: 15cqw; height: 15cqw; left: -7.5cqw; top: -7.5cqw; }
+@keyframes front { 0%, 24.9% { z-index: 1; } 25%, 74.9% { z-index: 3; } 75%, 100% { z-index: 1; } }
 .orbit .moon svg { width: 100%; height: 100%; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes bob { 50% { transform: translateY(-10px); } }
@@ -172,7 +177,8 @@ footer a { color: inherit; }
   .btn { width: 100%; justify-content: center; }
   .hero p.lead { font-size: 17px; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; }
+  .orbit .trk.r2 { z-index: 3; } .orbit .r2 .rot { transform: rotate(180deg); } .orbit .r2 .moon { transform: rotate(-180deg); } }
 </style>
 </head>
 <body>
@@ -202,8 +208,8 @@ footer a { color: inherit; }
     </div>
     <div class="orbit" aria-hidden="true">
       <div class="ring"></div>
-      <div class="rot"><div class="moon" data-planet="earth"></div></div>
-      <div class="rot r2"><div class="moon" data-planet="saturn"></div></div>
+      <div class="trk"><div class="rot"><div class="moon"><div data-planet="earth"></div></div></div></div>
+      <div class="trk r2"><div class="rot"><div class="moon"><div data-planet="saturn"></div></div></div></div>
       <div class="sun" data-planet="brand" data-px="300"></div>
     </div>
   </section>
@@ -236,7 +242,7 @@ footer a { color: inherit; }
   </section>
 
   <section class="show reveal">
-    <div class="phone"><div class="screen shot"><img src="app-home.jpg?v=20261120190801" width="390" height="844" alt="行星记账首页截图 / Planet Ledger home screen" loading="lazy"></div></div>
+    <div class="phone"><div class="screen shot"><img src="app-home.jpg?v=20261120205951" width="390" height="844" alt="行星记账首页截图 / Planet Ledger home screen" loading="lazy"></div></div>
     <div>
       <h2 style="text-align:left;margin-top:0" data-zh="三步开始使用" data-en="Start in three steps">三步开始使用</h2>
       <div class="tabs" role="tablist"><button class="on" data-os="android" role="tab">Android</button><button data-os="ios" role="tab">iPhone</button></div>
@@ -270,7 +276,7 @@ footer a { color: inherit; }
   </footer>
 </div>
 
-<script src="../planets.js?v=20261120190801"></script>
+<script src="../planets.js?v=20261120205951"></script>
 <script>
 'use strict';
 // 语言：跟着浏览器，右上角可以切换

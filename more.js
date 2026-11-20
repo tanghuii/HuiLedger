@@ -758,16 +758,18 @@ function recurringView() {
 
 // ---------------------------------------------------------------- 导出（和手机端同一种表格）
 
-function exportCsv() {
+/** 导出成表格。list / name 不给就是全部账单（月度账单页导出某个月时给）。 */
+function exportCsv(list = null, name = null) {
   const L = computeLookup(), q = (s) => '"' + String(s ?? '').replace(/"/g, '""') + '"';
   const lines = ['﻿时间,类型,分类,二级分类,金额,账本,转出账户,转入账户,备注,报销,标签,币种,原币金额'];
-  for (const t of allTxs().sort(byNewest)) {
+  for (const t of (list ? [...list].sort((a, b) => a.date - b.date || a.id - b.id) : allTxs().sort(byNewest))) {
     const leaf = catOf(t), top = L.top(t.categoryId), foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
     lines.push([dayISO(t.date), ['支出', '收入', '转账'][t.kind], t.kind === KIND.TRANSFER ? '转账' : top?.name ?? '', leaf && leaf.parentId ? leaf.name : '',
       (t.kind === KIND.EXPENSE ? '-' : '') + (t.amountCents / 100).toFixed(2), q(state.data.ledger.get(t.ledgerId)?.name), q(state.data.account.get(t.accountId)?.name), q(state.data.account.get(t.toAccountId)?.name),
       q(t.note), ['', '待报销', '已报销'][t.reimburse ?? 0], q((t.tags ?? '').split(' ').filter(Boolean).map((x) => '#' + x).join(' ')), foreign ? t.currency : HOME, ((foreign ? t.origCents : t.amountCents) / 100).toFixed(2)].join(','));
   }
-  const name = `${tr('行星记账', 'PlanetLedger')}-${new Date().toISOString().slice(0, 10)}.csv`, blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+  name ??= `${tr('行星记账', 'PlanetLedger')}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
   // iPhone 上装成主屏幕 App 时下载链接没反应：用系统的分享面板（存到"文件"、发给别人）
   const file = typeof File === 'function' ? new File([blob], name, { type: 'text/csv' }) : null;
   if (IS_IOS && file && navigator.canShare?.({ files: [file] })) { navigator.share({ files: [file] }).catch(() => { /* 用户取消了 */ }); return; }

@@ -505,8 +505,8 @@ function hmWorthPage() {
 
 /** "我的"页：个人卡片（记了几天、几笔、本月结余），下面一格一个功能入口，四列，和 App 一样。 */
 function meView() {
-  const txs = allTxs(), email = state.session?.email ?? '';
-  const name = String(store.get('hl.ownerName', '') || '').trim() || email.split('@')[0] || tr('我', 'Me');
+  // 显示用户名（点一下改，和手机同步），不显示邮箱和本人姓名
+  const txs = allTxs(), name = String(shared.get('nickname', '') || '').trim() || tr('星际旅人', 'Stargazer');
   const now = new Date(), from = epochDay(now.getFullYear(), now.getMonth() + 1, 1), to = epochDay(now.getFullYear(), now.getMonth() + 2, 0);
   const mt = computeLookup().totals(txs.filter((t) => t.ledgerId === state.ledgerId && t.date >= from && t.date <= to));
   const stats = [[String(new Set(txs.map((t) => t.date)).size), tr('记账天数', 'Days')], [String(txs.length), tr('账单', 'Entries')], [money(mt.income - mt.expense), tr('本月结余', 'This month')]];
@@ -522,6 +522,7 @@ function meView() {
     MOD.pages['tidy-transfers'] && { icon: 'transfer', name: tr('整理转账', 'Tidy up'), v: 'tidy-transfers', badge: tidy.transfers },
     MOD.pages['tidy-cats'] && { icon: 'blocks', name: tr('整理分类', 'Categories+'), v: 'tidy-cats', badge: tidy.cats },
     MOD.pages.import ? { icon: 'camera', name: tr('导入', 'Import'), v: 'import' } : { icon: 'camera', name: tr('导入', 'Import'), file: true },
+    MOD.pages.monthly && { icon: 'receipt', name: tr('月度账单', 'Monthly bill'), v: 'monthly' },
     { icon: 'upload', name: tr('导出', 'Export'), act: 'export' },
     { icon: 'wrench', name: tr('设置', 'Settings'), v: 'settings' },
   ].filter(Boolean);
@@ -531,7 +532,7 @@ function meView() {
     : `<button class="hm-cell" data-act="${it.act ?? 'tab'}" data-v="${h(it.v ?? '')}">${icon(it)}<span class="hm-cl">${h(it.name)}</span></button>`;
   return `<div class="grid hm-me">
     <div class="card cc hm-prof">
-      <div class="hm-prow">${typeof plAvatar === 'function' ? plAvatar() : `<div class="hm-av">${tr('我', 'Me')}</div>`}<div class="hm-grow"><div class="hm-name">${h(name)}</div><div class="muted hm-lname">${h(state.data.ledger.get(state.ledgerId)?.name ?? '')}</div></div></div>
+      <div class="hm-prow">${typeof plAvatar === 'function' ? plAvatar() : `<div class="hm-av">${tr('我', 'Me')}</div>`}<div class="hm-grow"><button class="hm-name" data-act="hm-nick"><span>${h(name)}</span>${hmSvg(ICONS.pencil.d)}</button><div class="muted hm-lname">${h(state.data.ledger.get(state.ledgerId)?.name ?? '')}</div></div></div>
       <div class="hm-stats">${stats.map(([v, l]) => `<div><b class="num">${h(v)}</b><span class="muted">${l}</span></div>`).join('')}</div>
     </div>
     <div class="card hm-gridcard"><div class="hm-grid">${items.map(cell).join('')}</div></div>
@@ -556,7 +557,7 @@ const hmCurLabel = (c) => { const sym = (SYMBOL[c] ?? '').trim(); return sym && 
 function settingsView() {
   const row = (icon, name, attrs, value = '') => `<button class="hm-li" ${attrs}>${iconTile(icon)}<span class="hm-li-t">${h(name)}</span>${value ? `<span class="hm-li-v">${h(value)}</span>` : ''}${hmSvg(ICONS.forward.d, 'hm-chev')}</button>`;
   const mod = (key) => MOD.me.find((m) => m.key === key);
-  const covered = ['budget', 'manage', 'settings', 'appearance', 'loans', 'schedules', 'backup'];
+  const covered = ['budget', 'manage', 'settings', 'appearance', 'loans', 'schedules', 'backup', 'monthly'];
   const modRow = (m) => (m ? row(m.icon ?? 'tag', m.name, `data-act="tab" data-v="${h(m.key)}"`) : '');
   const extra = (f) => { try { return typeof f === 'function' ? f() ?? '' : ''; } catch (e) { console.warn(e); return ''; } };
   const head = (t) => `<div class="hm-sh">${t}</div>`;
@@ -594,7 +595,7 @@ function settingsView() {
     : pending ? tr(`${pending} 条待上传`, `${pending} to upload`)
     : t ? tr('已同步 · ', 'Synced · ') + `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '';
   const cloud = `<div class="card hm-sc">
-    <div class="hm-cl2">${iconTile('layers')}<div class="hm-grow"><b>${tr('云端同步', 'Cloud sync')}</b><div class="muted hm-sub2">${h(state.session?.email ?? '')}</div></div></div>
+    <div class="hm-cl2">${iconTile('layers')}<div class="hm-grow"><b>${tr('云端同步', 'Cloud sync')}</b><div class="muted hm-sub2">${state.session ? h(tr('已登录', 'Signed in') + (String(shared.get('nickname', '') || '').trim() ? ' · ' + String(shared.get('nickname', '')).trim() : '')) : ''}</div></div></div>
     <div class="hm-btns"><button class="btn primary" data-act="reload" ${hm.syncing ? 'disabled' : ''}>${hm.syncing ? tr('正在同步…', 'Syncing…') : tr('立即同步', 'Sync now')}</button><button class="btn link hm-outl" data-act="hm-signout">${tr('退出登录', 'Sign out')}</button></div>
     ${status ? `<div class="muted hm-sub2">${status}</div>` : ''}
     <div class="hm-delrow"><button class="btn link hm-outl hm-del" data-act="hm-delete">${tr('注销账户', 'Delete account')}</button></div></div>`;
@@ -698,6 +699,12 @@ MOD.actions.push(async (act, v) => {
       return true;
     }
     case 'hm-delete': hmDeleteAccount(); return true;
+    case 'hm-nick': {
+      const v = await uiPrompt(tr('用户名', 'Username'), String(shared.get('nickname', '') || ''), { placeholder: tr('星际旅人', 'Stargazer'), max: 20 });
+      if (v === null) return true;
+      try { await shared.set('nickname', v.trim().slice(0, 20)); } catch (e) { state.error = e.message; }
+      break;
+    }
     case 'hm-menu-x': state.hmMenu = false; state.hmCurMenu = false; break;
     // 设置 → 货币
     case 'hm-cur': if (!state.hmFx?.busy) state.hmCurMenu = !state.hmCurMenu; break;
@@ -754,11 +761,15 @@ function loginView() {
   const heading = { login: tr('登录', 'Sign in'), register: tr('注册新账号', 'Create an account'), forgot: tr('找回密码', 'Reset password'), reset: tr('设置新密码', 'Set a new password'), sent: tr('查收邮件', 'Check your email') }[mode];
   const email = `<label class="f">${tr('邮箱', 'Email')}<input id="l-email" type="email" autocomplete="username" inputmode="email" value="${h(state.authEmail || '')}"></label>`;
   // 邮件已发出：告诉用户发到哪了、接下来点什么，并能重发
-  const sentBox = mode === 'sent' ? `<p style="margin:0">${state.sentKind === 'recovery'
-      ? tr(`重设密码的链接已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里设置新密码。`, `A reset link was sent to <b>${h(state.authEmail)}</b>. Open it to come back here and set a new password.`)
-      : tr(`确认邮件已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里并自动登录。`, `A confirmation email was sent to <b>${h(state.authEmail)}</b>. Open the link to come back here signed in.`)}</p>
+  // 注册后的激活：和 App 一样——"账户激活邮件已发送"，点"已激活"用刚输的账号密码直接登录（密码只留在内存里）
+  const sentBox = mode === 'sent' ? (state.sentKind === 'recovery'
+    ? `<p style="margin:0">${tr(`重设密码的链接已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里设置新密码。`, `A reset link was sent to <b>${h(state.authEmail)}</b>. Open it to come back here and set a new password.`)}</p>
     <p class="hint">${tr('没收到？看看垃圾邮件，或者过一分钟再重发。', 'Nothing yet? Check spam, or resend in a minute.')}</p>
-    <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>` : '';
+    <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>`
+    : `<div class="act-box">${typeof iconTile === 'function' ? iconTile('mail') : ''}<b>${tr('账户激活邮件已发送', 'Activation email sent')}</b>
+      <span class="muted">${tr('请您前往邮箱激活', 'Open your inbox to activate your account')}</span><span class="act-mail">${h(state.authEmail)}</span></div>
+    <button class="btn primary" data-act="auth-activated" ${dis}>${state.loading ? tr('请稍候…', 'Please wait…') : tr('已激活', 'I\'ve activated it')}</button>
+    <button class="btn" data-act="auth-resend" ${dis}>${tr('重新发送激活邮件', 'Resend activation email')}</button>`) : '';
   return `<div class="wrap"><div class="card login grid" style="position:relative">
     ${langSwitch()}
     <div class="pl-head">${typeof plLoginHero === 'function' ? plLoginHero() : ''}<h1 style="margin:0">${tr('行星记账', 'Planet Ledger')}</h1>
@@ -1123,7 +1134,7 @@ app.addEventListener('click', async (ev) => {
   const act = el.dataset.act, v = el.dataset.v;
   if (act === 'close-backdrop' && ev.target !== el) return;
   switch (act) {
-    case 'mode': state.authEmail = document.getElementById('l-email')?.value.trim() || state.authEmail; state.authMode = v; state.error = ''; state.notice = ''; render(); break;
+    case 'mode': state.authEmail = document.getElementById('l-email')?.value.trim() || state.authEmail; state.authMode = v; state.authPass = null; state.error = ''; state.notice = ''; render(); break;
     case 'lang': setLang(v); break;
     case 'pw-eye': { const inp = document.getElementById(v); if (inp) { inp.type = inp.type === 'password' ? 'text' : 'password'; el.textContent = inp.type === 'password' ? tr('显示', 'Show') : tr('隐藏', 'Hide'); } break; }
     case 'auth-resend': {
@@ -1138,6 +1149,17 @@ app.addEventListener('click', async (ev) => {
         state.authMode = 'sent'; state.unconfirmed = false; state.notice = tr('已重新发送。', 'Sent again.');
       } catch (e) { state.error = e.message; }
       state.loading = false; render(); break;
+    }
+    case 'auth-activated': {
+      // 用注册时输的账号密码直接登录；还没激活就留在这页提示
+      const email = state.authEmail, pass = state.authPass ?? '';
+      if (!pass) { state.authMode = 'login'; state.notice = tr('请输入密码登录。', 'Enter your password to sign in.'); render(); break; }
+      state.loading = true; state.error = ''; state.notice = ''; render();
+      try {
+        const o = await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
+        saveSession(o); state.authPass = null; state.loading = false; state.authMode = 'login'; await loadAll();
+      } catch (e) { state.loading = false; state.error = e.unconfirmed ? tr('还没激活，请先点邮件里的链接。', 'Not activated yet. Open the link in the email first.') : e.message; render(); }
+      break;
     }
     case 'auth': {
       const mode = state.authMode || 'login', val = (id) => document.getElementById(id)?.value ?? '';
@@ -1172,7 +1194,7 @@ app.addEventListener('click', async (ev) => {
         if (!o.access_token) {
           state.loading = false;
           if (mode === 'register' && Array.isArray(o.identities) && o.identities.length === 0) { state.authMode = 'login'; state.error = tr('这个邮箱已经注册过，直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'); }
-          else { state.authMode = 'sent'; state.sentKind = 'signup'; }
+          else { state.authMode = 'sent'; state.sentKind = 'signup'; state.authPass = pass; }
           render(); break;
         }
         saveSession(o); state.loading = false; state.authMode = 'login'; await loadAll();

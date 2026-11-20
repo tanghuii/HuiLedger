@@ -3,7 +3,7 @@
 
 svg.planet { display: block; flex: none; overflow: visible; }
 
-/* ---------------------------------------------------------------- 彩色卡片：星环、两颗小月亮、几颗小星（代替原来漂浮的圆） */
+/* ---------------------------------------------------------------- 彩色卡片：星环、环上一颗小星、几颗小星（代替原来漂浮的圆） */
 .card.cc::before, .card.cc::after, .face::before { display: none; }
 .pl-dc { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .card > .pl-dc, .face > .pl-dc { position: absolute; }
@@ -12,14 +12,17 @@ svg.planet { display: block; flex: none; overflow: visible; }
 .pl-sys.still { animation: none; }
 .pl-ring { box-sizing: border-box; border: solid rgba(255, 255, 255, .14); border-radius: 50%; }
 .pl-spin { inset: 0; animation: pl-spin 18s linear infinite; }
-.pl-moon { left: 100%; top: 50%; border-radius: 50%; }
-.pl-moon.m1 { animation: pl-un1 18s linear infinite; }
-.pl-moon.m2 { animation: pl-un2 11s linear infinite; }
+/* 环上的星：骑在轨道最右边（隔半圈的那颗在最左边），反着转抵消轨道的转动 */
+.pl-ride { left: 100%; top: 50%; width: 0; height: 0; animation: pl-unspin 18s linear infinite; }
+.pl-ride.b { left: 0; }
+.pl-ride > i { left: 0; top: 0; width: 0; height: 0; }
+.pl-star { background: #fff; opacity: .92; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.pl-glow { border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, .35), transparent); }
+.pl-dot { border-radius: 50%; background: rgba(255, 255, 255, .5); }
 .pl-spk { background: #fff; opacity: .55; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: pl-twinkle 3s ease-in-out infinite; }
 @keyframes pl-drift { 0%, 100% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(-9px, 7px) rotate(3deg); } }
 @keyframes pl-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-@keyframes pl-un1 { from { transform: rotate(0) scaleY(2.5); } to { transform: rotate(-360deg) scaleY(2.5); } }
-@keyframes pl-un2 { from { transform: rotate(0) scaleY(3.125); } to { transform: rotate(-360deg) scaleY(3.125); } }
+@keyframes pl-unspin { from { transform: rotate(0); } to { transform: rotate(-360deg); } }
 @keyframes pl-twinkle { 0%, 100% { opacity: .2; transform: scale(.7); } 50% { opacity: .9; transform: scale(1); } }
 
 /* ---------------------------------------------------------------- 首页：月份旁边的小星球 + "土星月"，点开一排九颗换这个月的星 */

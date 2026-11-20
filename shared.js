@@ -28,7 +28,7 @@ addEventListener('languagechange', () => { if (LANG_MODE === 'auto' && sysLang()
 /** 语言切换的小开关（登录页右上角、"我的"页都用它）。 */
 const langSwitch = () => `<div class="lang-sw" role="group" aria-label="Language"><button class="${LANG === 'zh' ? 'on' : ''}" data-act="lang" data-v="zh">中</button><button class="${LANG === 'en' ? 'on' : ''}" data-act="lang" data-v="en">EN</button></div>`;
 
-const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11, planet: 12, monthPlanet: 13 };
+const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11, planet: 12, monthPlanet: 13, nickname: 14 };
 
 const shared = {
   /** 读一项共享设置；云端还没有就用 def。 */
@@ -172,6 +172,23 @@ async function seedDefaults() {
  * await uiConfirm('删除这笔？', { ok: '删除', danger: true, detail: '可以撤销' }) → true / false
  * 画在 #app 外面的一层，不受 render() 影响。
  */
+/** 输入框弹窗（和 uiConfirm 一个样子）：返回输入的文字，取消返回 null。 */
+function uiPrompt(title, value = '', { ok = tr('保存', 'Save'), cancel = tr('取消', 'Cancel'), placeholder = '', max = 40 } = {}) {
+  return new Promise((done) => {
+    const box = document.createElement('div');
+    box.className = 'modal ui-confirm';
+    box.innerHTML = `<form class="card grid" role="dialog" aria-modal="true">
+      <b style="font-size:17px">${h(title)}</b><input class="ui-in" maxlength="${max}" value="${h(value)}" placeholder="${h(placeholder)}" enterkeyhint="done">
+      <div class="between"><button type="button" class="btn" data-v="0">${h(cancel)}</button><button class="btn primary" data-v="1">${h(ok)}</button></div></form>`;
+    const input = box.querySelector('input');
+    const close = (v) => { box.remove(); done(v); };
+    box.addEventListener('click', (e) => { const b = e.target.closest('button[data-v="0"]'); if (b || e.target === box) close(null); });
+    box.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); close(input.value); });
+    document.body.appendChild(box);
+    input.focus(); input.select();
+  });
+}
+
 function uiConfirm(title, { ok = tr('确定', 'OK'), cancel = tr('取消', 'Cancel'), danger = false, detail = '' } = {}) {
   return new Promise((done) => {
     const box = document.createElement('div');

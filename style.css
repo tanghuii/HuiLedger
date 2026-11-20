@@ -523,3 +523,10 @@ body { background: transparent; min-height: 100vh; min-height: 100dvh; }
 .ui-confirm { z-index: 60; }
 .ui-confirm .card { width: min(360px, 100%); }
 .btn.danger-fill { background: var(--expense); color: #fff; border-color: transparent; }
+
+/* 注册后的"激活邮件已发送"（和 App 一样） */
+.act-box { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 6px 0 4px; }
+.act-box .tile { width: 52px; height: 52px; margin-bottom: 8px; }
+.act-box .tile svg { width: 30px; height: 30px; }
+.act-box b { font-size: 18px; }
+.act-box .act-mail { font-size: 13px; color: var(--primary); }

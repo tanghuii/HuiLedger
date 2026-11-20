@@ -71,8 +71,16 @@
 .hm-dots button.on { width: 16px; background: #fff; }
 
 /* 往下滚时收成一行：两套内容都在，用 grid 的 1fr ⇄ 0fr 平滑收放（只动这一张卡片的高度） */
-.hm-sum { transition: padding .3s ease; }
-.hm-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s ease, opacity .25s ease; }
+/* 和 App 一样：高度、边距一起慢慢收；大内容往上缩一点、很快淡出，小的一行晚一点淡入，行星往右上缩小 */
+.hm-sum { --fold: .38s cubic-bezier(.4, 0, .2, 1); transition: padding var(--fold); }
+.hm-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--fold), opacity .22s ease; }
+.hm-fold > div { transition: transform var(--fold); }
+.hm-full > div { transform-origin: 50% 0; }
+.hm-sum.mini .hm-full > div { transform: translateY(-8px) scale(.95); }
+.hm-sum:not(.mini) .hm-mini > div { transform: translateY(10px); }
+.hm-sum.mini .hm-mini { transition-delay: 0s, .12s; }
+.hm-top1 > .pl-face { transition: transform var(--fold); transform-origin: 100% 15%; }
+.hm-sum.mini .hm-top1 > .pl-face { transform: scale(.55); }
 .hm-fold > div { min-height: 0; overflow: hidden; }
 .hm-mini { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 .hm-sum.mini { padding: 12px; }
@@ -98,7 +106,10 @@
 .hm-prof { padding: 18px; border-radius: 26px; }
 .hm-prow { display: flex; align-items: center; gap: 14px; }
 .hm-av { width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .24); color: #fff; font-size: 24px; font-weight: 700; line-height: 1; }
-.hm-name { font-size: 19px; font-weight: 600; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-name { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 19px; font-weight: 600; line-height: 26px; cursor: pointer; text-align: left; }
+.hm-name > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-name svg { width: 14px; height: 14px; flex: none; fill: none; stroke: var(--on-card-soft, rgba(255, 255, 255, .75)); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ui-in { width: 100%; box-sizing: border-box; font-size: 16px; }
 .hm-lname { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hm-stats { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
 .hm-stats > div { min-width: 0; }
@@ -253,3 +264,14 @@ div.hm-li { cursor: default; }
   .hm-upd { animation: none; }
   .hm-menu { animation: none; }
 }
+
+/* ---------------------------------------------------------------- 月度账单（modules/monthly.js）：预览就是要分享的那张图 */
+.mb-page { max-width: 480px; margin: 0 auto; }
+.mb-frame { border-radius: 26px; overflow: hidden; background: #261E5E; aspect-ratio: 360 / 640; }
+.mb-frame:has(img[src^="data"]) { aspect-ratio: auto; }
+.mb-img { display: block; width: 100%; height: auto; }
+.mb-img:not([src^="data"]) { visibility: hidden; }
+.mb-share { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; }
+.mb-share svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mb-row .btn { min-height: 46px; }
