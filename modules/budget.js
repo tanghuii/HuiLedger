@@ -5,7 +5,7 @@
 
 const BUD = {
   /** 正在改的预算：'total' 是总预算，数字是一级分类 id；null 表示没在改。 */
-  edit: null, err: '', grownKey: '',
+  edit: null, err: '',
 
   total: () => Number(shared.get('budget', 0)) || 0,
   cats() { const o = shared.get('catBudgets', {}); return o && typeof o === 'object' ? o : {}; },
@@ -28,16 +28,16 @@ const BUD = {
 const budCentsInput = (c) => (c > 0 ? (c / 100).toFixed(2) : '');
 
 /** 大圆环：fraction 是用掉的比例，中间放内容。 */
-function budgetRing(fraction, color, inner) {
-  const size = 190, w = 16, r = (size - w) / 2, len = 2 * Math.PI * r, f = Math.min(1, Math.max(0, fraction));
+function budgetRing(fraction, color, inner, grow = false) {
+  const size = 190, w = 16, r = (size - w) / 2;
   return `<div class="bud-ring"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true">
     <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-opacity=".14" stroke-width="${w}"/>
-    ${f > 0 ? `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${(len * f).toFixed(2)} ${len.toFixed(2)}"/>` : ''}</svg>
+    ${pgArc(size / 2, size / 2, r, fraction, color, w, grow)}</svg>
     <div class="in-ring">${inner}</div></div>`;
 }
 
 /** 累计花费曲线 + 预算线 + 均匀花完的虚线；当月再加一条到月底的预测虚线。 */
-function budgetPace(n, total) {
+function budgetPace(n, total, grow) {
   const { daily, days, current } = n, upTo = current ? n.todayDay : days;
   const cum = []; let acc = 0;
   for (const c of daily) { acc += c; cum.push(acc); }
@@ -46,9 +46,6 @@ function budgetPace(n, total) {
   const W = 600, H = 150, step = W / Math.max(1, days - 1), y = (c) => +(H - 4 - (H - 8) * c / top).toFixed(1);
   const pts = cum.slice(0, Math.max(1, upTo)).map((c, i) => `${(i * step).toFixed(1)},${y(c)}`);
   const lastX = ((Math.max(1, upTo) - 1) * step).toFixed(1);
-  // 换了月份才放一次"长出来"的动画，别的操作重画时不再闪
-  const key = `${state.ledgerId}-${state.month.y}-${state.month.m}`, grow = BUD.grownKey !== key;
-  BUD.grownKey = key;
   const svg = `<svg viewBox="0 0 ${W} ${H}" class="bud-chart ${grow ? 'grow' : ''}" role="img" aria-label="${tr('累计花费', 'Cumulative spending')}">
     <defs><linearGradient id="bud-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".28"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>
     <line x1="0" y1="${y(total)}" x2="${W}" y2="${y(total)}" stroke="var(--muted)" stroke-opacity=".35" stroke-width="1"/>
@@ -65,21 +62,23 @@ function budgetPace(n, total) {
 
 function budgetView() {
   const n = BUD.numbers(), total = BUD.total(), cb = BUD.cats(), { spent } = n;
+  // 换了账本、月份才放一次"长出来"的动画（圆环、分类条、走势），别的操作重画时不再放
+  const grow = pgGrow(`budget:${state.ledgerId}:${state.month.y}-${state.month.m}`);
   // 左边：大圆环
   let head;
   if (total <= 0) {
     head = `<div class="card grid">${monthBar()}<div><b>${tr('还没设月度预算', 'No monthly budget yet')}</b><div class="muted">${tr('本月已支出', 'Spent this month')} ${money(spent)}</div></div>
-      <div><button class="btn primary" data-act="bud-edit" data-v="total">${tr('设置预算', 'Set budget')}</button></div></div>`;
+      <div><button class="btn link" style="padding:0" data-act="bud-edit" data-v="total">${tr('设置预算', 'Set a budget')}</button></div></div>`;
   } else {
     const left = total - spent, ratio = spent / total;
     const color = left < 0 ? 'var(--expense)' : ratio > 0.8 ? 'var(--amber)' : 'var(--primary)';
     const daysLeft = n.current ? n.days - n.todayDay + 1 : 0;
     head = `<div class="card grid">${monthBar()}
-      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? tr('还剩', 'Left') : tr('超支', 'Over')}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">${tr('已用', 'Used')} ${Math.round(ratio * 100)}%</div>`)}
+      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? tr('还剩', 'Left') : tr('超支', 'Over')}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">${tr('已用', 'Used')} ${Math.round(ratio * 100)}%</div>`, grow)}
       <div class="bud-stats"><div><div class="muted small">${tr('预算', 'Budget')}</div><div class="num">${money(total)}</div></div>
         <div><div class="muted small">${tr('已花', 'Spent')}</div><div class="num out">${money(spent)}</div></div>
         <div><div class="muted small">${tr('每天可用', 'Per day')}</div><div class="num">${daysLeft > 0 && left > 0 ? money(Math.floor(left / daysLeft)) : '—'}</div></div></div>
-      <div><button class="btn" data-act="bud-edit" data-v="total">${tr('改预算', 'Edit budget')}</button></div></div>`;
+      <div class="bud-wide"><button class="btn" data-act="bud-edit" data-v="total">${tr('改预算', 'Edit budget')}</button></div></div>`;
   }
   // 右边：走势，分类预算
   const tops = [...state.data.category.values()].filter((c) => !c.parentId && !c.isIncome).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
@@ -93,17 +92,17 @@ function budgetView() {
     const color = ratio > 1 ? 'var(--expense)' : ratio > 0.8 ? 'var(--amber)' : (ICONS[c.icon] ?? ICONS.tag).c;
     return `<div class="row click" data-act="bud-edit" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}
       <div class="main"><div class="between"><span class="title">${h(c.name)}</span><span class="num muted small" style="font-weight:500">${money(used)} / ${money(b)}</span></div>
-        <div class="bar bud-bar" style="background:color-mix(in srgb, ${color} 15%, transparent)"><i style="width:${Math.min(100, ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${color} 65%, transparent), ${color})"></i></div>
+        <div class="bar bud-bar" style="background:color-mix(in srgb, ${color} 15%, transparent)"><i${pgGx(grow)} style="width:${Math.min(100, ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${color} 65%, transparent), ${color})"></i></div>
         <div class="small ${used > b ? 'out' : ratio > 0.8 ? 'amber' : 'muted'}" style="${used > b ? 'font-weight:600' : ''}">${used <= b ? tr('还剩 ' + money(b - used), money(b - used) + ' left') : tr('超支 ' + money(used - b), money(used - b) + ' over')}</div></div></div>`;
   }).join('');
   const otherRows = others.map((g) => `<div class="row ${g.top ? 'click' : ''}" ${g.top ? `data-act="bud-edit" data-v="${g.top.id}"` : ''}>${iconTile(g.top?.icon ?? 'tag')}
       <div class="main"><div class="between"><span class="title">${h(g.top?.name ?? tr('未分类', 'Uncategorized'))}</span><span class="num">${money(g.cents)}</span></div>
-        <div class="bar thin"><i style="width:${Math.min(100, g.cents * 100 / Math.max(1, spent)).toFixed(1)}%;background:${(ICONS[g.top?.icon] ?? ICONS.tag).c}"></i></div></div></div>`).join('');
+        <div class="bar thin"><i${pgGx(grow)} style="width:${Math.min(100, g.cents * 100 / Math.max(1, spent)).toFixed(1)}%;background:${(ICONS[g.top?.icon] ?? ICONS.tag).c}"></i></div></div></div>`).join('');
   const picker = free.length ? `<select class="mini" data-change="bud-pick" aria-label="${tr('设分类预算', 'Set category budget')}"><option value="">${tr('＋ 分类预算', '＋ Category budget')}</option>${free.map((c) => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select>` : '';
   const catCard = `<div class="card"><div class="between"><b class="muted small">${tr('分类预算', 'Category budgets')}</b>${picker}</div>
     ${!budgetedRows && !otherRows ? `<p class="muted" style="margin:8px 0 0">${tr('暂无支出', 'No spending yet')}</p>` : ''}${budgetedRows}
     ${budgetedRows && otherRows ? `<div class="muted small" style="margin-top:8px">${tr('没设预算的', 'No budget')}</div>` : ''}${otherRows}</div>`;
-  return `<div class="cols"><div class="grid sticky">${head}</div><div class="grid">${total > 0 ? budgetPace(n, total) : ''}${catCard}</div></div>${budgetDialog()}`;
+  return `<div class="cols"><div class="grid sticky">${head}</div><div class="grid">${total > 0 ? budgetPace(n, total, grow) : ''}${catCard}</div></div>${budgetDialog()}`;
 }
 
 /** 改预算的小窗：总预算或某个分类的。留空 = 不设。 */
@@ -147,13 +146,15 @@ function budgetHomeCard() {
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
   return `<div class="card click bud-home" data-act="tab" data-v="budget">
     <div class="between"><span class="muted small">${current ? tr('本月预算', 'Budget this month') : tr(m + '月预算', MONTH_EN[m - 1] + ' budget')}</span><span class="num ${over ? 'out' : ''}" style="font-size:18px">${over ? tr('超支 ' + money(-left), money(-left) + ' over') : tr('还剩 ' + money(left), money(left) + ' left')}</span></div>
-    <div class="bar" style="margin:8px 0 6px;background:color-mix(in srgb, ${bar} 15%, transparent)"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div>
+    <div class="bar" style="margin:8px 0 6px;background:color-mix(in srgb, ${bar} 15%, transparent)"><i${pgGx(pgGrow(`home:${state.ledgerId}:${y}-${m}`))} style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div>
     <div class="between small muted"><span>${tr('已花', 'Spent')} ${money(spent)} / ${money(total)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每天 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))}/day`)}</span>` : ''}</div>
     ${overCats.length ? `<div class="small out" style="font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tr('超支：', 'Over: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</div>`;
 }
 
 MOD.pages.budget = () => budgetView();
-MOD.me.push({ key: 'budget', get name() { return tr('预算', 'Budget'); }, icon: 'target', order: 10 });
+// 标题栏右边的"设置预算"（同手机端 ScreenBar 的 actions）
+MOD.me.push({ key: 'budget', get name() { return tr('预算', 'Budget'); }, icon: 'target', order: 10,
+  barRight: () => `<button class="btn link" data-act="bud-edit" data-v="total">${tr('设置预算', 'Set budget')}</button>` });
 MOD.homeCards.push(() => budgetHomeCard());
 
 MOD.actions.push(async (act, v, el) => {

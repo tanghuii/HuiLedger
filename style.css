@@ -337,9 +337,6 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .sc-pause { padding: 0 !important; font-size: 12px; }
 .bk-danger { background: var(--expense) !important; color: #fff !important; }
 .mg-item + .mg-item { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.mg-mv { display: inline-flex; gap: 2px; flex: none; }
-.mg-mv button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--field); color: var(--muted); cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
-.mg-mv button:disabled { opacity: .3; cursor: default; }
 .mg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; padding: 2px; }
 .mg-icons button { border: 0; background: none; border-radius: 13px; padding: 3px; cursor: pointer; display: grid; place-items: center; }
 .mg-icons button.on { background: color-mix(in srgb, var(--primary) 24%, transparent); outline: 2px solid var(--primary); }
@@ -492,7 +489,35 @@ body.ed-selecting .ed-toast:not(.top) { bottom: 210px; }
 .seg button { padding: 7px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 @media (max-width: 420px) { .seg button { font-size: 13.5px; } }
 
+/* ---------------------------------------------------------------- 全面屏适配（iPhone 装成桌面 App 时底部不留白）
+   背景改画在一层固定的底板上，上下都伸出屏幕外，盖住刘海和底部横条区域；页面高度用动态视口单位。 */
+html { background: var(--bg); min-height: 100%; height: -webkit-fill-available; }
+html::before {
+  content: ""; position: fixed; z-index: -2; pointer-events: none;
+  left: 0; right: 0; top: calc(-1 * env(safe-area-inset-top) - 60px); bottom: calc(-1 * env(safe-area-inset-bottom) - 60px);
+  background: var(--bg);
+  background-image:
+    radial-gradient(60vw 60vw at 5% 0%, color-mix(in srgb, var(--blob1) 75%, transparent), transparent 70%),
+    radial-gradient(55vw 55vw at 100% 35%, color-mix(in srgb, var(--blob2) 70%, transparent), transparent 70%),
+    radial-gradient(60vw 60vw at 10% 100%, color-mix(in srgb, var(--blob3) 70%, transparent), transparent 70%);
+}
+body { background: transparent; min-height: 100vh; min-height: 100dvh; }
+@supports (height: 100lvh) { html::before { min-height: calc(100lvh + 120px); } }
+/* 左右也留出安全区（横屏、灵动岛） */
+@media (max-width: 720px) {
+  .wrap { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .bottom-nav { left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); }
+}
+
 /* iPhone：输入框文字小于 16px 时，一点输入 Safari 就会自动放大页面。输入框统一用 16px，页面不再跳。 */
 @supports (-webkit-touch-callout: none) {
   input, select, textarea, [contenteditable] { font-size: max(16px, 1em) !important; }
 }
+/* 点按时不要出现灰色高亮、文字不被意外选中；输入框里仍可选字 */
+@media (max-width: 720px) {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  button, .row, .me-item, .bottom-nav { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
+.ui-confirm { z-index: 60; }
+.ui-confirm .card { width: min(360px, 100%); }
+.btn.danger-fill { background: var(--expense); color: #fff; border-color: transparent; }

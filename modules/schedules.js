@@ -66,6 +66,8 @@ async function runSchedules() {
     }
     if (changed) await schedSave(list);
   } finally { runSchedules.busy = false; }
+  // 同手机端到期记账后的通知："已自动记账 N 笔"
+  if (made > 0 && typeof edToast === 'function') { try { edToast(tr(`已自动记账 ${made} 笔`, `${made} ${made === 1 ? 'entry' : 'entries'} added`)); } catch { /* 提示出不来不影响记账 */ } }
   return made;
 }
 MOD.onLoad.push(async () => { await runSchedules(); });
@@ -92,6 +94,20 @@ function schedView() {
       <div style="margin-top:12px"><button class="pill" data-act="sc-new">${tr('＋ 新建', '＋ New')}</button></div></div>
     <div class="card">${rows || `<span class="muted">${tr('房租、订阅这类，到期自动记', 'Rent, subscriptions… logged when due')}</span>`}</div>
   </div>${state.schedEdit ? schedDialog() : ''}`;
+}
+
+/** 周期性收支页里的"自动记账"卡（同手机端 RecurringScreen）：标题、＋ 新建、每一条（点开修改）。 */
+function schedRecurringCard() {
+  const list = schedList().sort((a, b) => a.next - b.next), acc = state.data.account, cat = state.data.category;
+  const rows = list.map((s) => {
+    const a = acc.get(s.accountId);
+    const sub = s.paused ? `<span class="amber">${tr('已暂停', 'Paused')}</span>` : tr(`${schedLabel(s)} · 下次 ${dayISO(s.next)} · ${h(a?.name ?? '?')}`, `${schedLabel(s)} · next ${dayISO(s.next)} · ${h(a?.name ?? '?')}`);
+    return `<div class="row click" data-act="sc-edit" data-v="${s.id}">${iconTile(cat.get(s.categoryId)?.icon ?? 'calendar')}
+      <div class="main"><div class="title">${h(s.name)}</div><div class="sub">${sub}</div></div>
+      <div class="num ${s.kind === KIND.INCOME ? 'in' : ''}">${money(s.cents, a ? acctCur(a) : HOME)}</div></div>`;
+  }).join('');
+  return `<div class="card sc-card"><div class="between"><span class="muted small" style="font-weight:500">${tr('自动记账', 'Auto entries')}</span><button class="btn link" data-act="sc-new">${tr('＋ 新建', '＋ New')}</button></div>
+    ${rows || `<div class="muted small">${tr('房租、订阅这类，到期自动记', 'Rent, subscriptions: logged on the day')}</div>`}</div>`;
 }
 
 function schedDialog() {
@@ -166,7 +182,7 @@ MOD.actions.push(async (act, v) => {
       case 'sc-save': await schedSaveEditing(); break;
       case 'sc-delete': {
         const e = state.schedEdit;
-        if (!confirm(tr(`删除「${e.name}」？已记的账单不会删。`, `Delete "${e.name}"? Past entries are kept.`))) return true;
+        if (!await uiConfirm(tr(`删除「${e.name}」？`, `Delete "${e.name}"?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('已记的账单不会删', 'Past entries are kept') })) return true;
         await schedSave(schedList().filter((x) => x.id !== e.id)); state.schedEdit = null;
         break;
       }
@@ -191,3 +207,7 @@ document.addEventListener('click', (ev) => {
   if (ev.target?.dataset?.bg !== 'sc') return;
   state.schedEdit = null; state.schedError = ''; render();
 });
+// 离开这页（底栏、资产专题的返回）时把没保存的小窗收起来，免得在另一页冒出来
+document.addEventListener('click', (ev) => {
+  if (typeof state !== 'undefined' && ev.target.closest?.('[data-act="tab"], [data-act="asset-back"]')) { state.schedEdit = null; state.schedError = ''; }
+}, true);

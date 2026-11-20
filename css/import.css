@@ -1,0 +1,63 @@
+/* 导入账单（modules/import.js）：选文件、识别进度、核对列表，和手机端 ImportScreen 一个样子 */
+.imp-page { display: grid; gap: 12px; max-width: 720px; margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
+.imp-page > * { min-width: 0; }
+.imp-head { display: flex; align-items: center; gap: 12px; font-weight: 500; }
+.tile.imp-tile38 { width: 38px; height: 38px; border-radius: 12px; }
+.imp-key { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; }
+.imp-pick { display: block; width: 100%; text-align: center; cursor: pointer; margin-top: 12px; padding: 11px 16px; }
+.imp-pick + .imp-pick { margin-top: 8px; }
+.imp-note { margin-top: 8px; }
+
+/* 识别中 */
+.imp-load { display: grid; justify-items: center; align-content: center; gap: 12px; min-height: 55vh; padding: 0 40px; text-align: center; }
+.imp-load b { font-weight: 500; }
+.bar.imp-bar { width: 100%; max-width: 360px; height: 6px; }
+.bar.imp-bar i { background: var(--primary); transition: width .3s; }
+.imp-spin { width: 38px; height: 38px; border-radius: 50%; border: 3.5px solid color-mix(in srgb, var(--primary) 20%, transparent); border-top-color: var(--primary); animation: impSpin .9s linear infinite; }
+@keyframes impSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .imp-spin { animation-duration: 2.5s; } }
+
+/* 核对列表 */
+.imp-top { display: flex; align-items: center; gap: 8px; padding: 0 0 0 4px; }
+.imp-sum { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+.imp-top .btn.link { flex: none; font-weight: 500; }
+.imp-list { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+.imp-list.busy { pointer-events: none; }
+.card.imp-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px 8px 8px; border-radius: 18px; }
+.imp-row.off .tile, .imp-row.off .imp-main, .imp-row.off .imp-amt { opacity: .5; }
+input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0; accent-color: var(--primary); cursor: pointer; }
+.tile.imp-tile { width: 36px; height: 36px; border-radius: 12px; }
+.imp-main { flex: 1; min-width: 0; }
+.imp-dd { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; font-weight: 500; cursor: pointer; vertical-align: middle; }
+.imp-dd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-dd > select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; font-size: 16px; -webkit-appearance: none; appearance: none; }
+.imp-dd:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 8px; }
+.imp-need { font-style: normal; color: var(--expense); }
+.imp-tr { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.imp-tr .imp-dd { flex: 0 1 auto; }
+.imp-tr > .muted { flex: none; }
+.imp-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted); cursor: pointer; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.imp-sub:hover { color: var(--text); }
+.imp-dup { display: block; max-width: 100%; padding: 3px 0; border: 0; background: none; font-size: 11px; text-align: left; white-space: pre; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: var(--primary); }
+.imp-dup.new { color: var(--expense); }
+.imp-amt { flex: none; padding: 8px; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--text); border-radius: 10px; }
+.imp-amt.in { color: var(--income); }
+.imp-amt.out { color: var(--expense); }
+.imp-amt:disabled { cursor: default; }
+.imp-amt:not(:disabled):active { transform: scale(.94); }
+
+/* 底部：缺账户、汇率、放弃 / 导入 */
+.card.imp-foot { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); z-index: 3; display: grid; gap: 10px; padding: 12px; border-radius: 22px; }
+.imp-acc { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; font-size: 14px; }
+.imp-acc .chip { color: var(--text); font-size: 14px; max-width: 100%; }
+.imp-acc .chip > span { display: inline-flex; align-items: center; gap: 6px; }
+.imp-acc .chip b { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-acc .chip .tile { width: 24px; height: 24px; border-radius: 8px; }
+.imp-btns { display: flex; align-items: center; gap: 8px; }
+.imp-btns .btn.primary { flex: 1; height: 50px; font-size: 16px; }
+.imp-btns .btn:not(.primary) { height: 50px; }
+.imp-foot input, .imp-modal input, .imp-modal textarea { font-size: 16px; }
+
+/* 核对一笔：原文、日期、金额、备注 */
+.imp-src { margin-top: 4px; font-size: 13px; line-height: 19px; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }

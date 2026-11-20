@@ -26,32 +26,157 @@ async function mgPutMany(kind, list, deleted = false) {
   for (const r of rows) { if (r.deleted) state.data[kind].delete(r.id); else state.data[kind].set(r.id, r.data); }
   saveSnapshot();
 }
-/** 把这一组里的 id 和相邻的换位置，所有顺序号重新编一遍（同手机端 moveAccount / reorderCategories）。 */
-async function mgSwap(kind, all, group, id, dir) {
-  const at = group.findIndex((x) => x.id === id), other = group[at + dir];
-  if (at < 0 || !other) return;
-  const list = [...all], i = list.findIndex((x) => x.id === id), j = list.findIndex((x) => x.id === other.id);
-  [list[i], list[j]] = [list[j], list[i]];
-  await mgPutMany(kind, list.map((x, n) => ((x.sortOrder ?? 0) === n ? null : HL_JSON[kind]({ ...x, sortOrder: n }))).filter(Boolean));
+/**
+ * 一组（同类型的账户、同收支的一级分类）拖成了新顺序 ids：这组占的那几个位置按新顺序填回去，
+ * 所有顺序号从 0 重新编，只写变了的（同手机端 LedgerViewModel.reorderAccounts / reorderCategories）。
+ */
+async function mgReorder(kind, ids) {
+  const map = state.data[kind], all = [...map.values()].sort(mgOrder), want = new Set(ids);
+  const group = ids.map((id) => map.get(id)).filter(Boolean);
+  if (group.length !== ids.length) return;
+  const next = [...all];
+  all.map((x, i) => (want.has(x.id) ? i : -1)).filter((i) => i >= 0).forEach((slot, n) => { next[slot] = group[n]; });
+  await mgPutMany(kind, next.map((x, n) => ((x.sortOrder ?? 0) === n ? null : HL_JSON[kind]({ ...x, sortOrder: n }))).filter(Boolean));
 }
-const mgMoveBtns = (what, id, i, n) => `<span class="mg-mv"><button data-act="mg-${what}-up" data-v="${id}" ${i === 0 ? 'disabled' : ''} aria-label="${tr('上移', 'Move up')}">↑</button><button data-act="mg-${what}-down" data-v="${id}" ${i === n - 1 ? 'disabled' : ''} aria-label="${tr('下移', 'Move down')}">↓</button></span>`;
+
+// ---------------------------------------------------------------- 长按拖动排序（同手机端 Gestures.kt 的 ReorderColumn）
+// 用法：一列的容器带 data-ro="account" / "category"，里面每一项带 data-ro-id="id"（容器的直接子元素）。
+// 长按约半秒，这一项浮起来（放大 1.02、半透明、带阴影）跟着手指走，别的项让开；松手按新顺序存。
+// 没到时间就移动 = 正常滚动；短按 = 正常点开。拖到屏幕上下边缘时页面自己滚。
+
+const RO = { cand: null, drag: null, swallow: 0, raf: 0 };
+const RO_HOLD = 480;
+/** 轻轻震一下（开始拖、放下时，同手机端 buzz）；iPhone 网页没有震动就算了。 */
+const roBuzz = () => { try { if (navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(10); } catch { /* 没有震动 */ } };
+
+/** 往上找第一个能竖着滚的；没有就是整页。 */
+function roScroller(el) {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+const roTop = (sc) => (sc === document.scrollingElement || sc === document.documentElement ? scrollY : sc.scrollTop);
+
+function roCancelCand() { if (RO.cand) { clearTimeout(RO.cand.timer); RO.cand = null; } }
+
+function roStart() {
+  const c = RO.cand;
+  RO.cand = null;
+  if (!c || !c.item.isConnected) return;
+  const items = [...c.box.children].filter((el) => el.matches('[data-ro-id]'));
+  if (items.length < 2) return;
+  const rects = items.map((el) => el.getBoundingClientRect());
+  const sc = roScroller(c.box), from = items.indexOf(c.item), isPage = sc === document.scrollingElement || sc === document.documentElement;
+  RO.drag = { box: c.box, item: c.item, items, heights: rects.map((r) => r.height), gap: Math.max(0, rects[1].top - rects[0].bottom),
+    from, y0: c.y, y: c.y, sc, isPage, top0: roTop(sc), off: 0,
+    // 只在这一列的范围里拖；页面最多滚到拖之前的底（拖着的那一项往下移会把页面撑长）
+    min: rects[0].top - rects[from].top, max: rects[items.length - 1].bottom - rects[from].bottom,
+    maxTop: isPage ? document.documentElement.scrollHeight - innerHeight : sc.scrollHeight - sc.clientHeight };
+  c.box.classList.add('ro-on');
+  c.item.classList.add('ro-lift');
+  c.item.style.touchAction = 'none';
+  RO.swallow = Infinity;
+  roBuzz();
+  roLoop();
+}
+
+/** 现在落在第几个位置（同 ReorderColumn.target：越过相邻项一半高度就换位）。 */
+function roTarget(d) {
+  let t = d.from, left = d.off;
+  if (left > 0) while (t < d.items.length - 1) { const hh = d.heights[t + 1] + d.gap; if (left > hh / 2) { left -= hh; t++; } else break; }
+  else while (t > 0) { const hh = d.heights[t - 1] + d.gap; if (-left > hh / 2) { left += hh; t--; } else break; }
+  return t;
+}
+
+function roPaint() {
+  const d = RO.drag;
+  if (!d) return;
+  d.off = Math.min(d.max, Math.max(d.min, d.y - d.y0 + (roTop(d.sc) - d.top0)));
+  const to = roTarget(d), dragH = d.heights[d.from] + d.gap;
+  d.items.forEach((el, i) => {
+    const shift = el === d.item ? d.off : i > d.from && i <= to ? -dragH : i >= to && i < d.from ? dragH : 0;
+    el.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+
+/** 拖着的时候：手指靠近上下边缘，页面跟着滚（越靠边越快）。 */
+function roLoop() {
+  cancelAnimationFrame(RO.raf);
+  const d = RO.drag;
+  if (!d) return;
+  if (!d.item.isConnected) { roEnd(false); return; }
+  const r = d.isPage ? { top: 0, bottom: innerHeight } : d.sc.getBoundingClientRect();
+  // 手机上顶部有贴着的标题栏、底部有底栏，边缘区留宽一点
+  const zoneTop = r.top + 96, zoneBottom = r.bottom - 110, top = roTop(d.sc);
+  let speed = d.y < zoneTop ? -Math.min(18, (zoneTop - d.y) / 5) : d.y > zoneBottom ? Math.min(18, (d.y - zoneBottom) / 5) : 0;
+  // 到了这一列的头 / 尾，或者页面滚到头了，就不再滚
+  if ((speed < 0 && (d.off <= d.min || top <= 0)) || (speed > 0 && (d.off >= d.max || top >= d.maxTop))) speed = 0;
+  if (speed) { speed = Math.max(-top, Math.min(d.maxTop - top, speed)); if (d.isPage) scrollBy(0, speed); else d.sc.scrollTop += speed; roPaint(); }
+  RO.raf = requestAnimationFrame(roLoop);
+}
+
+async function roEnd(commit = true) {
+  cancelAnimationFrame(RO.raf);
+  const d = RO.drag;
+  RO.drag = null;
+  // 长按之后跟着来的那一下点击不算（不然松手就打开了这一项）
+  RO.swallow = Date.now() + 450;
+  if (!d) return;
+  const to = commit ? roTarget(d) : d.from;
+  d.box.classList.remove('ro-on');
+  d.item.classList.remove('ro-lift');
+  d.item.style.touchAction = '';
+  for (const el of d.items) el.style.transform = '';
+  if (to === d.from || !d.item.isConnected) return;
+  // 先在页面上按新顺序摆好（不闪回原位），再存，存完重画
+  const order = d.items.filter((el) => el !== d.item);
+  order.splice(to, 0, d.item);
+  d.box.insertBefore(d.item, to < d.items.length - 1 ? order[to + 1] : d.items[d.items.length - 1].nextSibling);
+  roBuzz();
+  try { await mgReorder(d.box.dataset.ro, order.map((el) => Number(el.dataset.roId))); } catch (e) { state.error = e.message; }
+  render();
+}
+
+document.addEventListener('pointerdown', (ev) => {
+  if (RO.drag || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+  const item = ev.target.closest?.('[data-ro-id]'), box = item?.parentElement;
+  roCancelCand();
+  if (!item || !box?.matches('[data-ro]') || ev.target.closest('input, select, textarea') || item.closest('.modal')) return;
+  RO.cand = { item, box, x: ev.clientX, y: ev.clientY, pid: ev.pointerId, timer: setTimeout(roStart, RO_HOLD) };
+}, true);
+document.addEventListener('pointermove', (ev) => {
+  if (RO.drag) { RO.drag.y = ev.clientY; roPaint(); ev.preventDefault(); return; }
+  // 还没到时间就挪开了：是在滚动或者滑动，不排序
+  if (RO.cand && ev.pointerId === RO.cand.pid && Math.hypot(ev.clientX - RO.cand.x, ev.clientY - RO.cand.y) > 8) roCancelCand();
+}, { passive: false });
+document.addEventListener('pointerup', () => { roCancelCand(); if (RO.drag) roEnd(true); });
+document.addEventListener('pointercancel', () => { roCancelCand(); if (RO.drag) roEnd(false); });
+// 拖着的时候不让页面跟着手指滚（touch-action 在按下时就定了，只能在这里拦）
+document.addEventListener('touchmove', (ev) => { if (RO.drag) ev.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', (ev) => { if (RO.cand || RO.drag) ev.preventDefault(); });
+document.addEventListener('click', (ev) => {
+  if (Date.now() < RO.swallow && ev.target.closest?.('[data-ro-id]')) { ev.stopPropagation(); ev.preventDefault(); RO.swallow = 0; }
+}, true);
 
 // ---------------------------------------------------------------- 分类
 
 function mgCategoriesView() {
   const m = mgState(), cats = [...state.data.category.values()].sort(mgOrder);
   const tops = cats.filter((c) => !c.parentId && !!c.isIncome === m.income);
-  const rows = tops.map((c, i) => {
+  const rows = tops.map((c) => {
     const subs = cats.filter((s) => s.parentId === c.id), open = m.open === c.id;
-    return `<div class="mg-item"><div class="row click" data-act="mg-open" data-v="${c.id}">${iconTile(c.icon)}
+    return `<div class="mg-item" data-ro-id="${c.id}"><div class="row click" data-act="mg-open" data-v="${c.id}">${iconTile(c.icon)}
         <div class="main"><div class="title">${h(c.name)} <span class="small muted">${open ? '▴' : '▾'}</span></div>${subs.length ? `<div class="sub">${subs.map((s) => h(s.name)).join(tr('、', ', '))}</div>` : ''}</div>
-        ${mgMoveBtns('cat', c.id, i, tops.length)}<button class="btn link small" data-act="mg-cat-edit" data-v="${c.id}">${tr('修改', 'Edit')}</button></div>
+        <button class="btn link small" data-act="mg-cat-edit" data-v="${c.id}">${tr('修改', 'Edit')}</button></div>
       ${open ? `<div class="indent">${subs.map((s) => `<div class="row click indent" data-act="mg-cat-edit" data-v="${s.id}">${iconTile(s.icon, 'sm')}<div class="main">${h(s.name)}</div><span class="muted">›</span></div>`).join('')}
         <button class="btn link small" data-act="mg-cat-new" data-v="${c.id}">${tr('＋ 子分类', '＋ Subcategory')}</button></div>` : ''}</div>`;
   }).join('');
   return `<div class="card grid">${seg('mg-income', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], m.income ? 1 : 0)}
     <div class="between"><span class="muted small">${tr(`${tops.length} 个分类`, `${tops.length} ${tops.length === 1 ? 'category' : 'categories'}`)}</span><button class="btn link" data-act="mg-cat-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div></div>
-    <div class="card">${rows || `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
+    ${tops.length > 1 ? `<div class="muted small mg-hint">${tr('长按拖动排序', 'Long-press to reorder')}</div>` : ''}
+    <div class="card">${rows ? `<div data-ro="category">${rows}</div>` : `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
 }
 
 function mgCategoryDialog(e) {
@@ -101,18 +226,20 @@ function mgLedgersView() {
 
 function mgAccountsView() {
   const accounts = [...state.data.account.values()].sort(mgOrder), due = shared.get('cardDue', {}) ?? {};
-  const row = (a, i, n) => {
+  const row = (a) => {
     const sub = [acctCur(a), due[String(a.id)] && a.type === 2 ? tr(`${due[String(a.id)]} 号还款`, `Due day ${due[String(a.id)]}`) : ''].filter(Boolean).join(' · ');
-    return `<div class="row click" data-act="mg-acc-edit" data-v="${a.id}">${accountTile(a)}<div class="main"><div class="title ${a.archived ? 'muted' : ''}">${h(a.name)}</div><div class="sub">${sub}</div></div>
-      ${mgMoveBtns('acc', a.id, i, n)}</div>`;
+    return `<div class="row click" data-act="mg-acc-edit" data-v="${a.id}" data-ro-id="${a.id}">${accountTile(a)}<div class="main"><div class="title ${a.archived ? 'muted' : ''}">${h(a.name)}</div><div class="sub">${sub}</div></div><span class="muted">›</span></div>`;
   };
+  // 同一类、同样归没归档的账户之间长按拖动排序
+  const list = (g) => `<div data-ro="account">${g.map(row).join('')}</div>`;
   const groups = mgTypes().map(([type, label]) => {
     const g = accounts.filter((a) => (a.type ?? 0) === type && !a.archived);
-    return g.length ? `<div class="card"><div class="dayhead"><span>${label}</span><span>${g.length}</span></div>${g.map((a, i) => row(a, i, g.length)).join('')}</div>` : '';
+    return g.length ? `<div class="card"><div class="dayhead"><span>${label}</span><span>${g.length}</span></div>${list(g)}</div>` : '';
   }).join('');
   const old = accounts.filter((a) => a.archived);
-  const archived = old.length ? `<div class="card"><div class="dayhead"><span>${tr('已归档', 'Archived')}</span><span>${old.length}</span></div>${old.map((a) => row(a, 0, 1)).join('')}</div>` : '';
-  return `<div class="card"><div class="between"><span class="muted small">${tr(`${accounts.length} 个账户`, `${accounts.length} account${accounts.length === 1 ? '' : 's'}`)}</span><button class="btn link" data-act="mg-acc-new">${tr('＋ 新建', '＋ New')}</button></div></div>${groups}${archived}`;
+  const archived = old.length ? `<div class="card"><div class="dayhead"><span>${tr('已归档', 'Archived')}</span><span>${old.length}</span></div>${list(old)}</div>` : '';
+  return `<div class="card"><div class="between"><span class="muted small">${tr(`${accounts.length} 个账户`, `${accounts.length} account${accounts.length === 1 ? '' : 's'}`)}</span><button class="btn link" data-act="mg-acc-new">${tr('＋ 新建', '＋ New')}</button></div></div>
+    ${accounts.length > 1 ? `<div class="muted small mg-hint">${tr('长按拖动排序', 'Long-press to reorder')}</div>` : ''}${groups}${archived}`;
 }
 
 function mgAccountDialog(e) {
@@ -191,11 +318,6 @@ MOD.actions.push(async (act, v) => {
       case 'mg-tab': m.tab = v; m.open = 0; m.color = 0; break;
       case 'mg-income': m.income = v === '1'; m.open = 0; break;
       case 'mg-open': m.open = m.open === id ? 0 : id; break;
-      case 'mg-cat-up': case 'mg-cat-down': {
-        const c = state.data.category.get(id), all = cats();
-        await mgSwap('category', all, all.filter((x) => !x.parentId && !!x.isIncome === !!c.isIncome), id, act.endsWith('up') ? -1 : 1);
-        break;
-      }
       case 'mg-cat-new': {
         const parent = state.data.category.get(id);
         m.edit = { kind: 'category', isNew: true, obj: { id: newId(), name: '', icon: parent?.icon ?? 'tag', isIncome: parent ? !!parent.isIncome : m.income, sortOrder: state.data.category.size, parentId: parent?.id ?? 0 } };
@@ -205,7 +327,8 @@ MOD.actions.push(async (act, v) => {
       case 'mg-icon': mgCollect(); m.edit.obj.icon = v; break;
       case 'mg-cat-delete': {
         const c = m.edit.obj, n = allTxs().filter((t) => t.categoryId === c.id || state.data.category.get(t.categoryId)?.parentId === c.id).length;
-        if (!confirm(tr(`删除「${c.name}」？${n ? `${n} 笔账单并入${c.parentId ? '上级分类' : '「其他」'}` : ''}`, `Delete "${c.name}"?${n ? ` ${n} ${n === 1 ? 'entry moves' : 'entries move'} to ${c.parentId ? 'the parent category' : '"Other"'}.` : ''}`))) return true;
+        if (!await uiConfirm(tr(`删除「${c.name}」？`, `Delete "${c.name}"?`), { ok: tr('删除', 'Delete'), danger: true,
+          detail: n ? h(tr(`${n} 笔账单并入${c.parentId ? '上级分类' : '「其他」'}`, `${n} ${n === 1 ? 'entry moves' : 'entries move'} to ${c.parentId ? 'the parent' : '"Other"'}`)) : '' })) return true;
         await mgDeleteCategory(state.data.category.get(c.id)); m.edit = null;
         break;
       }
@@ -214,7 +337,8 @@ MOD.actions.push(async (act, v) => {
       case 'mg-ledger-edit': m.edit = { kind: 'ledger', isNew: false, obj: { ...state.data.ledger.get(id) } }; break;
       case 'mg-ledger-delete': {
         const l = state.data.ledger.get(id), txs = allTxs().filter((t) => t.ledgerId === id);
-        if (state.data.ledger.size <= 1 || !confirm(tr(`删除账本「${l.name}」？其中 ${txs.length} 笔账单一并删除，无法恢复。`, `Delete ledger "${l.name}" and its ${txs.length} ${txs.length === 1 ? 'entry' : 'entries'}? This can't be undone.`))) return true;
+        if (state.data.ledger.size <= 1 || !await uiConfirm(tr(`删除账本「${l.name}」？`, `Delete ledger "${l.name}"?`), { ok: tr('删除', 'Delete'), danger: true,
+          detail: h(tr(`${txs.length} 笔账单一并删除，无法恢复`, `Its ${txs.length} ${txs.length === 1 ? 'entry' : 'entries'} go too. Can't be undone.`)) })) return true;
         await mgPutMany('tx', txs.map((t) => t.id), true);
         await deleteRecord('ledger', id);
         if (state.ledgerId === id) { state.ledgerId = [...state.data.ledger.keys()][0]; store.set('hl.ledger', state.ledgerId); }
@@ -225,11 +349,6 @@ MOD.actions.push(async (act, v) => {
         const colors = { ...(shared.get('ledgerColors', {}) ?? {}) };
         if (v) colors[String(m.color)] = hexToArgb(v); else delete colors[String(m.color)];
         await shared.set('ledgerColors', colors); m.color = 0;
-        break;
-      }
-      case 'mg-acc-up': case 'mg-acc-down': {
-        const a = state.data.account.get(id), all = accs();
-        await mgSwap('account', all, all.filter((x) => (x.type ?? 0) === (a.type ?? 0) && !!x.archived === !!a.archived), id, act.endsWith('up') ? -1 : 1);
         break;
       }
       case 'mg-acc-new': {
@@ -246,7 +365,7 @@ MOD.actions.push(async (act, v) => {
       case 'mg-acc-delete': {
         const a = m.edit.obj;
         if (mgAccountUsed(a.id)) { m.error = tr('还有账单，不能删', "Has entries, can't delete"); break; }
-        if (!confirm(tr(`删除账户「${a.name}」？`, `Delete account "${a.name}"?`))) return true;
+        if (!await uiConfirm(tr(`删除账户「${a.name}」？`, `Delete account "${a.name}"?`), { ok: tr('删除', 'Delete'), danger: true })) return true;
         await deleteRecord('account', a.id);
         const due = { ...(shared.get('cardDue', {}) ?? {}) };
         if (String(a.id) in due) { delete due[String(a.id)]; await shared.set('cardDue', due); }

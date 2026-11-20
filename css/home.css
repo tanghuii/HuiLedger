@@ -1,0 +1,257 @@
+/* home：首页（明细）、顶栏、底栏、"我的"、设置。手机宽度下和 App 一个样子；尺寸照 App 的 dp 取（1dp ≈ 1px）。
+   颜色都用 style.css 里的变量（--card、--stroke、--primary、--text、--muted、--card-tint……），外观主题换变量就跟着变。 */
+
+/* ---------------------------------------------------------------- 顶栏 */
+.top .hm-p, .hm-acts { display: none; }
+.hm-acts { position: relative; align-items: center; gap: 8px; flex: none; }
+.hm-ib, .hm-chip, .month .round, .subbar .round {
+  display: grid; place-items: center; padding: 0; cursor: pointer; color: var(--text);
+  background: var(--card); border: 1px solid var(--stroke);
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--shine);
+  transition: transform .2s cubic-bezier(.2, .9, .3, 1.4);
+}
+.hm-ib:active, .hm-chip:active, .month .round:active, .subbar .round:active { transform: scale(.92); }
+.hm-ib { width: 40px; height: 40px; border-radius: 50%; }
+.hm-ib svg, .month .round svg, .subbar .round svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hm-ib svg { width: 20px; height: 20px; }
+.hm-chip { display: inline-flex; align-items: center; gap: 6px; height: 37px; padding: 0 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+.hm-chip svg { width: 16px; height: 16px; fill: none; stroke: var(--primary); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hm-chip i { font-style: normal; font-size: 11px; color: var(--muted); margin-left: 4px; }
+/* 切换账本的下拉 */
+.hm-menu-bg { position: fixed; inset: 0; z-index: 50; }
+.hm-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 51; min-width: 190px; max-width: min(280px, calc(100vw - 32px)); max-height: 60vh; overflow: auto;
+  padding: 6px; border-radius: 18px; background: color-mix(in srgb, var(--bg) 90%, transparent); border: 1px solid var(--stroke);
+  backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 18px 40px -12px rgba(30, 20, 90, .38), inset 0 1px 0 var(--shine); animation: hm-drop .18s ease-out;
+}
+@keyframes hm-drop { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+.hm-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border: 0; background: none; border-radius: 12px; text-align: left; font-size: 15px; color: var(--text); cursor: pointer; }
+.hm-menu button:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.hm-menu button.on { color: var(--primary); font-weight: 600; background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.hm-ld { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--primary); }
+.hm-ln { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-ck { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 月份：左右两个小圆钮，中间年月 */
+.month .round { width: 34px; height: 34px; border-radius: 50%; }
+.month .round svg { width: 18px; height: 18px; }
+.cc .month .round { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .3); color: #fff; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ---------------------------------------------------------------- 汇总卡片（左右滑三页） */
+.hm-sum { padding: 18px; }
+/* 三团装饰圆的位置和 App 的 ColorCard 一样：右上角一个大的、左下角一个、中间偏右下一个小的 */
+.card.cc.hm-sum::before, .card.cc.hm-prof::before { width: 84%; left: 56%; right: auto; top: 2%; margin-top: -42%; }
+.card.cc.hm-sum::after, .card.cc.hm-prof::after { width: 52%; left: -20%; bottom: auto; top: 108%; margin-top: -26%; }
+.card .hm-bub { position: absolute; width: 14%; aspect-ratio: 1; left: 55%; top: 78%; margin-top: -7%; border-radius: 50%; background: rgba(255, 255, 255, .06); pointer-events: none; animation: bubbleB 13s ease-in-out infinite; }
+.hm-pager {
+  display: flex; align-items: flex-start; gap: 24px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; transition: height .3s ease;
+}
+.hm-pager::-webkit-scrollbar { display: none; }
+.hm-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.hm-page[data-act] { cursor: pointer; }
+.hm-top1 { display: flex; align-items: center; gap: 10px; }
+.hm-grow { flex: 1; min-width: 0; }
+.hm-lbl { font-size: 13px; line-height: 24px; }
+.hm-big { font-family: var(--num-font); font-size: 34px; font-weight: 700; line-height: 40px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-face { width: 58px; height: 58px; flex: none; }
+.hm-cells { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.hm-cells > div { min-width: 0; }
+.hm-lbl2 { font-size: 12px; line-height: 24px; }
+.hm-val { font-size: 18px; line-height: 24px; }
+.hm-rl { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; line-height: 18px; margin-top: 6px; }
+.hm-rl + .hm-rl { margin-top: 0; }
+.cc .hm-rl.amber { color: #FFE3A3; }
+.hm-nob { font-size: 26px; font-weight: 700; line-height: 1.4; padding: 6px 0; }
+.hm-bar { height: 10px; margin-top: 10px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--on-card-soft) 15%, transparent); }
+.hm-bar i { display: block; height: 100%; border-radius: 99px; transition: width .7s ease-out; }
+.hm-bl { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; line-height: 18px; }
+.hm-oc { font-size: 12px; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-dots { display: flex; justify-content: center; gap: 6px; padding-top: 8px; }
+.hm-dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 3px; cursor: pointer; background: color-mix(in srgb, var(--on-card-soft) 30%, transparent); transition: width .25s ease, background .25s; }
+.hm-dots button.on { width: 16px; background: #fff; }
+
+/* 往下滚时收成一行：两套内容都在，用 grid 的 1fr ⇄ 0fr 平滑收放（只动这一张卡片的高度） */
+.hm-sum { transition: padding .3s ease; }
+.hm-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s ease, opacity .25s ease; }
+.hm-fold > div { min-height: 0; overflow: hidden; }
+.hm-mini { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+.hm-sum.mini { padding: 12px; }
+.hm-sum.mini .hm-full { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+.hm-sum.mini .hm-mini { grid-template-rows: 1fr; opacity: 1; pointer-events: auto; }
+.hm-mrow { display: flex; align-items: center; gap: 10px; }
+.hm-mrow .hm-lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-mrow b { font-family: var(--num-font); font-size: 20px; line-height: 28px; font-weight: 700; white-space: nowrap; }
+.hm-mrow svg { width: 28px; height: 28px; flex: none; }
+
+/* 一句话记账输入条：App 里的星星和箭头 */
+.quick .spark { display: grid; place-items: center; }
+.quick .spark svg { width: 18px; height: 18px; fill: none; stroke: var(--primary); stroke-width: 1.7; stroke-linejoin: round; }
+.quick .send { display: grid; place-items: center; padding: 0; flex: none; }
+.quick .send svg { width: 16px; height: 16px; fill: none; stroke: var(--on-primary); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 每天一张卡片的抬头：收 / 支 / 可报销 分开写 */
+.hm-dh { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 10px; font-size: 12px; font-weight: 400; text-align: right; }
+.hm-empty { display: grid; justify-items: center; gap: 10px; padding: 60px 0 30px; font-size: 14px; }
+.hm-empty svg { width: 54px; height: 54px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; opacity: .5; }
+
+/* ---------------------------------------------------------------- 我的 */
+.hm-prof { padding: 18px; border-radius: 26px; }
+.hm-prow { display: flex; align-items: center; gap: 14px; }
+.hm-av { width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .24); color: #fff; font-size: 24px; font-weight: 700; line-height: 1; }
+.hm-name { font-size: 19px; font-weight: 600; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-lname { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-stats { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
+.hm-stats > div { min-width: 0; }
+.hm-stats > div:nth-child(2) { text-align: center; }
+.hm-stats > div:last-child { text-align: right; }
+.hm-stats b { display: block; font-size: 18px; font-weight: 700; line-height: 24px; }
+.hm-stats span { display: block; font-size: 11px; line-height: 24px; }
+.hm-gridcard { padding: 10px; }
+.hm-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hm-cell { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 10px 0; border: 0; background: none; border-radius: 16px; cursor: pointer; color: var(--text); font-size: 12px; line-height: 22px; text-align: center; -webkit-tap-highlight-color: transparent; transition: background .15s, transform .15s; }
+.hm-cell:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+.hm-cell:active { transform: scale(.94); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.hm-cell .tile { width: 42px; height: 42px; border-radius: 13.5px; }
+.hm-tw { position: relative; display: grid; }
+.hm-badge { position: absolute; top: -4px; right: -6px; min-width: 18px; padding: 1px 5px; border-radius: 99px; background: var(--expense); color: #fff; font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; font-family: var(--num-font); }
+.hm-cl { max-width: 100%; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- 设置：一行一项，左边图标，右边值和小箭头 */
+.hm-list { padding: 4px 16px; }
+.hm-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 0; border: 0; background: none; color: var(--text); font-size: 15px; text-align: left; cursor: pointer; }
+div.hm-li { cursor: default; }
+.hm-li .tile { width: 34px; height: 34px; border-radius: 11px; }
+.hm-li-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-li-v { max-width: 150px; color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-chev { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hm-in { flex: 0 1 150px; min-width: 0; width: auto; padding: 6px 10px; border-radius: 10px; font-size: 16px; text-align: right; }
+.hm-out { justify-content: center; color: var(--expense); font-weight: 600; }
+.hm-tip { padding: 12px 16px; font-size: 13px; }
+
+.hm-sc { display: grid; gap: 10px; padding: 16px; }
+.hm-sh { font-weight: 600; font-size: 15px; }
+.hm-seg button { padding: 8px 4px; }
+.hm-sub2 { font-size: 12.5px; line-height: 18px; color: var(--muted); }
+.hm-sub2.amber { color: var(--amber); }
+.hm-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hm-sc .hm-li { min-height: 44px; padding: 4px 0; }
+.hm-li-c { flex: 1; min-width: 0; }
+.hm-rates { font-size: 12px; line-height: 17px; font-family: var(--num-font); }
+.hm-curw { display: flex; }
+.hm-chip:disabled { opacity: .5; }
+.hm-flag { font-size: 16px; line-height: 1; }
+.hm-menu.hm-curmenu { position: fixed; top: auto; min-width: 170px; max-height: 60vh; }
+.hm-curmenu .hm-flag { font-size: 18px; }
+.hm-note { font-size: 13px; color: var(--income); }
+.hm-note.err { color: var(--expense); }
+.hm-cl2 { display: flex; align-items: center; gap: 12px; }
+.hm-cl2 .tile { width: 34px; height: 34px; border-radius: 11px; }
+.btn.link.hm-outl { color: var(--expense); }
+.hm-fxbusy .card { width: min(320px, 100%); }
+.hm-pbar { margin-top: 0; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+.hm-pbar i { background: var(--primary); transition: width .3s ease; }
+/* 有新版本：顶上一条小胶囊，点一下刷新 */
+.hm-upd {
+  position: fixed; z-index: 70; left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100% - 32px); top: calc(env(safe-area-inset-top) + 10px);
+  padding: 9px 18px; border: 0; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  background: var(--primary); color: var(--on-primary); font-size: 14px; font-weight: 600;
+  box-shadow: 0 10px 26px -8px color-mix(in srgb, var(--primary) 70%, transparent); animation: hm-drop .25s ease-out;
+}
+
+/* ---------------------------------------------------------------- 手机：和 App 一样的布局 */
+@media (max-width: 720px) {
+  .wrap.hm-t-ledger, .wrap.hm-t-me, .wrap.hm-t-settings { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+
+  /* 顶栏：大标题 + 右边的切换 / 搜索 / 日历；二级页面不要顶栏（有返回栏） */
+  .top { flex-wrap: nowrap; min-height: 44px; margin: 2px 0 8px; gap: 8px; }
+  .top.hm-sub { display: none; }
+  .top > select, .top > .search, .top > .lang-sw { display: none; }
+  .top h1 { flex: 1; min-width: 0; font-size: 28px; line-height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top .hm-d { display: none; }
+  .top .hm-p { display: inline; }
+  /* 首页以外（我的）的标题是普通的字，不流光 */
+  :root .wrap > .top:not(.hm-shim) h1 { background: none; color: var(--text); animation: none; font-weight: 700; letter-spacing: 0; }
+  .hm-acts { display: flex; }
+
+  /* 首页：月份、卡片、输入条、账单，间距照 App */
+  .cols.hm-home, .hm-head { gap: 0; }
+  .hm-home .month { margin: 4px 0; }
+  .hm-home .month b { font-size: 16px; font-weight: 600; }
+  .hm-home .hm-sum { margin: 6px 0; }
+  .hm-home .quick { height: 42px; margin: 2px 0; padding: 0 4px 0 16px; gap: 10px; }
+  .hm-home .quick input { font-size: 16px; padding: 0; }
+  .hm-home .ed-listbar { margin-top: 8px; }
+  .hm-home .ed-selbtn { padding: 4px 12px; font-size: 12.5px; }
+  .hm-days { gap: 10px; padding-top: 8px; }
+  .hm-days > .card { padding: 12px; }
+  .hm-days .dayhead { padding: 0 2px 2px; }
+
+  /* 首页（列表和日历）：顶栏和月份 / 汇总卡片 / 输入条钉在上面，只有账单往上滚（和 App 一样）。
+     滚动以后才铺一层磨砂底，免得在顶上时多出一块颜色 */
+  .wrap.hm-t-ledger > .top {
+    position: sticky; top: 0; z-index: 7; margin-top: calc(-10px - env(safe-area-inset-top)); margin-bottom: 0;
+    padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 8px;
+  }
+  .wrap.hm-t-ledger:not(.hm-cal) .hm-head { position: sticky; top: calc(64px + env(safe-area-inset-top)); z-index: 6; }
+  /* 磨砂底只铺一层（从屏幕最上沿一直到输入条下面），两层拼起来接缝处会有一道线；日历模式只有顶栏钉住 */
+  .wrap.hm-t-ledger.hm-cal > .top::after, .wrap.hm-t-ledger:not(.hm-cal) .hm-head::before {
+    content: ""; position: absolute; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .25s ease;
+    left: calc(-1 * max(16px, env(safe-area-inset-left))); right: calc(-1 * max(16px, env(safe-area-inset-right))); top: 0; bottom: 0;
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
+  }
+  .wrap.hm-t-ledger:not(.hm-cal) .hm-head::before { top: calc(-64px - env(safe-area-inset-top)); bottom: -6px; box-shadow: 0 10px 18px -14px rgba(30, 20, 90, .35); }
+  .wrap.hm-t-ledger.hm-scrolled > .top::after, .wrap.hm-t-ledger.hm-scrolled .hm-head::before { opacity: 1; }
+  .wrap.hm-t-ledger.hm-cal.hm-scrolled > .top::after { box-shadow: 0 10px 18px -14px rgba(30, 20, 90, .35); }
+
+  /* 我的：标题下面空一点 */
+  .hm-me { gap: 12px; padding-top: 12px; }
+  .hm-set { gap: 12px; }
+
+  /* 二级页面的返回栏：和 App 一样的玻璃圆钮 + 标题 */
+  .subbar { min-height: 44px; margin: 2px 0 10px; gap: 12px; }
+  .subbar b { font-size: 22px; font-weight: 700; line-height: 28px; }
+  .subbar .round { width: 40px; height: 40px; border-radius: 50%; }
+  .subbar .round svg { width: 20px; height: 20px; }
+
+  /* 底栏：圆角玻璃条，选中的页签垫一块圆角底（换页时滑过去），中间的＋大一圈、带一圈光晕 */
+  .bottom-nav {
+    left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom) + 10px);
+    height: 72px; padding: 6px; border-radius: 28px; grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .bottom-nav button { position: relative; z-index: 1; height: 60px; padding: 0; gap: 1px; justify-content: center; border-radius: 22px; font-size: 11px; line-height: 14px; -webkit-tap-highlight-color: transparent; }
+  .bottom-nav button svg { width: 22px; height: 22px; }
+  .bottom-nav button.on svg { transform: scale(1.12); }
+  /* 刚选中的一刻图标往上蹦一下再落回来 */
+  .bottom-nav button.on.hop svg { animation: hm-hop .5s cubic-bezier(.3, 1.6, .5, 1); }
+  /* 实心外观（themes.css）自己给选中的页签上底色，就不再叠这块滑动的底 */
+  .bottom-nav button.on span { font-weight: 600; }
+  .hm-pill {
+    position: absolute; left: 6px; top: 6px; width: calc((100% - 12px) / 5); height: 60px; border-radius: 22px; pointer-events: none;
+    background: color-mix(in srgb, var(--primary) 16%, transparent);
+    transform: translateX(calc(var(--i, 0) * 100%)); transition: transform .5s cubic-bezier(.34, 1.4, .55, 1);
+  }
+  .bottom-nav .nav-add {
+    width: 50px; height: 50px; justify-self: center; align-self: center; display: grid; place-items: center; border-radius: 50%; padding: 0;
+    background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 70%, #fff), var(--primary) 55%, color-mix(in oklab, var(--primary) 88%, #000));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent), 0 10px 22px -6px color-mix(in srgb, var(--primary) 70%, transparent);
+    transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
+  }
+  .bottom-nav .nav-add svg { width: 24px; height: 24px; fill: none; stroke: var(--on-primary); stroke-width: 2.2; stroke-linecap: round; transform: none; }
+  .bottom-nav .nav-add:active { transform: scale(.88); }
+}
+
+@keyframes hm-hop { 0% { transform: scale(1.12); } 25% { transform: translateY(-7px) scale(1.12); } 100% { transform: scale(1.12); } }
+/* 换页：内容淡入、轻轻往上滑一点（顶栏不动） */
+@keyframes hm-in { from { opacity: 0; transform: translateY(8px); } }
+.wrap.hm-enter > :not(.top) { animation: hm-in .26s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap.hm-enter > *, .bottom-nav button.hop svg { animation: none; }
+  .hm-pill, .hm-pager, .hm-dots button, .hm-bar i, .hm-sum, .hm-fold { transition: none; }
+  .hm-upd { animation: none; }
+  .card .hm-bub, .hm-menu { animation: none; }
+}

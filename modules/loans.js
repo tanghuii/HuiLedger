@@ -91,9 +91,11 @@ function loansView() {
       <div class="card">${loose.map((t) => loanTxRow(t, acc, 0, "loan-assign")).join("")}</div></div>`;
   } else {
     const total = loans.reduce((s, l) => s + l.total, 0), back = loans.reduce((s, l) => s + l.back, 0);
-    const p = total > 0 ? Math.min(1, Math.max(0, back / total)) : 0, r = 34, len = 2 * Math.PI * r;
+    const p = total > 0 ? Math.min(1, Math.max(0, back / total)) : 0, r = 34;
+    // 第一次看这一边（借出 / 借入）时圆环和每人的进度条长出来（同手机端 ProgressRing 800ms）
+    const grow = pgGrow(`loans:${LOAN.side}`);
     const ring = `<div class="ln-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="9"/>
-      ${p > 0 ? `<circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(len * p).toFixed(2)} ${len.toFixed(2)}"/>` : ''}</svg>
+      ${pgArc(42, 42, r, p, '#fff', 9, grow)}</svg>
       <div><b class="num">${Math.round(p * 100)}%</b><div class="muted" style="font-size:10px">${tr('已还', 'repaid')}</div></div></div>`;
     const sumCard = `<div class="card cc" style="--cc:${lend ? '#1FA98A' : '#7B6CF6'}">
       <div class="row" style="padding:0"><div class="main"><div class="muted small">${tr('剩余未还', 'Outstanding')}</div><div class="big">${money(Math.max(0, total - back))}</div><div class="muted small">${tr(`共 ${loans.length} 人`, `${loans.length} ${loans.length === 1 ? 'person' : 'people'}`)}</div></div>${ring}</div>
@@ -108,12 +110,12 @@ function loansView() {
         : `<div class="num">${money(l.left)}</div>${late > 0 ? `<div class="small out">${tr(`已逾期 ${late} 天`, `${late} days overdue`)}</div>` : `<div class="small muted">${dues[l.person] != null ? tr(dayISO(dues[l.person]) + ' 到期', 'Due ' + dayISO(dues[l.person])) : tr('剩余未还', 'Outstanding')}</div>`}`;
       return `<div class="card click ln-card" data-act="loan-open" data-v="${h(l.person)}"><div class="row" style="padding:0">${loanAvatar(l.person)}
         <div class="main"><div class="title">${h(l.person)}</div>
-          ${l.total > 0 ? `<div class="bar ln-bar"><i style="width:${(Math.min(1, l.back / l.total) * 100).toFixed(1)}%"></i></div>` : ''}
+          ${l.total > 0 ? `<div class="bar ln-bar"><i${pgGx(grow)} style="width:${(Math.min(1, l.back / l.total) * 100).toFixed(1)}%"></i></div>` : ''}
           <div class="sub">${lend ? tr('借出', 'Lent') : tr('借入', 'Borrowed')} ${money(l.total)} · ${dayISO(l.last)}</div></div>
         <div class="right">${status}</div></div></div>`;
     };
     body = `<div class="cols"><div class="grid sticky"><div class="card" style="padding:8px">${seg('loan-side', [[1, tr('借出', 'Lent')], [2, tr('借入', 'Borrowed')]], LOAN.side)}</div>${sumCard}</div>
-      <div class="grid">${looseCard}${!loans.length && !loose.length ? `<div class="card muted">${tr('还没有借款', 'No loans yet')}</div>` : ''}
+      <div class="grid">${looseCard}${!loans.length && !loose.length ? pgEmpty('piggy', tr('还没有借款，点 ＋ 记一笔', 'No loans yet. Tap ＋ to add.')) : ''}
         ${active.map(card).join('')}
         ${settled.length ? `<button class="btn link ln-done" data-act="loan-done">${tr(`已结清 ${settled.length} 人`, `Settled (${settled.length})`)} ${LOAN.showDone ? '▴' : '▾'}</button>` : ''}
         ${LOAN.showDone ? settled.map(card).join('') : ''}</div></div>`;

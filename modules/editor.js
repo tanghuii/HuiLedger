@@ -1,18 +1,26 @@
 // 记账页和账单行，和手机端对齐：
-// 1. 记一笔 / 修改（EditScreen.kt）：标题栏里切支出收入转账、大金额、一行六个分类图标、小胶囊、备注、自带数字键盘（能算 + −，再记 / 保存）
-// 2. 账单行侧滑（Gestures.kt SwipeRow）：左滑删除、右滑复制，拉过一半多才生效，都能撤销
+// 1. 记一笔 / 修改（EditScreen.kt）：标题栏里切支出收入转账、大金额（能选币种、改折合金额）、一行六个分类图标、小胶囊、备注、
+//    收入可以抵扣支出（补贴、退款）、支出下面列出抵扣它的补贴，自带数字键盘（能算 + −，再记 / 保存）
+// 2. 账单行（TxRow.kt）：侧滑（Gestures.kt SwipeRow）左滑删除、右滑复制，拉过一半多才生效，都能撤销；账户明细里按账户的角度显示
 // 3. 多选：长按一行或点"多选"，批量改项目、资金来源、分类、报销状态，或者一起删
 // app.js 的 render() 在 state.editing 不为空时画 editorView()；txRow() 也在这里。
 // 撤销提示、多选操作条、删除确认画在 #app 外面的一层（#ed-layer），整页重画不影响它们。
+// 给别的页面用的：startEdit(tx)、startEditWith({ date, accountId, kind, categoryId })、startOffset(expense, '补贴' | '退款' | '代付收回')、
+// txRow(t, L, showDate, viewAccount)、edToast(text, undo)。地址带 ?new 或 #new 打开时直接进记账页（主屏幕快捷方式用）。
 'use strict';
 
 const ed = { layer: null, toast: null, toastTimer: 0, bulk: null, bulkPick: null, busy: '', confirm: null };
-const edReimburse = () => [tr('不报销', 'Not reimbursable'), tr('待报销', 'To reimburse'), tr('已报销', 'Reimbursed')];
+const edReimburse = () => [tr('不报销', 'Not claimable'), tr('待报销', 'To claim'), tr('已报销', 'Reimbursed')];
 
 const edSvg = (key, color) => `<svg class="ed-ic" viewBox="0 0 24 24"${color ? ` style="stroke:${color}"` : ''}><path d="${(ICONS[key] ?? ICONS.tag).d}"/></svg>`;
+const ED_SEARCH_SVG = '<svg class="ed-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
 /** 分 → 输入框里的字：整数不带小数点。 */
 const edInput = (cents) => (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
 const edIsFormula = (s) => /\d\s*[+\-−×÷*/]\s*[\d.]/.test(s);
+/** 分类名：tags.js 里有 catName() 时用它（英文界面显示英文名），否则就是存的名字。 */
+const edCatName = (c) => { if (!c) return ''; if (typeof catName === 'function') { try { return catName(c) || c.name; } catch { /* 用存的名字 */ } } return c.name ?? ''; };
+/** 标签的彩色小标志（tags.js 的 tagLogo）；没有就返回空串，调用的地方退回 #文字。 */
+const edTagLogo = (tag, px) => { if (typeof tagLogo !== 'function') return ''; try { return tagLogo(tag, px) || ''; } catch { return ''; } };
 
 /** 金额里可以写算式（12.5+3.2、3×4）：先乘除后加减，结果是分；不是正数就返回 null。 */
 function edCalc(text) {
@@ -44,17 +52,67 @@ function edCalc(text) {
   return c > 0 ? c : null;
 }
 
+// ---------------------------------------------------------------- 币种和汇率（Fx.kt）
+
+/** 可选的记账币种，常用的排前面（和手机端 Fx.CODES 一样）。 */
+const ED_CODES = ['EUR', 'CNY', 'USD', 'GBP', 'JPY', 'HKD', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK', 'HUF', 'TRY', 'AUD', 'CAD', 'SGD', 'KRW', 'THB', 'MYR', 'INR', 'NZD', 'ISK', 'RON'];
+const ED_SYM = { EUR: '€', CNY: '¥', USD: '$', GBP: '£', JPY: 'JP¥', HKD: 'HK$', CHF: 'CHF', AUD: 'A$', CAD: 'C$', SGD: 'S$', KRW: '₩', THB: '฿', INR: '₹', TRY: '₺', PLN: 'zł' };
+const edSym = (c) => ED_SYM[c] ?? c;
+/** 币种的旗帜（表情字符）：这 24 种的国家代码都是前两个字母，欧元用 EU。 */
+function edFlag(c) {
+  const cc = c === 'EUR' ? 'EU' : ED_CODES.includes(c) ? c.slice(0, 2) : '';
+  return cc ? String.fromCodePoint(...[...cc].map((x) => 0x1F1E6 + x.charCodeAt(0) - 65)) : (typeof flagOf === 'function' ? flagOf(c) : '');
+}
+
+// 某一天的汇率表（1 EUR = ?）：今天和以后用最新的；过去的日期联网取那天的，取到的存在浏览器里；取不到先用最新的（和 Fx.ratesOn 一样）
+// （app.js 比这个文件后加载，store 要用的时候再读）
+const edFx = { byDay: null, asked: new Map() };
+function edRatesOn(day) {
+  if (day >= today()) return fx.rates;
+  edFx.byDay ??= store.get('hl.ratesOn', {});
+  const iso = dayISO(day);
+  if (edFx.byDay[iso]) return edFx.byDay[iso];
+  if (!(Date.now() - (edFx.asked.get(iso) ?? 0) < 60000)) {
+    edFx.asked.set(iso, Date.now());
+    fetch(`https://api.frankfurter.dev/v1/${iso}?base=EUR`).then((r) => r.json()).then((j) => {
+      if (!j?.rates) return;
+      edFx.byDay[iso] = j.rates;
+      const keys = Object.keys(edFx.byDay);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 120))) delete edFx.byDay[k];
+      store.set('hl.ratesOn', edFx.byDay);
+      if (state.editing && dayISO(state.editing.date) === iso) edPaintAmount();
+    }).catch(() => { /* 取不到就用最新的 */ });
+  }
+  return fx.rates;
+}
+/** 1 单位 from 折合多少主货币；没有汇率时 null。 */
+function edRate(from, table) {
+  if (from === HOME) return 1;
+  const f = from === 'EUR' ? 1 : table?.[from], t = HOME === 'EUR' ? 1 : table?.[HOME];
+  return f && t ? t / f : null;
+}
+
 // ---------------------------------------------------------------- 记一笔 / 修改
 
 const edForeign = (e) => !!(e.currency && e.origCents > 0 && e.currency !== HOME);
-/** 金额按什么币种输入：新记的跟着账户走；改外币账单时改原币金额；其余是主货币。 */
-const edCur = (e) => (e._isNew ? acctCur(state.data.account.get(e.accountId) ?? {}) : edForeign(e) ? e.currency : HOME);
-/** 输入的金额折成主货币。改已有的外币账单时按它原来的汇率折，免得旧账跟着今天的汇率变。 */
+/** 金额按什么币种输入：自己选过的；新记的跟着账户走；改外币账单时是它原来的币种；其余是主货币。 */
+function edCur(e) {
+  if (e._curPicked && e._cur) return e._cur;
+  if (e._isNew) return acctCur(state.data.account.get(e.accountId) ?? {});
+  return edForeign(e) ? e.currency : HOME;
+}
+/**
+ * 输入的金额折成主货币。手动填过折合金额就用填的；改已有的外币账单时按它原来的汇率折（旧账不跟着今天的汇率变）；
+ * 否则按账单那天的汇率算。没有汇率返回 null（这时不能保存，要手动填）。
+ */
 function edHomeCents(e, cents) {
   const cur = edCur(e);
+  if (cents == null) return null;
   if (cur === HOME) return cents;
-  if (!e._isNew && edForeign(e)) return cents === e.origCents ? e.amountCents : Math.round(cents * e.amountCents / e.origCents);
-  return convert(cents, cur, HOME);
+  if (String(e._equiv ?? '').trim()) return parseCents(e._equiv);
+  if (e._keep && !e._isNew && edForeign(e) && cur === e.currency) return cents === e.origCents ? e.amountCents : Math.round(cents * e.amountCents / e.origCents);
+  const r = edRate(cur, edRatesOn(e.date));
+  return r ? Math.round(cents * r) : null;
 }
 
 function edAccounts(keep) {
@@ -88,8 +146,26 @@ function edKnownTags() {
   for (const t of state.data.tx.values()) for (const x of String(t.tags ?? '').split(' ').filter(Boolean)) last.set(x, Math.max(last.get(x) ?? 0, t.date));
   return [...last.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x).slice(0, 30);
 }
+/** 一笔收入抵扣了哪些支出、各多少（和手机端 Tx.offsetList 一样：分摊写在 offsetParts，否则 offsetOf 指向的那笔吃掉全部）。 */
+function edOffsetList(t) {
+  if (t.offsetParts) return String(t.offsetParts).split(',').map((p) => p.split(':').map(Number)).filter(([id, c]) => id && c > 0);
+  return t.offsetOf > 0 ? [[t.offsetOf, t.amountCents]] : [];
+}
 
-function startEdit(t) {
+/** 记账页的状态里，手机端那些 remember 的东西（别处直接塞进来的 state.editing 也补齐）。 */
+function edInit(e) {
+  if (e._amount == null) e._amount = e.amountCents ? edInput(e.amountCents) : '';
+  if (e._offs == null) {
+    const list = e._isNew ? [] : edOffsetList(e);
+    e._offs = list.map(([id, c]) => [id, e.offsetParts ? edInput(c) : '']);
+    e._hadOffs = !e._isNew && list.length > 0;
+  }
+  if (e._equiv == null) e._equiv = '';
+  if (e._keep == null) e._keep = !e._isNew && edForeign(e);
+  if (e._origKind == null) e._origKind = e._isNew ? -1 : e.kind;
+}
+
+function startEdit(t, quiet = false) {
   if (t) {
     state.editing = { ...t, _amount: edInput(edForeign(t) ? t.origCents : t.amountCents), _isNew: false };
   } else {
@@ -100,58 +176,159 @@ function startEdit(t) {
       offsetOf: 0, offsetParts: '', project: '', fund: '', _amount: '', _isNew: true,
     };
   }
+  edInit(state.editing);
+  if (!quiet) render();
+}
+
+/**
+ * 带着预设打开记账页：日历里某一天的"记一笔"、账户详情的"记一笔"、补贴 / 退款。
+ * { date: 天数或 'YYYY-MM-DD', accountId, kind: 0/1/2 或 'expense'/'income'/'transfer', categoryId, ledgerId, offsetOf }
+ */
+function startEditWith(o = {}) {
+  state.error = '';
+  startEdit(null, true);
+  const e = state.editing;
+  if (o.date != null && o.date !== '') e.date = typeof o.date === 'string' ? isoToDay(o.date) : Number(o.date);
+  const cat = o.categoryId ? state.data.category.get(Number(o.categoryId)) : null;
+  const kind = typeof o.kind === 'string' ? { expense: KIND.EXPENSE, income: KIND.INCOME, transfer: KIND.TRANSFER }[o.kind.toLowerCase()] ?? Number(o.kind) : o.kind;
+  if (kind != null && !Number.isNaN(kind)) e.kind = Number(kind);
+  else if (cat) e.kind = cat.isIncome ? KIND.INCOME : KIND.EXPENSE;
+  if (cat) e.categoryId = cat.id;
+  if (o.accountId && state.data.account.has(Number(o.accountId))) e.accountId = Number(o.accountId);
+  if (o.ledgerId && state.data.ledger.has(Number(o.ledgerId))) e.ledgerId = Number(o.ledgerId);
+  if (o.offsetOf) e._offs = [[Number(o.offsetOf), '']];
   render();
 }
 
+/**
+ * 给这笔支出记一笔补贴 / 退款 / 代付收回（LedgerViewModel.startOffset）：没有这个收入分类就先建一个，
+ * 然后打开记账页：收入、这个分类、同一个账户、同一天，已经连到这笔支出上。
+ */
+async function startOffset(expense, kindName = '补贴') {
+  if (typeof expense !== 'object') expense = state.data.tx.get(Number(expense));
+  if (!expense) return;
+  const zh = { subsidy: '补贴', refund: '退款', paidback: '代付收回' }[String(kindName).toLowerCase().replace(/[\s_-]/g, '')] ?? String(kindName);
+  const en = DEFAULT_INCOME.find(([z]) => z === zh)?.[1];
+  const cats = [...state.data.category.values()];
+  let cat = cats.find((c) => !c.parentId && c.isIncome && c.name === zh) ?? (en ? cats.find((c) => !c.parentId && c.isIncome && c.name === en) : null);
+  if (!cat) {
+    cat = { id: newId(), name: zh, icon: iconKey(zh), isIncome: true, sortOrder: cats.length, parentId: 0 };
+    try { await saveRecord('category', cat); } catch (err) { state.error = err.message; render(); return; }
+  }
+  startEditWith({ kind: KIND.INCOME, categoryId: cat.id, accountId: expense.accountId, date: expense.date, ledgerId: expense.ledgerId, offsetOf: expense.id });
+}
+
+/** 这笔收入每笔抵扣的金额（分）：填了的按填的，留空的拿剩下的全部（EditScreen offsetAmounts）。 */
+function edOffAmounts(e, home) {
+  const total = home ?? 0;
+  const typed = (e._offs ?? []).filter(([id]) => state.data.tx.get(id)?.kind === KIND.EXPENSE)
+    .map(([id, s]) => [id, String(s ?? '').trim() === '' ? null : parseCents(s) ?? 0]);
+  const fixed = typed.reduce((s, [, c]) => s + (c ?? 0), 0);
+  return typed.map(([id, c]) => [id, c ?? Math.max(0, total - fixed)]).filter(([, c]) => c > 0);
+}
+/** 现在能不能保存、为什么不能。 */
+function edCheck(e) {
+  const cents = edCalc(e._amount), cur = edCur(e), home = edHomeCents(e, cents);
+  const transfer = e.kind === KIND.TRANSFER;
+  const offs = e.kind === KIND.INCOME ? edOffAmounts(e, home) : [];
+  const given = offs.reduce((s, [, c]) => s + c, 0);
+  let why = '';
+  if (cents == null) why = tr('请输入金额', 'Enter an amount');
+  else if (home == null) why = tr('没有汇率，请填折合金额', 'No rate: enter the amount in ' + HOME);
+  else if (!state.data.account.get(e.accountId)) why = tr('请选择账户', 'Choose an account');
+  else if (transfer && !edTo(e)) why = tr('请选择两个不同的账户', 'Choose two different accounts');
+  else if (!transfer && !edCats(e).leafId) why = tr('请选择分类', 'Choose a category');
+  else if (given > home) why = tr('抵扣超过了这笔收入', 'Offsets exceed this income');
+  return { cents, cur, home, offs, given, why, ok: !why };
+}
+
 function edAmountCard(e) {
-  const a = e._amount ?? '', cur = edCur(e), cents = edCalc(a);
+  const a = e._amount ?? '', cur = edCur(e), cents = edCalc(a), foreign = cur !== HOME;
   const cls = !a ? 'zero' : cents == null ? 'bad' : e.kind === KIND.INCOME ? 'in' : e.kind === KIND.EXPENSE ? 'out' : '';
-  const home = cents != null && cur !== HOME ? edHomeCents(e, cents) : null;
-  const lines = [
-    cents != null && edIsFormula(a) ? `= ${edInput(cents)}` : '',
-    cur !== HOME && cents != null ? (home != null ? `≈ ${money(home)}` : tr('无汇率', 'No rate')) : '',
-  ].filter(Boolean);
-  return `<div class="ed-amount"><span class="ed-cur">${flagOf(cur)} ${h(cur)}</span>
-    <div class="ed-amt-w"><div class="ed-amt num ${cls} ${a.length > 12 ? 'long' : ''}">${h(a || '0.00')}</div>${lines.length ? `<div class="ed-amt-sub">${lines.join('　')}</div>` : ''}</div></div>`;
+  const home = foreign ? edHomeCents(e, cents ?? 0) : null;
+  const formula = cents != null && edIsFormula(a) ? `= ${edInput(cents)}` : '';
+  const equiv = !foreign ? '' : home != null ? `≈ ${money(home)}` : tr('没有汇率，点这里填', 'No rate, tap to enter');
+  return `<div class="ed-amount"><button class="ed-cur" data-act="ed-pick" data-v="cur" aria-label="${tr('币种', 'Currency')}">${edFlag(cur)}<span>${h(cur)}</span><i>▾</i></button>
+    <div class="ed-amt-w"><div class="ed-amt num ${cls} ${a.length > 12 ? 'long' : ''}">${h(a || '0.00')}</div>${formula || equiv ? `<div class="ed-amt-sub">${formula ? `<span>${formula}</span>` : ''}${equiv ? `<button class="ed-equiv ${home == null ? 'bad' : ''}" data-act="ed-pick" data-v="equiv">${equiv}</button>` : ''}</div>` : ''}</div></div>`;
+}
+
+/** 收入：抵扣哪些支出（补贴、退款），每笔自己填金额。 */
+function edOffsetCard(e, L) {
+  const rows = (e._offs ?? []).map(([id, text], i) => {
+    const t = state.data.tx.get(id);
+    if (!t || t.kind !== KIND.EXPENSE) return '';
+    const bad = String(text).trim() !== '' && parseCents(text) == null;
+    return `<div class="ed-off"><div class="muted ed-offdate">${dayISO(t.date)}</div>
+      <div class="ed-offrow">${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>
+      <div class="ed-offline"><label class="ed-offamt ${bad ? 'bad' : ''}"><span>${h(edSym(HOME))}</span><input class="ed-offin" data-i="${i}" value="${h(text)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${tr('留空 = 剩下的全部', 'Empty = the rest')}" aria-label="${tr('抵扣金额', 'Amount')}"></label>
+        <button class="btn link muted" data-act="ed-off-rm" data-v="${i}">${tr('移除', 'Remove')}</button></div></div>`;
+  }).join('');
+  return `<div class="ed-box ed-offs"><div class="muted small">${tr('抵扣支出（补贴、退款）', 'Offsets expenses (subsidy, refund)')}</div>${rows}
+    <div class="small ed-offsum">${edOffSum(e)}</div>
+    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}</button></div>`;
+}
+function edOffSum(e) {
+  if (!(e._offs ?? []).length) return '';
+  const { home, given } = edCheck(e);
+  if (home == null) return '';
+  return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已抵扣 ${money(given)}，剩余 ${money(Math.max(0, home - given))} 算收入`, `${money(given)} offset, ${money(Math.max(0, home - given))} left as income`)}</span>`;
+}
+
+/** 支出：列出抵扣它的补贴、退款，也可以直接加一笔。 */
+function edLinkedCard(e, L) {
+  const orig = state.data.tx.get(e.id);
+  if (!orig || orig.kind !== KIND.EXPENSE) return '';
+  const linked = [...state.data.tx.values()].filter((t) => L.parts(t).some(([id]) => id === orig.id)).sort((a, b) => a.date - b.date);
+  const off = L.offsets.get(orig.id) ?? 0;
+  const head = linked.length
+    ? tr(`补贴 / 退款 ${money(off)}，实际支出 ${money(orig.amountCents - off)}`, `Subsidy / refund ${money(off)}, net ${money(orig.amountCents - off)}`)
+    : tr('补贴 / 退款 / 代付收回', 'Subsidy / refund / paid back');
+  return `<div class="ed-box ed-offs"><div class="muted small">${head}</div>
+    ${linked.map((t) => txRow(t, L).replace('data-act="view"', 'data-act="ed-open"')).join('')}
+    <div class="ed-offbtns"><button class="btn link" data-act="ed-offset" data-v="补贴">${tr('＋ 补贴', '＋ Subsidy')}</button><button class="btn link" data-act="ed-offset" data-v="退款">${tr('＋ 退款', '＋ Refund')}</button><button class="btn link" data-act="ed-offset" data-v="代付收回">${tr('＋ 代付收回', '＋ Paid back')}</button></div></div>`;
 }
 
 function editorView() {
   const e = state.editing;
-  if (e._amount == null) e._amount = e.amountCents ? edInput(e.amountCents) : '';
+  edInit(e);
   const acc = state.data.account, transfer = e.kind === KIND.TRANSFER;
   const { tops, top, leafId, subs } = edCats(e);
   const from = acc.get(e.accountId), to = edTo(e), tags = edTags(e);
   const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? tr('选择账户', 'Choose account'))}</span></button>`;
   const head = transfer
     ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('至少要两个账户', 'Needs two accounts')}</div>` : ''}</div>`
-    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(c.name)}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('还没有分类', 'No categories yet')}</div>`}
-      ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(s.name)}</button>`).join('')}</div>` : ''}</div>`;
+    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('还没有分类', 'No categories yet')}</div>`}
+      ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(edCatName(s))}</button>`).join('')}</div>` : ''}</div>`;
   // 可报销的支出、报销收入才问项目和资金来源（已经填了的照样显示）
   const pf = !transfer && (e.kind === KIND.EXPENSE && e.reimburse || e.kind === KIND.INCOME && top?.name === '报销' || e.project || e.fund);
+  const tagLabel = tags.length ? tags.map((x) => { const logo = edTagLogo(x, 18); return logo ? `<span class="ed-tagin">${logo}${h(x)}</span>` : '#' + h(x); }).join(' ') : tr('标签', 'Tags');
   const chips = [
     transfer ? '' : accChip(from, 'acc'),
     `<label class="chip ed-datechip">${edSvg('calendar')}<span>${edDayName(e.date)}</span><input type="date" id="e-date" value="${dayISO(e.date)}" aria-label="${tr('日期', 'Date')}"></label>`,
-    `<button class="chip ${tags.length ? 'on' : ''}" data-act="ed-pick" data-v="tags">${edSvg('tag')}<span>${tags.length ? tags.map((x) => '#' + h(x)).join(' ') : tr('标签', 'Tags')}</span></button>`,
+    `<button class="chip ${tags.length ? 'on' : ''}" data-act="ed-pick" data-v="tags">${edSvg('tag')}<span>${tagLabel}</span></button>`,
     e.kind === KIND.EXPENSE ? `<button class="chip ${e.reimburse ? 'on' : ''}" data-act="ed-pick" data-v="reimburse">${edSvg('receipt')}<span>${edReimburse()[e.reimburse ?? 0]}</span></button>` : '',
     pf ? `<button class="chip ${e.project ? 'on' : ''}" data-act="ed-pick" data-v="project">${edSvg('target')}<span>${e.project ? tr('项目 · ', 'Project · ') + h(e.project) : tr('项目', 'Project')}</span></button>` : '',
     pf ? `<button class="chip ${e.fund ? 'on' : ''}" data-act="ed-pick" data-v="fund">${edSvg('coins')}<span>${e.fund ? tr('资金 · ', 'Funding · ') + h(e.fund) : tr('资金来源', 'Funding')}</span></button>` : '',
-    transfer ? '' : `<button class="chip ${e.excluded ? 'on' : ''}" data-act="ed-pick" data-v="excluded"><span>${e.excluded ? tr('不计入收支', 'Excluded') : tr('计入收支', 'Included')}</span></button>`,
+    transfer ? '' : `<button class="chip ${e.excluded ? 'on' : ''}" data-act="ed-pick" data-v="excluded"><span>${e.excluded ? tr('不计入收支', 'Not counted') : tr('计入收支', 'Counted')}</span></button>`,
     e._isNew ? '' : `<button class="chip danger" data-act="delete"><span>${tr('删除', 'Delete')}</span></button>`,
   ].filter(Boolean).join('');
-  const valid = edCalc(e._amount) != null;
+  const L = e.kind === KIND.INCOME || (!e._isNew && e._origKind === KIND.EXPENSE && e.kind === KIND.EXPENSE) ? computeLookup() : null;
+  const extra = e.kind === KIND.INCOME ? edOffsetCard(e, L) : L ? edLinkedCard(e, L) : '';
+  const valid = edCheck(e).ok;
   const key = (k) => k === 'SAVE' ? `<button class="ed-key save ${valid ? '' : 'dim'}" data-act="save">${tr('保存', 'Save')}</button>`
     : k === 'AGAIN' ? `<button class="ed-key op txt" data-act="ed-again">${tr('再记', 'Next')}</button>`
     : k === 'C' ? `<button class="ed-key op txt" data-act="ed-key" data-v="C">${tr('清空', 'Clear')}</button>`
     : `<button class="ed-key ${'⌫+−'.includes(k) ? 'op' : ''}" data-act="ed-key" data-v="${k}" ${k === '⌫' ? `aria-label="${tr('退格', 'Backspace')}"` : ''}>${k}</button>`;
   const keys = ['1', '2', '3', '⌫', '4', '5', '6', '+', '7', '8', '9', '−', e._isNew ? 'AGAIN' : 'C', '0', '.', 'SAVE'];
-  const heading = e._isNew ? tr('记一笔', 'New entry') : tr('修改', 'Edit');
+  const heading = e._isNew ? tr('记一笔', 'New') : tr('修改', 'Edit');
   return `<div class="modal ed-modal" data-act="close-backdrop"><div class="card ed-sheet" role="dialog" aria-label="${heading}">
-    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${seg('e-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')], [2, tr('转账', 'Transfer')]], e.kind)}</div>
+    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${seg('e-kind', [[0, tr('支出', 'Out')], [1, tr('收入', 'In')], [2, tr('转账', 'Move')]], e.kind)}</div>
     ${edAmountCard(e)}
     <div class="ed-scroll">
       ${head}
       <div class="ed-chips">${chips}</div>
       <label class="ed-note">${edSvg('pencil')}<textarea id="e-note" rows="${Math.min(4, String(e.note ?? '').split('\n').length)}" placeholder="${tr('备注', 'Note')}">${h(e.note)}</textarea></label>
+      ${extra}
       ${state.error ? `<p class="err" style="margin:0">${h(state.error)}</p>` : ''}
     </div>
     <div class="ed-keys">${keys.map(key).join('')}</div>
@@ -159,21 +336,67 @@ function editorView() {
   </div></div>`;
 }
 
+/** 选项多的面板（账户、币种、抵扣哪笔支出）：一条搜索框，下面的列表随打字筛选。 */
+function edPopList(e) {
+  const p = e._pick, q = String(e._q ?? '').trim().toLowerCase();
+  const opt = (k, v, label, on, lead = '') => `<button class="ed-opt ${on ? 'on' : ''}" data-act="ed-set" data-k="${k}" data-v="${h(v)}">${lead}<span>${label}</span>${on ? edSvg('check') : ''}</button>`;
+  const none = `<div class="muted small ed-none">${tr('没有匹配的', 'No match')}</div>`;
+  if (p === 'acc' || p === 'to') {
+    const k = p === 'to' ? 'toAccountId' : 'accountId', sel = p === 'to' ? edTo(e)?.id : e.accountId;
+    const list = edAccounts(sel).filter((a) => (p !== 'to' || a.id !== e.accountId) && (!q || a.name.toLowerCase().includes(q)));
+    return list.map((a) => opt(k, a.id, `${h(a.name)}${acctCur(a) !== HOME ? ` <small class="muted">${h(acctCur(a))}</small>` : ''}`, a.id === sel, accountTile(a))).join('') || none;
+  }
+  if (p === 'cur') {
+    const cur = edCur(e), codes = ED_CODES.includes(cur) ? ED_CODES : [cur, ...ED_CODES];
+    const list = codes.filter((c) => !q || `${c}  ${edSym(c)}`.toLowerCase().includes(q));
+    return list.map((c) => opt('cur', c, `${c}　<span class="muted">${h(edSym(c))}</span>`, c === cur, `<span class="ed-flag">${edFlag(c)}</span>`)).join('') || none;
+  }
+  if (p === 'offset') {
+    // 候选：这笔收入之前 150 天到之后 62 天的支出；已经选了的支出是什么分类，同分类的排最前，其余离得近的排前面
+    const L = computeLookup(), cat = state.data.category, day = e.date;
+    const orig = e._isNew ? null : state.data.tx.get(e.id), ledger = orig?.ledgerId ?? e.ledgerId;
+    const chosen = new Set((e._offs ?? []).map(([id]) => state.data.tx.get(id)?.categoryId).filter((x) => x != null));
+    const picked = new Set((e._offs ?? []).map(([id]) => id));
+    const names = (t) => [cat.get(t.categoryId), L.top(t.categoryId)].filter(Boolean).flatMap((c) => [c.name, edCatName(c)]);
+    const list = [...state.data.tx.values()]
+      .filter((t) => t.kind === KIND.EXPENSE && t.ledgerId === ledger && t.date >= day - 150 && t.date <= day + 62)
+      .filter((t) => !q || String(t.note ?? '').toLowerCase().includes(q) || names(t).some((n) => String(n).toLowerCase().includes(q)))
+      .sort((a, b) => (chosen.has(a.categoryId) ? 0 : 1) - (chosen.has(b.categoryId) ? 0 : 1) || Math.abs(a.date - day) - Math.abs(b.date - day))
+      .slice(0, 80);
+    return list.map((t) => `<div class="ed-offpick ${picked.has(t.id) ? 'on' : ''}" data-act="ed-off-add" data-v="${t.id}"><div class="muted ed-offdate">${dayISO(t.date)}</div>${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>`).join('') || none;
+  }
+  return '';
+}
+
 /** 点了某个小胶囊后弹出来的选择面板（盖在记账页下半截）。 */
 function edPop(e) {
   const p = e._pick;
   if (!p) return '';
   const opt = (k, v, label, on, lead = '') => `<button class="ed-opt ${on ? 'on' : ''}" data-act="ed-set" data-k="${k}" data-v="${h(v)}">${lead}<span>${label}</span>${on ? edSvg('check') : ''}</button>`;
-  let title = '', body = '';
+  let title = '', body = '', search = false, cls = '';
   if (p === 'acc' || p === 'to') {
-    const k = p === 'to' ? 'toAccountId' : 'accountId', sel = p === 'to' ? edTo(e)?.id : e.accountId;
+    const sel = p === 'to' ? edTo(e)?.id : e.accountId;
     title = p === 'to' ? tr('转入账户', 'To account') : e.kind === KIND.TRANSFER ? tr('转出账户', 'From account') : tr('账户', 'Account');
-    body = edAccounts(sel).filter((a) => p !== 'to' || a.id !== e.accountId)
-      .map((a) => opt(k, a.id, `${h(a.name)}${acctCur(a) !== HOME ? ` <small class="muted">${h(acctCur(a))}</small>` : ''}`, a.id === sel, accountTile(a))).join('');
+    // 账户多（几十个）时改成能搜索的列表（和手机端 ChipPicker 一样，超过 8 个）
+    search = edAccounts(sel).filter((a) => p !== 'to' || a.id !== e.accountId).length > 8;
+    body = edPopList(e);
+  } else if (p === 'cur') {
+    title = tr('币种', 'Currency'); search = true; body = edPopList(e);
+  } else if (p === 'offset') {
+    title = tr('抵扣哪笔支出', 'Which expense?'); search = true; cls = 'tall'; body = edPopList(e);
+  } else if (p === 'equiv') {
+    // 折合主货币：留空就按账单那天的汇率算；没有汇率时必须自己填
+    const cents = edCalc(e._amount), cur = edCur(e), r = edRate(cur, edRatesOn(e.date));
+    const auto = cents != null && r ? Math.round(cents * r) : null;
+    const now = String(e._equiv ?? '').trim() ? e._equiv : e._keep ? edInput(edHomeCents(e, cents ?? e.origCents) ?? 0) : '';
+    title = tr(`折合 ${HOME}`, `In ${HOME}`);
+    body = `<label class="ed-eqfield"><span>${h(edSym(HOME))}</span><input id="ed-equiv" value="${h(now)}" data-was="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${auto != null ? edInput(auto) : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
+      <div class="muted small">${r ? `1 ${h(cur)} = ${r.toFixed(4)} ${HOME} · ${dayISO(e.date)}` : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}</div>
+      <div class="ed-eqbtns"><button class="btn" data-act="ed-eq-reset">${tr('按汇率算', 'Use the rate')}</button><button class="btn primary" data-act="ed-eq-ok">${tr('好', 'OK')}</button></div>`;
   } else if (p === 'reimburse') {
     title = tr('报销', 'Reimburse'); body = edReimburse().map((n, i) => opt('reimburse', i, n, (e.reimburse ?? 0) === i)).join('');
   } else if (p === 'excluded') {
-    title = tr('收支统计', 'In totals'); body = opt('excluded', 0, tr('计入收支', 'Included'), !e.excluded) + opt('excluded', 1, tr('不计入收支', 'Excluded'), !!e.excluded);
+    title = tr('收支统计', 'In totals'); body = opt('excluded', 0, tr('计入收支', 'Counted'), !e.excluded) + opt('excluded', 1, tr('不计入收支（借还款、代付等）', 'Not counted (loans, paid for others…)'), !!e.excluded);
   } else if (p === 'project' || p === 'fund') {
     title = p === 'project' ? tr('报销项目', 'Project') : tr('资金来源', 'Funding');
     body = opt(p, '', tr('（不填）', '(None)'), !e[p]) + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(p, n, h(n), e[p] === n)).join('')
@@ -181,10 +404,13 @@ function edPop(e) {
   } else if (p === 'tags') {
     const on = edTags(e), all = [...on.filter((x) => !edKnownTags().includes(x)), ...edKnownTags()];
     title = tr('标签', 'Tags');
-    body = `<div class="ed-chips">${all.map((x) => `<button class="chip ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">#${h(x)}</button>`).join('') || `<span class="muted small">${tr('还没有标签', 'No tags yet')}</span>`}</div>
+    body = `<div class="ed-chips">${all.map((x) => { const logo = edTagLogo(x, 24); return `<button class="chip ed-tagpick ${logo ? 'ed-tagchip' : ''} ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">${logo}<span>${logo ? '' : '#'}${h(x)}</span></button>`; }).join('') || `<span class="muted small">${tr('还没有标签', 'No tags yet')}</span>`}</div>
       <div class="ed-new"><input id="ed-newtag" placeholder="${tr('新标签', 'New tag')}" enterkeyhint="done" autocomplete="off"><button class="btn primary" data-act="ed-tags-done">${tr('好', 'Done')}</button></div>`;
   }
-  return `<div class="ed-pop" data-act="ed-pick-close"><div class="ed-popcard" data-act="noop"><div class="between"><b>${title}</b><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div><div class="ed-opts">${body}</div></div></div>`;
+  const top = search
+    ? `<div class="ed-pophead"><label class="ed-search">${ED_SEARCH_SVG}<input id="ed-q" value="${h(e._q ?? '')}" placeholder="${p === 'offset' ? tr('搜分类或备注，如 医保、房租', 'Search category or note') : tr('搜索', 'Search')}" autocomplete="off" enterkeyhint="search" aria-label="${h(title)}"></label><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>`
+    : `<div class="between"><b>${title}</b><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>`;
+  return `<div class="ed-pop ${cls}${search ? ' search' : ''}" data-act="ed-pick-close"><div class="ed-popcard" data-act="noop">${top}<div class="ed-opts">${body}</div></div></div>`;
 }
 
 /** 以前的表单要先把输入框里的字收回来；现在只剩备注是输入框（边打边存），留着这个名字给别处调用。 */
@@ -201,6 +427,18 @@ function edRefresh() {
   if (s) s.scrollTop = top;
 }
 
+/** 只重画金额卡片、抵扣合计和保存键（打字时不整页重画，输入框的光标不会丢）。 */
+function edPaintAmount() {
+  const e = state.editing;
+  if (!e) return;
+  const box = document.querySelector('.ed-amount');
+  if (!box) return render();
+  box.outerHTML = edAmountCard(e);
+  const sum = document.querySelector('.ed-offsum');
+  if (sum) sum.innerHTML = edOffSum(e);
+  document.querySelector('.ed-key.save')?.classList.toggle('dim', !edCheck(e).ok);
+}
+
 /** 自带数字键盘按下一个键（规则和手机端一样：最多两位小数，开头的 0 会被替换）。 */
 function edPress(k) {
   const e = state.editing;
@@ -213,10 +451,7 @@ function edPress(k) {
   else if (k === '.') { if (!last.includes('.') && a.length <= 20) a += last ? '.' : '0.'; }
   else if (a.length <= 20 && !(last.includes('.') && last.length - last.indexOf('.') > 2)) a = last === '0' ? a.slice(0, -1) + k : a + k;
   e._amount = a;
-  const box = document.querySelector('.ed-amount');
-  if (!box) return render();
-  box.outerHTML = edAmountCard(e);
-  document.querySelector('.ed-key.save')?.classList.toggle('dim', edCalc(a) == null);
+  edPaintAmount();
 }
 
 function edKind(k) {
@@ -226,27 +461,35 @@ function edKind(k) {
   edRefresh();
 }
 
-/** 保存。again：存完留在记账页接着记下一笔（类型、分类、账户、日期不变，金额和备注清空）。 */
+/** 保存。again：存完留在记账页接着记下一笔（类型、分类、账户、日期不变，金额、备注、抵扣清空）。 */
 async function saveEditing(again = false) {
   const e = state.editing;
   if (!e) return;
   collect();
-  const cents = edCalc(e._amount);
-  if (cents == null) { state.error = tr('请输入金额', 'Enter an amount'); return edRefresh(); }
-  const transfer = e.kind === KIND.TRANSFER;
-  if (!state.data.account.get(e.accountId)) { state.error = tr('请选择账户', 'Choose an account'); return edRefresh(); }
-  const to = transfer ? edTo(e) : null;
-  if (transfer && !to) { state.error = tr('请选择两个不同的账户', 'Choose two different accounts'); return edRefresh(); }
+  edInit(e);
+  const c = edCheck(e);
+  if (!c.ok) {
+    state.error = c.why;
+    // 没有汇率：直接打开折合金额让人填（不再悄悄按 1:1 存）
+    if (c.cents != null && c.home == null) e._pick = 'equiv';
+    return edRefresh();
+  }
+  const transfer = e.kind === KIND.TRANSFER, to = transfer ? edTo(e) : null;
   const t = {};
   for (const [k, v] of Object.entries(e)) if (!k.startsWith('_')) t[k] = v;
-  // 新记的一笔按账户的币种填：外币账户存下原币金额，再折成主货币
-  const cur = edCur(e), home = edHomeCents(e, cents) ?? cents;
-  if (cur === HOME) { t.amountCents = cents; if (e._isNew) { t.currency = ''; t.origCents = 0; } }
-  else { t.currency = cur; t.origCents = cents; t.amountCents = home; }
-  if (transfer) { t.toAccountId = to.id; t.categoryId = 0; t.reimburse = 0; t.excluded = false; t.project = ''; t.fund = ''; }
+  const foreign = c.cur !== HOME;
+  t.amountCents = c.home;
+  t.currency = foreign ? c.cur : '';
+  t.origCents = foreign ? c.cents : 0;
+  if (transfer) { t.toAccountId = to.id; t.categoryId = 0; t.project = ''; t.fund = ''; }
   else { t.toAccountId = 0; t.categoryId = edCats(e).leafId; }
+  t.excluded = !!e.excluded && !transfer;
   if (t.kind !== KIND.EXPENSE) t.reimburse = 0;
-  if (t.kind !== KIND.INCOME) { t.offsetOf = 0; t.offsetParts = ''; }
+  // 抵扣（和手机端 build() 一样）：只抵扣一笔而且是全额时用 offsetOf；分摊时逐笔记在 offsetParts；
+  // 原来有抵扣、现在全去掉了：offsetOf 记成 -1（"不抵扣"），免得自动关联又连回去
+  const offs = c.offs;
+  t.offsetOf = t.kind !== KIND.INCOME ? 0 : offs.length ? offs[0][0] : e._hadOffs ? -1 : e._isNew ? 0 : (e.offsetOf ?? 0);
+  t.offsetParts = t.kind !== KIND.INCOME || !offs.length || (offs.length === 1 && offs[0][1] === c.home) ? '' : offs.map(([id, x]) => `${id}:${x}`).join(',');
   t.note = String(t.note ?? '').trim();
   t.tags = edTags(e).join(' ');
   try {
@@ -256,9 +499,9 @@ async function saveEditing(again = false) {
     if (t.fund) rememberName('hl.funds', t.fund);
     state.error = '';
     if (again && e._isNew) {
-      state.editing = { ...e, id: newId(), createdAt: Date.now(), _amount: '', note: '', _pick: null };
+      state.editing = { ...e, id: newId(), createdAt: Date.now(), _amount: '', note: '', _pick: null, _equiv: '', _offs: [], _q: '' };
       render();
-      edToast(tr('已保存', 'Saved'));
+      edToast(tr('已保存，接着记下一笔', 'Saved. Next one.'));
       return;
     }
     state.editing = null;
@@ -273,37 +516,51 @@ async function edDeleteEditing() {
   if (t) await edRemove(t); else render();
 }
 
-// ---------------------------------------------------------------- 账单行
+// ---------------------------------------------------------------- 账单行（TxRow.kt）
 
-function txRow(t, L, showDate = false) {
+/**
+ * 一行账单。viewAccount：站在哪个账户的角度看（账户详情页，传账户或它的 id）：
+ * 转账写成"来自 X / 转到 Y"并带正负号，金额按这个账户的币种，不显示付款账户小签，也不显示抵扣后的净额。
+ */
+function txRow(t, L, showDate = false, viewAccount = null) {
   const cat = state.data.category, acc = state.data.account;
+  const view = viewAccount == null || viewAccount === false ? null : typeof viewAccount === 'object' ? viewAccount : acc.get(Number(viewAccount)) ?? null;
+  const pid = view?.id ?? 0;
   const leaf = cat.get(t.categoryId), top = L.top(t.categoryId), from = acc.get(t.accountId), to = acc.get(t.toAccountId);
   const transfer = t.kind === KIND.TRANSFER;
-  const title = transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}` : !leaf ? tr('未分类', 'Uncategorized') : leaf.parentId ? `${h(top?.name)} · ${h(leaf.name)}` : h(leaf.name);
-  const offset = t.kind === KIND.EXPENSE ? L.offsets.get(t.id) ?? 0 : 0;
-  const foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
+  const incoming = !!pid && transfer && t.toAccountId === pid, outgoing = !!pid && transfer && t.accountId === pid;
+  const title = incoming ? tr(`来自 ${h(from?.name ?? '?')}`, `From ${h(from?.name ?? '?')}`)
+    : outgoing ? tr(`转到 ${h(to?.name ?? '?')}`, `To ${h(to?.name ?? '?')}`)
+    : transfer ? `${h(from?.name ?? '?')} → ${h(to?.name ?? '?')}`
+    : !leaf ? tr('未分类', 'Uncategorized') : leaf.parentId ? `${h(edCatName(top))} · ${h(edCatName(leaf))}` : h(edCatName(leaf));
+  // 在账户明细里看的是这笔钱实际进出了多少，不显示抵扣后的净额
+  const offset = !view && t.kind === KIND.EXPENSE ? L.offsets.get(t.id) ?? 0 : 0;
+  const foreign = edForeign(t);
+  const vcur = view ? acctCur(view) : HOME, inAcc = !!view && vcur !== HOME && !foreign;
   const net = L.net(t);
   const over = offset > 0 && net < 0;
-  const sign = over ? '+' : t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : '';
-  const amount = offset > 0 && !foreign ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : money(t.amountCents);
-  const cls = over || t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : '';
-  const details = [showDate ? dayISO(t.date) : '', t.note, ...(t.tags ? t.tags.split(' ').filter(Boolean).map((x) => '#' + x) : [])].filter(Boolean).map(h).join('  ');
-  // 付款账户做成带小标志的彩色小签，放在备注前面
-  const face = !transfer && from ? accountFace(from) : null;
+  const sign = over || t.kind === KIND.INCOME || incoming ? '+' : t.kind === KIND.EXPENSE || outgoing ? '-' : '';
+  const amount = offset > 0 && !foreign && !inAcc ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : inAcc ? money(Math.abs(effect(view, t)), vcur) : money(t.amountCents);
+  const cls = over || t.kind === KIND.INCOME || incoming ? 'in' : t.kind === KIND.EXPENSE || outgoing ? 'out' : '';
+  const tagHtml = (t.tags ? String(t.tags).split(' ').filter(Boolean) : []).map((x) => { const logo = edTagLogo(x, 14); return logo ? `<span class="ed-rtag">${logo}${h(x)}</span>` : '#' + h(x); });
+  const details = [...[showDate ? dayISO(t.date) : '', t.loanPerson, t.note].filter(Boolean).map(h), ...tagHtml].join('  ');
+  // 付款账户做成带小标志的彩色小签，放在备注前面；账户明细里不重复
+  const face = !transfer && !view && from ? accountFace(from) : null;
   const payer = face ? `<span class="payer" style="--pc:${face}">${accountTile(from, 'mini')}${h(from.name)}</span>` : '';
-  const targets = L.parts(t);
+  const targets = L.parts(t), linked = targets.length ? state.data.tx.get(targets[0][0]) : null;
+  const linkedName = targets.length > 1 ? tr(`${targets.length} 笔支出`, `${targets.length} expenses`) : linked ? edCatName(cat.get(linked.categoryId)) || linked.note || '' : '';
   const extra = [
-    offset > 0 ? `${tr('原', 'Orig.')} ${money(t.amountCents)} · ${tr('抵', 'offset')} ${money(offset)}` : '',
-    foreign ? `≈ ${money(t.amountCents)}` : '',
-    targets.length ? `${tr('抵扣', 'Offsets')} ${targets.length > 1 ? tr(targets.length + ' 笔支出', targets.length + ' expenses') : h(cat.get(state.data.tx.get(targets[0][0])?.categoryId)?.name ?? '')}` : '',
-  ].filter(Boolean).join(' · ');
+    offset > 0 ? tr(`原 ${money(t.amountCents)} · 抵 ${money(offset)}`, `${money(t.amountCents)} − ${money(offset)}`) : '',
+    linked ? tr(`抵扣 ${h(linkedName)}`, `Offsets ${h(linkedName)}`) : '',
+    foreign || inAcc ? `≈ ${money(t.amountCents)}` : '',
+  ].filter(Boolean).map((x) => `<div class="small muted ed-rx">${x}</div>`).join('');
   // 多选时前面多一个勾；"row click" 和 data-act="view" 这两段别处（txRowStatic）会替换，不要改写法
   return `<div class="row click ed-tx${state.sel?.has(t.id) ? ' sel-on' : ''}" data-act="view" data-v="${t.id}">
     <span class="ed-check" aria-hidden="true"></span>
-    ${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}
-    <div class="main"><div class="title">${title}${t.excluded ? `<span class="badge gray">${tr('不计', 'Excluded')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To reimburse')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
+    ${transfer ? accountTile(incoming ? from : to) : iconTile(leaf?.icon ?? 'tag')}
+    <div class="main"><div class="title">${title}${t.excluded ? `<span class="badge gray">${tr('不计', 'Not counted')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To claim')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
       ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
-    <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra ? `<div class="small muted">${extra}</div>` : ''}</div>
+    <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra}</div>
   </div>`;
 }
 
@@ -341,14 +598,17 @@ function edPaintLayer() {
 }
 function edPaintToast() {
   const t = ed.toast;
+  // 和手机端一样：深色条，"撤销"是浅蓝字；有底栏时浮在底栏上面，没有底栏的页面贴着底边
+  const nav = !!document.querySelector('#app .bottom-nav');
   edLayerEl().querySelector('.ed-toastbox').innerHTML = t
-    ? `<div class="ed-toast ${state.editing ? 'top' : ''}"><span>${h(t.text)}</span>${t.undo ? `<button data-ed="undo">${tr('撤销', 'Undo')}</button>` : ''}</div>` : '';
+    ? `<div class="ed-toast ${state.editing ? 'top' : nav ? '' : 'nonav'}" role="status"><span>${h(t.text)}</span>${t.undo ? `<button data-ed="undo">${tr('撤销', 'Undo')}</button>` : ''}</div>` : '';
 }
+/** 底部提示；带 undo 的 4 秒后消失（和手机端一样），只是告知的 2 秒。 */
 function edToast(text, undo = null) {
   clearTimeout(ed.toastTimer);
   ed.toast = { text, undo };
   edPaintToast();
-  ed.toastTimer = setTimeout(() => { ed.toast = null; edPaintToast(); }, undo ? 5000 : 2000);
+  ed.toastTimer = setTimeout(() => { ed.toast = null; edPaintToast(); }, undo ? 4000 : 2000);
 }
 
 /** 侧滑删除 / 复制都要先确认：标题、日期、这一笔本身、会发生什么。 */
@@ -410,7 +670,7 @@ function edSelBar() {
     <div class="ed-chips">
       <button class="chip ${b.project != null ? 'on' : ''}" data-ed="pick" data-v="project">${edSvg('target')}${lab(tr('项目', 'Project'), b.project)}</button>
       <button class="chip ${b.fund != null ? 'on' : ''}" data-ed="pick" data-v="fund">${edSvg('coins')}${lab(tr('资金来源', 'Funding'), b.fund)}</button>
-      <button class="chip ${cat ? 'on' : ''}" data-ed="pick" data-v="categoryId">${edSvg('layers')}${cat ? tr('分类 · ', 'Category · ') + h(cat.name) : tr('分类', 'Category')}</button>
+      <button class="chip ${cat ? 'on' : ''}" data-ed="pick" data-v="categoryId">${edSvg('layers')}${cat ? tr('分类 · ', 'Category · ') + h(edCatName(cat)) : tr('分类', 'Category')}</button>
       <button class="chip ${b.reimburse != null ? 'on' : ''}" data-ed="pick" data-v="reimburse">${edSvg('receipt')}${b.reimburse != null ? tr('报销 · ', 'Reimburse · ') + edReimburse()[b.reimburse] : tr('报销', 'Reimburse')}</button>
     </div>
     <div class="ed-selbtns"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>${tr('删除', 'Delete')}</button>
@@ -435,8 +695,8 @@ function edBulkPop() {
     for (const [inc, name] of [[false, tr('支出', 'Expense')], [true, tr('收入', 'Income')]]) {
       body += `<div class="muted small ed-grp">${name}</div>`;
       for (const top of cats.filter((c) => !c.parentId && !!c.isIncome === inc)) {
-        body += opt(top.id, h(top.name), b.categoryId === top.id, iconTile(top.icon ?? 'tag', 'sm'));
-        for (const s of cats.filter((c) => c.parentId === top.id)) body += `<div class="ed-indent">${opt(s.id, h(s.name), b.categoryId === s.id, iconTile(s.icon ?? top.icon ?? 'tag', 'sm'))}</div>`;
+        body += opt(top.id, h(edCatName(top)), b.categoryId === top.id, iconTile(top.icon ?? 'tag', 'sm'));
+        for (const s of cats.filter((c) => c.parentId === top.id)) body += `<div class="ed-indent">${opt(s.id, h(edCatName(s)), b.categoryId === s.id, iconTile(s.icon ?? top.icon ?? 'tag', 'sm'))}</div>`;
       }
     }
   }
@@ -458,7 +718,8 @@ async function edBulkApply() {
 
 async function edBulkDelete() {
   const list = [...state.sel].map((id) => state.data.tx.get(id)).filter(Boolean);
-  if (!list.length || ed.busy || !confirm(tr(`删除 ${list.length} 笔？`, `Delete ${list.length} ${list.length === 1 ? 'entry' : 'entries'}?`))) return;
+  if (!list.length || ed.busy) return;
+  if (!await uiConfirm(tr(`删除 ${list.length} 笔？`, `Delete ${list.length} ${list.length === 1 ? 'entry' : 'entries'}?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('可以撤销', 'You can undo') })) return;
   for (let i = 0; i < list.length; i++) {
     ed.busy = tr(`删除中 ${i + 1}/${list.length}`, `Deleting ${i + 1}/${list.length}`); edPaintLayer();
     try { await deleteRecord('tx', list[i].id); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('没删完：', 'Not all deleted: ') + e.message); return; }
@@ -600,22 +861,39 @@ document.addEventListener('click', (ev) => {
 // ---------------------------------------------------------------- 记账页里的输入
 
 document.addEventListener('input', (ev) => {
-  if (ev.target.id !== 'e-note' || !state.editing) return;
-  state.editing.note = ev.target.value;
-  ev.target.style.height = 'auto'; ev.target.style.height = ev.target.scrollHeight + 'px';
+  const e = state.editing, el = ev.target;
+  if (!e) return;
+  if (el.id === 'e-note') {
+    e.note = el.value;
+    el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px';
+  } else if (el.id === 'ed-q') {
+    // 搜索框：只换下面的列表，输入框不动（拼音选字时也不打断）
+    e._q = el.value;
+    const box = el.closest('.ed-popcard')?.querySelector('.ed-opts');
+    if (box) box.innerHTML = edPopList(e);
+  } else if (el.classList.contains('ed-offin')) {
+    const i = Number(el.dataset.i);
+    if (e._offs?.[i]) e._offs[i][1] = el.value;
+    el.closest('.ed-offamt')?.classList.toggle('bad', el.value.trim() !== '' && parseCents(el.value) == null);
+    edPaintAmount();
+  } else if (el.id === 'ed-equiv') {
+    el.closest('.ed-eqfield')?.classList.toggle('bad', el.value.trim() !== '' && parseCents(el.value) == null);
+  }
 });
-// 打备注时收起自带键盘，让系统键盘上来（和手机端一样）
-document.addEventListener('focusin', (ev) => { if (ev.target.id === 'e-note') ev.target.closest('.ed-sheet')?.classList.add('typing'); });
-document.addEventListener('focusout', (ev) => { if (ev.target.id === 'e-note') setTimeout(() => document.querySelector('.ed-sheet')?.classList.remove('typing'), 120); });
+// 打备注、填抵扣金额时收起自带键盘，让系统键盘上来（和手机端一样）
+const edTyping = (el) => el.id === 'e-note' || el.classList?.contains('ed-offin');
+document.addEventListener('focusin', (ev) => { if (edTyping(ev.target)) ev.target.closest('.ed-sheet')?.classList.add('typing'); });
+document.addEventListener('focusout', (ev) => { if (edTyping(ev.target)) setTimeout(() => { if (!edTyping(document.activeElement ?? {})) document.querySelector('.ed-sheet')?.classList.remove('typing'); }, 120); });
 // 电脑上点日期胶囊直接弹出日历
 document.addEventListener('click', (ev) => { if (ev.target.id === 'e-date') { try { ev.target.showPicker(); } catch { /* 不支持就用浏览器自己的 */ } } });
 // 电脑上也能直接用键盘打金额：回车保存，Esc 关掉
 document.addEventListener('keydown', (ev) => {
   const e = state.editing;
   if (!e || ev.isComposing || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-  if (ev.key === 'Enter' && (ev.target.id === 'ed-newname' || ev.target.id === 'ed-newtag')) {
-    ev.preventDefault(); document.querySelector(ev.target.id === 'ed-newname' ? '[data-act="ed-newname"]' : '[data-act="ed-tags-done"]')?.click(); return;
+  if (ev.key === 'Enter' && ['ed-newname', 'ed-newtag', 'ed-equiv'].includes(ev.target.id)) {
+    ev.preventDefault(); document.querySelector({ 'ed-newname': '[data-act="ed-newname"]', 'ed-newtag': '[data-act="ed-tags-done"]', 'ed-equiv': '[data-act="ed-eq-ok"]' }[ev.target.id])?.click(); return;
   }
+  if (ev.key === 'Enter' && (ev.target.id === 'ed-q' || ev.target.classList.contains('ed-offin'))) { ev.preventDefault(); ev.target.blur(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName)) return;
   const k = /^[0-9]$/.test(ev.key) ? ev.key : ev.key === '.' || ev.key === ',' ? '.' : ev.key === '+' ? '+' : ev.key === '-' ? '−'
     : ev.key === '*' ? '×' : ev.key === '/' ? '÷' : ev.key === 'Backspace' ? '⌫' : null;
@@ -645,8 +923,46 @@ MOD.changes.push(async (ev) => {
   // 不整页重画：iPhone 上日期面板还开着，只改胶囊上的字
   const label = ev.target.parentElement?.querySelector('span');
   if (label) label.textContent = edDayName(state.editing.date);
+  edPaintAmount(); // 外币按新日期的汇率折
   return true;
 });
+
+/** 抵扣列表里加一笔支出（EditScreen 选支出的那段逻辑）。 */
+function edAddOffset(e, id) {
+  const t = state.data.tx.get(id);
+  if (!t || e._offs.some(([x]) => x === id)) return;
+  const L = computeLookup(), { home } = edCheck(e), total = home ?? 0;
+  const given = edOffAmounts(e, home).reduce((s, [, c]) => s + c, 0);
+  // 默认给它"还没被抵扣的部分"，不超过这笔收入还没分出去的钱
+  const want = Math.max(0, L.net(t));
+  if (e._offs.length === 1 && String(e._offs[0][1]).trim() === '') {
+    // 第二笔加进来时，把第一笔的"留空"固定成它当时的金额，两笔才分得开
+    const first = state.data.tx.get(e._offs[0][0]), saved = e._isNew ? null : state.data.tx.get(e.id);
+    const mine = saved ? L.parts(saved).find(([x]) => x === first?.id)?.[1] ?? 0 : 0;
+    const firstGive = Math.min(total, first ? Math.max(0, L.net(first) + mine) : 0);
+    e._offs[0][1] = edInput(firstGive);
+    e._offs.push([id, edInput(Math.max(0, Math.min(total - firstGive, want)))]);
+  } else e._offs.push([id, e._offs.length ? edInput(Math.max(0, Math.min(total - given, want))) : '']);
+}
+
+// 地址带 ?new 或 #new 打开（主屏幕快捷方式）：数据读好后直接进记账页
+const ED_OPEN_NEW = (() => {
+  try {
+    const q = new URLSearchParams(location.search), hash = /^#new(&|$)/.test(location.hash);
+    if (!q.has('new') && !hash) return false;
+    q.delete('new');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + (hash ? '' : location.hash));
+    return true;
+  } catch { return false; }
+})();
+if (ED_OPEN_NEW) {
+  let tries = 0;
+  const tick = () => {
+    if (typeof state !== 'undefined' && state.session && !state.loading && state.data.account.size && state.data.category.size) { if (!state.editing) { state.error = ''; startEdit(null); } return; }
+    if (tries++ < 1200) setTimeout(tick, 250);
+  };
+  addEventListener('load', () => setTimeout(tick, 0));
+}
 
 MOD.actions.push(async (act, v, el) => {
   if (act === 'ed-sel-start') { edSelect(new Set()); return true; }
@@ -658,14 +974,32 @@ MOD.actions.push(async (act, v, el) => {
     case 'ed-again': await saveEditing(true); return true;
     case 'ed-cat': e.categoryId = Number(v); break;
     case 'ed-sub': { const { top, leafId } = edCats(e); e.categoryId = leafId === Number(v) ? top.id : Number(v); break; }
-    case 'ed-pick': e._pick = v; break;
+    case 'ed-pick': e._pick = v; e._q = ''; break;
     case 'ed-pick-close': e._pick = null; break; // 面板里面的点击会先碰到 data-act="noop"，到这里的只有背景
     case 'ed-pick-x': e._pick = null; break;
     case 'ed-set': {
       const k = el.dataset.k;
-      e[k] = k === 'excluded' ? v === '1' : k === 'project' || k === 'fund' ? v : Number(v);
+      if (k === 'cur') {
+        // 自己选的币种：折合金额回到按汇率算
+        e._cur = v; e._curPicked = true; e._equiv = ''; e._keep = false;
+      } else {
+        e[k] = k === 'excluded' ? v === '1' : k === 'project' || k === 'fund' ? v : Number(v);
+        // 新记的一笔换了账户：币种跟着新账户走
+        if (k === 'accountId' && e._isNew) { e._curPicked = false; e._equiv = ''; }
+      }
       e._pick = null; break;
     }
+    case 'ed-eq-ok': {
+      const inp = document.getElementById('ed-equiv'), val = inp?.value.trim() ?? '';
+      if (val && parseCents(val) == null) { inp.closest('.ed-eqfield')?.classList.add('bad'); return true; }
+      if (val !== (inp?.dataset.was ?? '')) { e._equiv = val; e._keep = false; }
+      e._pick = null; state.error = ''; break;
+    }
+    case 'ed-eq-reset': e._equiv = ''; e._keep = false; e._pick = null; state.error = ''; break;
+    case 'ed-off-rm': e._offs.splice(Number(v), 1); break;
+    case 'ed-off-add': edAddOffset(e, Number(v)); e._pick = null; break;
+    case 'ed-offset': { const t = state.data.tx.get(e.id); if (t) await startOffset(t, v); return true; }
+    case 'ed-open': { const t = state.data.tx.get(Number(v)); if (t) { state.error = ''; startEdit(t); } return true; }
     case 'ed-tag': { const on = edTags(e); e.tags = (on.includes(v) ? on.filter((x) => x !== v) : [...on, v]).join(' '); break; }
     case 'ed-tags-done': {
       const add = (document.getElementById('ed-newtag')?.value ?? '').split(/[\s#,，]+/).filter(Boolean);

@@ -1,0 +1,70 @@
+/* extras：应用锁、提醒横幅、语音记账（modules/lock.js、reminders.js、voice.js） */
+
+/* ---- 共用：开关、设置卡片里的行、底部提示 ---- */
+.xs-sw { position: relative; flex: none; width: 51px; height: 31px; padding: 0; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in srgb, var(--muted) 32%, transparent); transition: background .2s; -webkit-tap-highlight-color: transparent; }
+.xs-sw i { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .22); transition: transform .25s cubic-bezier(.3, 1.4, .5, 1); }
+.xs-sw.on { background: var(--primary); }
+.xs-sw.on i { transform: translateX(20px); }
+.xs-sw:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.xs-set .xs-h { padding: 12px 0 2px; font-weight: 600; }
+.xs-lbl { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.xs-lbl small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.xs-sel { width: auto; min-width: 86px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--field); color: var(--text); }
+.xs-toast { position: fixed; z-index: 1100; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 96px); transform: translate(-50%, 12px);
+  max-width: calc(100% - 32px); width: max-content; padding: 10px 18px; border-radius: 20px; background: rgba(34, 34, 40, .94); color: #fff;
+  font-size: 14px; line-height: 1.4; text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.xs-toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- 应用锁：盖住一切的一层 ---- */
+.lk-layer { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+  padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px); color: var(--text); background-color: var(--bg);
+  background-image:
+    radial-gradient(60vw 60vw at 5% 0%, color-mix(in srgb, var(--blob1, transparent) 75%, transparent), transparent 70%),
+    radial-gradient(55vw 55vw at 100% 35%, color-mix(in srgb, var(--blob2, transparent) 70%, transparent), transparent 70%),
+    radial-gradient(60vw 60vw at 10% 100%, color-mix(in srgb, var(--blob3, transparent) 70%, transparent), transparent 70%);
+  -webkit-user-select: none; user-select: none; cursor: pointer; }
+.lk-box { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.lk-ic { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, transparent); }
+.lk-t { font-size: 17px; }
+.lk-pin { width: 168px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--field); color: var(--text);
+  font-size: 22px; letter-spacing: 8px; text-align: center; -webkit-user-select: text; user-select: text; cursor: text; }
+.lk-pin::placeholder { letter-spacing: 0; font-size: 15px; color: var(--muted); }
+.lk-err { min-height: 18px; margin: -6px 0; color: var(--expense); font-size: 13px; }
+.lk-layer .lk-go { min-width: 120px; padding: 10px 22px; }
+.lk-layer .lk-out { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 20px); color: var(--muted); font-size: 13px; background: none; border: 0; }
+.lk-shake { animation: lk-shake .4s; }
+@keyframes lk-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+body.lk-locked { overflow: hidden; }
+body.lk-locked .ui-confirm { z-index: 1050; }
+.lk-setpin .lk-pin { width: 100%; box-sizing: border-box; }
+
+/* ---- 提醒横幅（明细页顶上） ---- */
+.rm-bans { display: grid; gap: 10px; }
+.rm-ban { display: flex; align-items: center; gap: 4px; padding: 10px 6px 10px 12px; border-radius: 20px; }
+.rm-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.rm-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
+.rm-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rm-tx { min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.rm-tx b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-tx span { color: var(--muted); font-size: 12.5px; }
+.rm-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.rm-x:hover { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+
+/* ---- 语音记账：长按 ＋ 时不弹系统菜单、不选中文字 ---- */
+.nav-add, .fab { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.vc-card { position: fixed; z-index: 70; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 16px); max-width: 520px; margin: 0 auto;
+  display: flex; flex-direction: column; align-items: center; padding: 22px; border-radius: 28px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--stroke); box-shadow: 0 18px 50px -12px rgba(20, 16, 60, .45);
+  opacity: 0; transform: translateY(24px); transition: opacity .2s, transform .25s cubic-bezier(.2, .9, .3, 1.2); }
+.vc-card.on { opacity: 1; transform: none; }
+.vc-mic { position: relative; display: grid; place-items: center; width: 84px; height: 84px; }
+.vc-pulse { --lv: 0; position: absolute; inset: 0; border-radius: 50%; background: color-mix(in srgb, var(--primary) 18%, transparent);
+  transform: scale(calc(1 + var(--lv) * .5)); transition: transform .12s ease-out; }
+.vc-dot { position: relative; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: var(--primary); }
+.vc-heard { margin-top: 12px; font-size: 17px; text-align: center; overflow-wrap: anywhere; }
+.vc-hint { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.vc-btns { display: flex; gap: 12px; margin-top: 14px; }
+.vc-btns .btn { min-width: 96px; }
+@media (prefers-reduced-motion: reduce) { .vc-pulse { transition: none; } .xs-sw i, .xs-sw { transition: none; } }

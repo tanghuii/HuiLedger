@@ -1,0 +1,172 @@
+/* ai.js 的样式：问账本、月度复盘、净资产曲线、修正余额、对账。颜色全用 style.css 的变量，深浅色自动跟着走。 */
+
+.ai-ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ai-ch { font-size: 13px; }
+.ai-muted { color: var(--muted) !important; }
+.ai-empty { text-align: center; padding: 22px 16px; }
+
+/* ---- 小签 + 往下弹的选项（ChipPicker） */
+.ai-pk { position: relative; display: inline-block; max-width: 100%; }
+.ai-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; min-height: 36px; padding: 4px 12px 4px 5px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--field); color: var(--text); font-size: 14px; cursor: pointer; }
+.ai-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-chip > i { font-style: normal; font-size: 10px; color: var(--muted); }
+.ai-chip > .ai-ic { margin-left: 4px; color: var(--primary); }
+.ai-chip.open { border-color: var(--primary); }
+.ai-chip .tile, .ai-pop .tile { width: 26px; height: 26px; border-radius: 9px; font-size: 10px; }
+.ai-pop { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 210px; max-width: min(300px, calc(100vw - 32px)); max-height: 300px; overflow: auto;
+  padding: 6px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); box-shadow: 0 16px 36px -12px rgba(20, 16, 60, .35); animation: ai-pop .16s ease-out; }
+@keyframes ai-pop { from { opacity: 0; transform: translateY(-4px); } }
+.ai-pop button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 11px; background: none; color: var(--text); font-size: 14px; text-align: left; cursor: pointer; }
+.ai-pop button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-pop button:hover { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.ai-pop button.on { background: color-mix(in srgb, var(--primary) 15%, transparent); font-weight: 600; }
+.ai-pop-none { padding: 8px 10px; }
+
+/* ---- 问账本 */
+/* 和 App 一样：对话在上面，输入条在屏幕底部 */
+.ai-ask { max-width: 720px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; min-height: calc(100vh - 150px); min-height: calc(100dvh - 150px - env(safe-area-inset-top)); }
+.ai-msgs { display: grid; gap: 10px; align-content: start; flex: 1 0 auto; }
+.ai-msg { min-width: 0; }
+.ai-ask .card { border-radius: 20px; padding: 14px; }
+.ai-ask .bubble.me { max-width: min(80%, 300px); font-size: 15px; padding: 9px 14px; border-radius: 18px; overflow-wrap: anywhere; }
+.ai-hints { display: grid; gap: 8px; }
+.ai-hl { font-size: 13px; }
+.ai-ask .ai-hint { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text); border-radius: 18px; padding: 12px; cursor: pointer; }
+.ai-ask .ai-hint:active { transform: scale(.98); }
+.ai-text { white-space: pre-wrap; font-size: 15px; line-height: 22px; overflow-wrap: anywhere; }
+.ai-rel { margin-top: 6px; }
+.ai-errc .err { font-size: 14px; }
+.ai-errc .btn.link { padding: 6px 0 0; }
+.ai-think { font-size: 14px; padding-left: 6px; }
+.ai-think i { display: inline-block; width: 4px; height: 4px; margin-left: 3px; border-radius: 50%; background: currentColor; animation: ai-dot 1.2s infinite ease-in-out; }
+.ai-think i:nth-child(2) { animation-delay: .15s; } .ai-think i:nth-child(3) { animation-delay: .3s; }
+@keyframes ai-dot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.ai-nokey { display: grid; gap: 6px; justify-items: start; }
+.ai-nokey .btn { margin-top: 6px; }
+/* 输入条贴在页面底部 */
+.ai-ask .ai-in { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 5;
+  background: linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 88%, transparent)) padding-box,
+    linear-gradient(135deg, var(--edge1, var(--primary)), var(--edge2, var(--primary)) 42%, var(--edge3, var(--primary))) border-box;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.ai-ask .ai-in input { font-size: 16px; min-width: 0; }
+.ai-ask .ai-in .spark svg, .ai-ask .ai-in .send svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ai-ask .ai-in .send { display: grid; place-items: center; }
+.ai-end { display: block; height: 1px; }
+
+/* 待确认的一笔 */
+.ai-dh { display: flex; align-items: center; gap: 12px; }
+.ai-dh .tile { width: 42px; height: 42px; border-radius: 13px; }
+.ai-dh .main { flex: 1; min-width: 0; }
+.ai-dh .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-dsub { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ai-dh .num { font-size: 16px; }
+.ai-fx { font-size: 13px; margin-top: 8px; }
+.ai-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ai-btns { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 8px; }
+.ai-btns .btn.link { padding: 8px 12px; }
+.ai-saved { font-size: 12px; font-weight: 500; }
+
+/* ---- 净资产曲线 */
+.ai-nw { padding: 18px; }
+.ai-nw-h { display: flex; align-items: center; gap: 10px; }
+.ai-nw-t { flex: 1; min-width: 0; }
+.ai-nw-l { font-size: 12px; }
+.ai-nw-v { font-size: 26px; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; }
+.ai-nw-seg { width: 150px; flex: none; }
+.ai-nw-seg .seg { flex-wrap: nowrap; }
+.ai-nw-seg .seg button { padding: 6px 4px; font-size: 13px; white-space: nowrap; }
+.ai-nw-d { font-size: 13px; min-height: 18px; }
+.ai-nw-few { font-size: 13px; margin-top: 10px; }
+.ai-nw-plot { position: relative; height: 120px; margin-top: 10px; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
+.ai-nw-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ai-nw-zero { stroke: var(--primary); stroke-opacity: .25; stroke-width: 1; }
+.ai-nw-guide { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -.5px; background: color-mix(in srgb, var(--primary) 45%, transparent); pointer-events: none; }
+.ai-nw-dot { position: absolute; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; background: var(--primary); border: 1.5px solid #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.ai-nw-f { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11px; }
+.ai-nw-f span:nth-child(2) { text-align: center; }
+
+/* ---- 修正余额 */
+.ai-dt { font-size: 18px; }
+.ai-fix .seg { flex-wrap: nowrap; }
+.ai-fix input.ai-bad { border-color: var(--expense); outline-color: var(--expense); }
+.ai-fix-note { min-height: 16px; }
+
+/* ---- 月度复盘 */
+.ai-review { gap: 12px; }
+/* 复盘自带月份切换（同手机端）；放在统计页里时，统计页那一条就不重复显示了 */
+.pg.st:has(.ai-rv-month) .st-month { display: none; }
+.ai-rv-month .month { display: flex; align-items: center; justify-content: space-between; }
+.ai-rv-month .month b { font-size: 16px; }
+.ai-stories { display: grid; gap: 8px; min-width: 0; }
+.ai-pager { display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; border-radius: 26px; }
+.ai-pager::-webkit-scrollbar { display: none; }
+.ai-story { flex: 0 0 100%; min-width: 0; height: 210px; box-sizing: border-box; scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; padding: 22px; border-radius: 26px; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2)); }
+.ai-story > i { position: absolute; pointer-events: none; z-index: -1; }
+.ai-b1 { width: 84%; aspect-ratio: 1; left: 53%; top: 5%; margin-top: -42%; border-radius: 50%; background: rgba(255, 255, 255, .10); animation: bubbleA 14s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.ai-b2 { width: 50%; aspect-ratio: 1; left: -15%; top: 105%; margin-top: -25%; border-radius: 50%; background: rgba(255, 255, 255, .07); animation: bubbleB 14s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.ai-sh { inset: 0; background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .10) 50%, transparent 62%) no-repeat; background-size: 250% 100%; animation: sheen 8.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.ai-sbox { width: 44px; height: 44px; border-radius: 14px; background: rgba(255, 255, 255, .22); display: grid; place-items: center; flex: none; }
+.ai-sbox .ai-ic { width: 24px; height: 24px; color: #fff; }
+.ai-sgap { flex: 1; }
+.ai-sk { font-size: 14px; color: rgba(255, 255, 255, .85); }
+.ai-sb { font-size: 34px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.ai-sl { font-size: 13px; line-height: 18px; color: rgba(255, 255, 255, .85); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ai-dots { display: flex; justify-content: center; gap: 6px; }
+.ai-dots i { width: 6px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 30%, transparent); transition: width .25s ease, background .25s; }
+.ai-dots i.on { width: 16px; background: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .ai-story > i, .ai-pop, .ai-think i { animation: none; } }
+
+.ai-three { display: flex; justify-content: space-between; gap: 8px; }
+.ai-three > div { min-width: 0; }
+.ai-fl { font-size: 12px; }
+.ai-fv { font-size: 18px; font-weight: 700; }
+.ai-fd { font-size: 11px; white-space: nowrap; }
+.ai-fnote { font-size: 11px; margin-top: 8px; }
+.ai-figs { padding: 18px; }
+.ai-sum-h { display: flex; align-items: center; gap: 10px; }
+.ai-sum-h b { flex: 1; font-weight: 500; }
+.ai-sum-h .btn.link { padding: 6px 4px; }
+.ai-sum .tile.ai-t32 { width: 32px; height: 32px; border-radius: 10px; }
+.ai-sum-t { margin-top: 8px; font-size: 14px; line-height: 21px; white-space: pre-wrap; }
+.ai-sum-e { margin-top: 8px; }
+.ai-sum > .muted.small { margin-top: 4px; }
+.ai-wr { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.ai-wr .tile { width: 34px; height: 34px; border-radius: 11px; }
+.ai-wr .main { flex: 1; min-width: 0; }
+.ai-wr .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-wd { font-size: 12px; }
+.ai-rf { margin-top: 4px; font-size: 13px; display: grid; gap: 2px; }
+.ai-rv { font-size: 17px; font-weight: 700; }
+.ai-claim .between { margin-top: 6px; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.ai-mt { margin-top: 6px; font-size: 15px; }
+.ai-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent); border-top-color: var(--primary); animation: ai-spin .8s linear infinite; flex: none; margin-right: 6px; }
+.ai-spin.lg { width: 34px; height: 34px; border-width: 3px; margin: 0; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+
+/* ---- 对账 */
+.ai-rec { max-width: 760px; gap: 12px; }
+.ai-rec-set { gap: 8px; }
+.ai-rec-set .ai-ch + div { margin-bottom: 6px; }
+.ai-file { display: inline-block; cursor: pointer; }
+.ai-fnames { overflow-wrap: anywhere; }
+.ai-go { height: 50px; font-size: 15px; }
+.ai-load { display: grid; justify-items: center; gap: 12px; padding: 40px 24px; text-align: center; }
+.ai-pbar { width: 100%; }
+.ai-pbar i { display: block; height: 100%; background: var(--primary); border-radius: inherit; transition: width .3s; }
+.ai-rh { padding: 18px; }
+.ai-rh1 { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ai-rh1 .tile { width: 30px; height: 30px; border-radius: 9px; }
+.ai-rh1 b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-rh2 { margin-top: 10px; }
+.ai-rh3 { display: flex; justify-content: flex-end; margin: 2px -6px -8px 0; }
+.ai-rc > b { font-weight: 500; display: block; margin-bottom: 2px; }
+.ai-ra { display: flex; justify-content: flex-end; margin: -2px 0 4px; }
+.ai-bl { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
+.ai-bl .main { flex: 1; min-width: 0; }
+.ai-bd { font-size: 11px; }
+.ai-bt { font-size: 13px; line-height: 17px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ai-bl .btn.link { padding: 6px 4px 6px 8px; white-space: nowrap; }
+.ai-fx2 { font-size: 11px; padding-left: 8px; white-space: nowrap; }
+.ai-same { display: block; width: 100%; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }

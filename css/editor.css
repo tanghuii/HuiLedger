@@ -1,0 +1,72 @@
+/* editor：记账页和账单行补充的样式（基础样式在 style.css 的 editor module 段，这里的规则在它后面加载） */
+
+/* 金额卡片：币种胶囊（点了选币种）、折合主货币那一行（点了改折合金额） */
+.ed-amount .ed-cur { border: 0; color: var(--text); cursor: pointer; font-family: inherit; touch-action: manipulation; }
+.ed-cur i { font-style: normal; font-size: 10px; color: var(--muted); }
+.ed-amt-sub { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0 14px; }
+.ed-equiv { border: 0; background: none; padding: 2px 0; margin: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline dotted color-mix(in srgb, var(--muted) 60%, transparent); text-underline-offset: 3px; touch-action: manipulation; }
+.ed-equiv.bad { color: var(--expense); text-decoration-color: color-mix(in srgb, var(--expense) 60%, transparent); }
+
+/* 选项面板：搜索条（矮矮的圆角条：放大镜 + "搜索"，和手机端 ChipPicker 一样）、币种旗帜 */
+.ed-pophead { display: flex; align-items: center; gap: 10px; }
+.ed-search { flex: 1; min-width: 0; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); cursor: text; }
+.ed-search .ed-ic { stroke: var(--muted); }
+.ed-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; padding: 0; font-size: 16px; color: var(--text); outline: none; border-radius: 0; box-shadow: none; }
+.ed-search input::placeholder { color: var(--muted); }
+.ed-opt > span.ed-flag, .ed-flag { flex: none; width: 30px; text-align: center; font-size: 22px; line-height: 1; }
+.ed-none { padding: 10px; }
+/* 能搜索的面板高度固定，打字筛选时搜索框不跳 */
+.ed-pop.search .ed-popcard { height: 72%; }
+.ed-pop.tall .ed-popcard { height: 86%; max-height: 86%; }
+
+/* 折合金额对话框 */
+.ed-eqfield, .ed-offamt { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 44px; border-radius: 12px; background: var(--field); border: 1px solid var(--line); }
+.ed-eqfield > span, .ed-offamt > span { color: var(--muted); font-size: 15px; }
+.ed-eqfield input, .ed-offamt input { flex: 1; min-width: 0; border: 0; background: none; padding: 0; height: 100%; font-size: 16px; color: var(--text); outline: none; box-shadow: none; border-radius: 0; font-family: var(--num-font); }
+.ed-eqfield:focus-within, .ed-offamt:focus-within { border-color: var(--primary); }
+.ed-eqfield.bad, .ed-offamt.bad { border-color: var(--expense); }
+.ed-eqbtns { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* 收入抵扣支出 / 支出下面的补贴退款 */
+.ed-offs { padding: 12px; display: grid; gap: 4px; }
+.ed-off { display: grid; gap: 2px; padding-top: 4px; }
+.ed-offdate { font-size: 11px; margin-top: 4px; }
+.ed-offrow .row, .ed-offpick .row { padding: 6px 0; }
+.ed-offline { display: flex; align-items: center; gap: 8px; }
+.ed-offline .ed-offamt { flex: 1; }
+.ed-offsum:empty { display: none; }
+.ed-err { color: var(--expense); }
+.ed-offadd { justify-self: start; padding: 4px 0; }
+.ed-offbtns { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ed-offbtns .btn.link { padding: 4px 0; }
+.ed-offs .row.click { margin: 0 -8px; }
+.ed-offpick { padding: 0 8px; border-radius: 12px; cursor: pointer; }
+.ed-offpick:hover { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.ed-offpick.on { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.ed-offpick .ed-offdate { margin-top: 6px; }
+
+/* 标签：彩色小标志（tags.js 的 tagLogo） */
+.chip.ed-tagchip { padding-left: 4px; }
+.ed-tagin, .ed-rtag { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.ed-tagin + .ed-tagin { margin-left: 4px; }
+
+/* 账单行右边的几行小字（原价 · 抵、抵扣某笔、≈ 主货币）分开写，和手机端一样 */
+.row .right .ed-rx { line-height: 15px; white-space: nowrap; }
+
+/* 撤销提示：和手机端一样的深色条，"撤销"是浅蓝字，4 秒后消失 */
+.ed-toast { background: rgba(34, 34, 40, .94); color: #fff; border-radius: 20px; min-height: 46px; padding: 6px 6px 6px 18px; justify-content: space-between; }
+.ed-toast:not(:has(button)) { padding-right: 18px; }
+.ed-toast button { color: #9DB8FF; font-weight: 600; padding: 8px 12px; }
+@media (max-width: 720px) {
+  .ed-toast:not(.top) { left: 24px; right: 24px; width: auto; max-width: none; transform: none; bottom: calc(env(safe-area-inset-bottom) + 96px); animation-name: ed-up2; }
+  .ed-toast.nonav:not(.top) { bottom: calc(env(safe-area-inset-bottom) + 24px); }
+  body.ed-selecting .ed-toast:not(.top) { bottom: calc(env(safe-area-inset-bottom) + 200px); }
+}
+@keyframes ed-up2 { from { opacity: 0; transform: translateY(16px); } }
+
+/* 网格里的长备注（不换行）别把面板撑宽 */
+.ed-popcard, .ed-opts, .ed-offs, .ed-off { grid-template-columns: minmax(0, 1fr); }
+.ed-offpick, .ed-offrow { min-width: 0; }
+/* 标签面板里选中的标签：实心主色（和手机端一样） */
+.chip.ed-tagpick.on { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.ed-offline .btn.link { color: var(--muted); flex: none; }

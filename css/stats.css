@@ -1,0 +1,221 @@
+/* stats */
+/* 统计页、资产页（含账户详情和资产里的几个专题）：手机宽度下和安卓端一个样子。页面最外层是 .pg */
+:root { --pg-surface: rgba(255, 255, 255, .86); --pg-dot: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pg-surface: rgba(26, 28, 48, .9); --pg-dot: #1b1d33; } }
+:root[data-theme="dark"] { --pg-surface: rgba(26, 28, 48, .9); --pg-dot: #1b1d33; }
+
+.pg { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.pg > *, .st-side > *, .st-main > *, .as-side > *, .as-main > * { min-width: 0; }
+
+/* 标题栏：返回、标题、右边的按钮（同手机端 ScreenBar：没有返回 28px，有返回 22px） */
+.pg-bar { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.pg-bar h2 { flex: 1; min-width: 0; margin: 0; font-size: 28px; line-height: 34px; font-weight: 800; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-bar h2.sm { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: 0; }
+.pg-round { width: 40px; height: 40px; flex: none; display: grid; place-items: center; padding: 0; color: var(--text);
+  backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%); box-shadow: inset 0 1px 0 var(--shine); }
+.pg-round.sm { width: 34px; height: 34px; }
+.pg-round:active, .pg-pill:active { transform: scale(.93); }
+.pg-ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pg-round.sm .pg-ic { width: 18px; height: 18px; }
+.pg-pill { flex: none; height: 40px; display: inline-flex; align-items: center; gap: 4px; padding: 0 14px 0 11px; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary);
+  font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.pg-pill .pg-ic { width: 18px; height: 18px; stroke-width: 2.2; }
+/* 图标方块：手机端玻璃风格是左上浅、右下本色的渐变（银行 logo 图片不加） */
+.pg .tile:not(:has(img)) { position: relative; }
+html:not(.ap-solid):not(.line-icons) .pg .tile:not(:has(img))::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(135deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 72%); }
+.pg .tile svg { position: relative; }
+.pg .tri { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* ---------------------------------------------------------------- 统计 */
+.st-per { flex: none; width: 176px; }
+.st-per .seg button, .st-kind .seg button, .st-sec .seg button { padding-top: 8px; padding-bottom: 8px; font-size: 14px; }
+.st-month { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px; }
+.st-month b { font-size: 16px; font-weight: 600; text-align: center; }
+.st-sec .seg { background: var(--pg-surface); border-color: var(--stroke); }
+
+/* 总览：彩色卡片上的 支出 / 收入 / 结余 */
+.st-over { padding: 18px; }
+.st-three { display: flex; justify-content: space-between; gap: 8px; }
+.st-three > div { min-width: 0; }
+.st-three .muted { font-size: 12px; }
+.st-three .num { font-size: 18px; font-weight: 700; }
+.st-count { font-size: 12px; margin-top: 8px; }
+.st-left { padding: 14px; }
+
+/* 趋势图：柱子上浓下淡，空的日子是一个小点；点一根顶上出气泡 */
+.st-trend .st-h { font-size: 13px; font-weight: 500; color: var(--muted); }
+.st-trend .seg { flex: none; width: 128px; }
+.st-trend .seg button { padding: 6px 4px; font-size: 14px; }
+.st-plot { position: relative; height: 150px; padding-top: 34px; margin-top: 12px; }
+.st-area { position: relative; height: 100%; }
+.st-bars, .st-hits { display: flex; height: 100%; }
+.st-hits { position: absolute; inset: 0; }
+.st-bars button, .st-hits button { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: none; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.st-bars i { display: block; width: 64%; max-width: 26px; min-height: 3px; border-radius: 999px; background: linear-gradient(var(--c), color-mix(in srgb, var(--c) 45%, transparent)); transition: opacity .2s; }
+.st-bars .z i { width: 3px; height: 3px; min-height: 0; border-radius: 50%; background: color-mix(in srgb, var(--c) 18%, transparent); }
+.st-bars.picking button:not(.on) i { opacity: .42; }
+.st-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.st-dot { position: absolute; width: 7px; height: 7px; margin: 0 0 -3.5px -3.5px; border-radius: 50%; background: var(--pg-dot); border: 1.5px solid var(--c); pointer-events: none; }
+.st-dot.on { width: 10px; height: 10px; margin: 0 0 -5px -5px; background: var(--c); }
+.st-pin { position: absolute; top: -4px; width: 1px; margin-left: -.5px; background: color-mix(in srgb, var(--c) 40%, transparent); pointer-events: none; }
+.st-bub { position: absolute; top: -34px; height: 30px; padding: 0 9px; border-radius: 10px; background: var(--pg-surface); border: 1px solid color-mix(in srgb, var(--c) 50%, transparent);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; white-space: nowrap; pointer-events: none; }
+.st-bub span { font-size: 10px; color: var(--muted); }
+.st-bub b { font-size: 12px; }
+.st-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+/* 分类、标签：环形图 + 排行 */
+.st-dcard { padding: 20px; }
+.st-donut { position: relative; width: 190px; height: 190px; margin: 0 auto; }
+.st-donut svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.st-donut [data-act] { cursor: pointer; }
+.st-donut text { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.st-donut .mid { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.st-donut .mid .muted { font-size: 12px; }
+.st-donut .mid .num { font-size: 20px; font-weight: 700; }
+.st-rank { padding: 14px; }
+.st-rank .crow .title, .st-rank .st-tag .title { font-size: 16px; }
+.st-rank .crow .line1 .num, .st-rank .st-tag > .num { font-size: 16px; }
+.st-tag .tile { width: 38px; height: 38px; border-radius: 12px; }
+
+/* ---------------------------------------------------------------- 资产 */
+.as-cols { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.as-side, .as-main { display: contents; }
+.as-worth { order: 1; } .as-chart { order: 2; } .as-menu { order: 3; } .as-recv { order: 4; } .as-grp { order: 5; }
+.as-worth { padding: 20px; }
+.as-lbl { font-size: 13px; }
+.as-big { font-size: 34px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
+.as-ad { margin-top: 12px; align-items: flex-start; }
+.as-ad .num { font-size: 18px; }
+.as-ratio { display: flex; gap: 2px; height: 8px; margin-top: 10px; border-radius: 99px; overflow: hidden; }
+.as-ratio i, .as-ratio b { display: block; min-width: 2px; }
+.as-ratio i { background: var(--income); } .as-ratio b { background: var(--expense); }
+.as-rate { font-size: 11px; margin-top: 4px; }
+.as-menu, .as-recv, .as-grp { padding: 14px; }
+.as-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; background: none; color: var(--text); font-size: 16px; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.as-row:active { opacity: .65; }
+.as-row .tile { width: 34px; height: 34px; border-radius: 11px; }
+.as-row > span:not(.tile) { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.as-row > .pg-ic { width: 16px; height: 16px; color: var(--muted); stroke-width: 2; }
+.as-recv .as-row { padding: 9px 0 2px; font-weight: 500; }
+.as-recv .as-row .tile { width: 42px; height: 42px; border-radius: 13px; }
+.as-recv .as-row .num { font-size: 16px; }
+.as-gh { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 500; color: var(--muted); }
+button.as-gh { width: 100%; border: 0; background: none; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; text-align: left; }
+.as-grp .faces { margin-top: 10px; }
+.as .face .small { font-size: 11px; }
+.as .face:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.as-old .row.click { margin: 0 -8px; }
+.as-old .row .num { font-size: 14px; }
+
+/* 账户详情：银行卡样的头、按月分组 */
+.acc .acard-name { font-weight: 600; font-size: 16px; color: #fff; }
+.acc .acard-cur { flex: none; display: flex; align-items: center; gap: 6px; }
+.acc .acard-lbl { margin-top: 22px; }
+.acc .acard .stats3 .small { font-size: 11px; }
+.acc .acard-btns { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.acc-month { padding: 14px; }
+.acc-mh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+.acc-mh b { flex: 1; min-width: 0; font-size: 15px; }
+.acc-mh span { font-size: 12px; font-family: var(--num-font); white-space: nowrap; }
+.acc-day { margin-top: 6px; font-size: 12px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- 宽屏：左边一栏控件 / 概要，右边内容 */
+.st-side, .st-main { display: contents; }
+@media (min-width: 860px) {
+  .st { grid-template-columns: 320px minmax(0, 1fr); align-items: start; gap: 14px; }
+  .st-side { display: grid; gap: 12px; position: sticky; top: 16px; }
+  .st-main { display: grid; gap: 12px; grid-column: 2; grid-row: 1; }
+  .st-side .pg-bar h2 { font-size: 24px; }
+  .st-per { width: 168px; }
+  .as-cols { grid-template-columns: 340px minmax(0, 1fr); align-items: start; gap: 14px; }
+  .as-side, .as-main { display: grid; gap: 12px; }
+  .as-side { position: sticky; top: 16px; }
+}
+
+/* ---------------------------------------------------------------- 手机（主屏幕 App） */
+@media (max-width: 720px) {
+  /* 这几页和手机端一样，用自己的标题栏，不要上面的网站标题和搜索框 */
+  .wrap:has(> .pg) { padding-top: 0; }
+  .wrap:has(> .pg) > .top { display: none; }
+  /* 出错提示在标题栏上面：让开状态栏 */
+  .wrap:has(> .pg) > p { margin: calc(env(safe-area-inset-top) + 10px) 0 0; }
+  /* 标题栏贴在顶上，底下的内容滑过去时磨砂、下沿渐隐 */
+  .pg-bar { position: sticky; top: 0; z-index: 20;
+    margin: 0 calc(-1 * max(12px, env(safe-area-inset-right))) -6px calc(-1 * max(12px, env(safe-area-inset-left)));
+    padding: calc(env(safe-area-inset-top) + 12px) max(12px, env(safe-area-inset-right)) 14px max(12px, env(safe-area-inset-left));
+    backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 14px), transparent); mask-image: linear-gradient(#000 calc(100% - 14px), transparent); }
+  /* 统计页最底下浮着 总览 / 分类 / 标签 / 复盘，在底栏上面 */
+  .st { padding-bottom: 58px; }
+  .st-sec { position: fixed; z-index: 29; left: max(24px, env(safe-area-inset-left)); right: max(24px, env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom) + 80px); }
+  .st-sec .seg { flex-wrap: nowrap; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: 0 10px 30px -12px rgba(40, 30, 120, .35), inset 0 1px 0 var(--shine); }
+}
+@media (max-width: 380px) { .st-per { width: 156px; } .st-month { padding: 0 6px; } .pg-bar h2 { font-size: 25px; } }
+
+/* ---------------------------------------------------------------- 日历（同手机端 CalendarScreen） */
+.calv .cal-month { padding: 0 16px; }
+.calv .cal-month .round { width: 34px; height: 34px; }
+.calv .cal-card { padding: 10px; }
+.cal-sum { display: flex; justify-content: space-between; gap: 6px; padding: 4px 6px; font-size: 13px; font-weight: 500; }
+.cal-re { padding: 0 6px; }
+.calv .calgrid { gap: 3px; }
+.calv .calgrid.head { margin-top: 6px; }
+.calv .cal { height: 56px; min-height: 56px; border-radius: 12px; padding: 4px 1px 0; justify-content: flex-start; }
+.calv .cal b { font-size: 14px; line-height: 16px; font-weight: 400; }
+.calv .cal span { font-size: 10px; line-height: 12px; max-width: 100%; overflow: hidden; white-space: nowrap; }
+.calv .cal.we:not(.on):not(.today) b { opacity: .75; }
+.calv .cal.today b, .calv .cal.on b { font-weight: 700; }
+.calv .cal .dot { margin-top: 4px; }
+.calv .cal .tbar { display: block; width: 12%; min-width: 4px; height: 4px; margin-top: 5px; border-radius: 9px; background: var(--muted); }
+.calv .cal.on .tbar { background: var(--on-primary); }
+.cal-day { padding: 14px; }
+.cal-dh { display: flex; align-items: center; gap: 8px; }
+.cal-dh .main { flex: 1; min-width: 0; }
+.cal-dh .btn.link { flex: none; font-weight: 600; }
+
+/* 账单详情：给支出记补贴 / 退款 / 代付收回；标签带小标志 */
+.dt-offs { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.dt-offs .btn.link { padding: 4px 8px; font-weight: 600; }
+.dt-tag { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; }
+/* 周期性收支：柱子下面的起止月份 */
+.rc-axis { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--muted); }
+/* 补贴 */
+.sb-sum .big { font-size: 28px; }
+.sb-link { padding: 6px 0 0; font-weight: 600; }
+.sb-grp { padding: 14px; }
+/* 报销：疑似已报销的一对、待报销每一笔下面的操作 */
+.rb-likely { padding: 0 4px; font-size: 14px; }
+.rb-pair, .rb-item { padding: 12px; border-radius: 20px; }
+.rb-btns { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.rb-btns .sp { flex: 1; }
+.rb-btns .btn.link { font-weight: 600; }
+
+/* ---------------------------------------------------------------- 长出来的动画（同手机端：圆环 800ms、条 600–700ms、环形图 750ms），只在第一次画这一页时放 */
+@keyframes pg-ring { from { stroke-dashoffset: var(--len); } }
+@keyframes pg-gx { from { transform: scaleX(0); } }
+@keyframes pg-gy { from { transform: scaleY(0); } }
+@keyframes pg-fade { from { opacity: 0; } }
+@keyframes pg-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.pg-ring-in { animation: pg-ring .8s cubic-bezier(.4, 0, .2, 1) both; }
+.pg-gx { transform-origin: left center; animation: pg-gx .65s cubic-bezier(.4, 0, .2, 1) both; }
+.pg-gy i { transform-origin: center bottom; animation: pg-gy .7s cubic-bezier(.4, 0, .2, 1) both; }
+.st-line.pg-wipe { animation: pg-wipe .7s cubic-bezier(.4, 0, .2, 1) both; }
+.pg-arc { animation-name: pg-ring; animation-timing-function: linear; animation-fill-mode: both; }
+.pg-fade { animation: pg-fade .3s ease-out .55s both; }
+@media (prefers-reduced-motion: reduce) { .pg-ring-in, .pg-gx, .pg-gy i, .st-line.pg-wipe, .pg-arc, .pg-fade { animation: none; } }
+
+/* ---------------------------------------------------------------- 长按拖动排序（资产页账户卡面、管理里的分类 / 账户） */
+[data-ro-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+[data-ro].ro-on > [data-ro-id] { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+[data-ro].ro-on > [data-ro-id].ro-lift { position: relative; z-index: 6; scale: 1.02; opacity: .92; transition: scale .15s ease-out, box-shadow .2s, opacity .2s;
+  box-shadow: 0 16px 34px -12px rgba(30, 20, 90, .45); border-radius: 18px; background-color: var(--pg-surface); }
+[data-ro].ro-on > .face.ro-lift { background-color: transparent; filter: none; }
+.mg-hint { padding: 0 6px; margin: -4px 0; }
+/* 预算等页面：返回栏右边的文字按钮 */
+.subbar .sb-r { margin-left: auto; flex: none; }
+.subbar .sb-r .btn.link { padding: 6px 4px; font-weight: 600; }
+@media (max-width: 720px) { .bud-wide { display: none; } }
+/* 周期性收支里的自动记账卡 */
+.sc-card { padding: 14px; }
+.sc-card .between .btn.link { padding: 2px 0; font-weight: 600; }

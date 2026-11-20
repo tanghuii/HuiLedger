@@ -1,0 +1,229 @@
+/* 外观：五套外观，和手机端 Glass.kt 的 GlassColors / JizhangTheme / IconTile 一一对应。
+   modules/appearance.js 在 <html> 上设：
+     data-style="glass|bento|dark|cartoon|paper"   选的外观（存在本机）
+     .ap-solid    不是液态玻璃的四套：实心卡片、没有模糊和光晕
+     .line-icons  分类图标用线性画法（手账纸总是线性）
+     .ap-accent + --accent / --on-accent   当前账本有自己的主题色时
+     data-theme="light|dark"   只有深浅固定的外观才设（便当格、卡通 = light，深色金融 = dark），
+                               style.css 里 `:root:not([data-theme="light"])` 那种写法就能跟着走
+   分类图标的方块 .tile.ap-ic 上有 --tc（它本来的颜色），各外观据此换画法。
+   液态玻璃就是 style.css 本来的样子，这里只补图标渐变和账本色。 */
+
+/* ---------------------------------------------------------------- 公共变量 */
+html {
+  --bw: 1px; --ink: #2b2140;
+  /* 线性图标：淡彩底的浓度、线条往黑还是往白调 */
+  --li-bg: 12%; --li-pct: 80%; --li-to: #000;
+  /* 标题流光的三个颜色（深色外观下提亮） */
+  --t1: var(--primary); --t2: #ff5c9a; --t3: #4fa8f0;
+  /* 没有光晕的外观：顶上铺一层淡淡的账本色（--glow），再加外观自己的底纹（--art） */
+  --glow: none, none; --glow-a: 22%; --glow-b: 10%;
+  --art: none; --art-size: auto; --art-pos: 0 0;
+  --nav-on: var(--primary); --nav-off: var(--muted); --nav-bg: color-mix(in srgb, var(--bg) 72%, transparent);
+  --card-shadow: none; --nav-shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) { --li-bg: 18%; --li-pct: 75%; --li-to: #fff; --glow-a: 30%; --glow-b: 16%;
+    --t1: color-mix(in srgb, var(--primary) 65%, #fff); --t2: color-mix(in srgb, #ff5c9a 65%, #fff); --t3: color-mix(in srgb, #4fa8f0 65%, #fff); }
+}
+
+/* ---------------------------------------------------------------- 便当格：浅灰底、白色实心卡片、黑色强调、黑色底栏 */
+html[data-style="bento"] {
+  color-scheme: light;
+  --bg: #f2f2f0; --blob1: transparent; --blob2: transparent; --blob3: transparent;
+  --card: #fff; --stroke: rgba(0, 0, 0, .08);
+  --text: #171717; --muted: #6b6a65; --primary: #171717; --on-primary: #fff;
+  --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: #fafaf8; --line: #dcdad2;
+  --edge1: var(--stroke); --edge2: var(--stroke); --edge3: var(--stroke); --shine: transparent; --shine2: transparent;
+  --card-tint: #171717;
+  --nav-bg: rgba(23, 23, 23, .94); --nav-off: #b4b2a9; --nav-on: #fff;
+  --pg-surface: rgba(255, 255, 255, .92); --pg-dot: #fff;
+}
+
+/* ---------------------------------------------------------------- 深色金融：近黑底、深灰卡片、亮绿强调（不跟系统） */
+html[data-style="dark"] {
+  color-scheme: dark;
+  --bg: #0e0f12; --blob1: transparent; --blob2: transparent; --blob3: transparent;
+  --card: #17191e; --stroke: #262a32;
+  --text: #f2f3f5; --muted: #8a8f98; --primary: #3ddc97; --on-primary: #05281a;
+  --income: #3dd68c; --expense: #e5484d; --amber: #f0a93a; --field: #1a1d22; --line: #2a2e36;
+  --edge1: var(--stroke); --edge2: var(--stroke); --edge3: var(--stroke); --shine: transparent; --shine2: transparent;
+  --card-tint: #3ddc97;
+  --nav-bg: rgba(23, 25, 30, .92);
+  --pg-surface: rgba(23, 25, 30, .92); --pg-dot: #17191e;
+  --li-bg: 18%; --li-pct: 75%; --li-to: #fff; --glow-a: 30%; --glow-b: 16%;
+  --t1: color-mix(in srgb, var(--primary) 65%, #fff); --t2: color-mix(in srgb, #ff5c9a 65%, #fff); --t3: color-mix(in srgb, #4fa8f0 65%, #fff);
+}
+
+/* ---------------------------------------------------------------- 卡通：奶油底撒波点、粗黑描边、往右下错开的硬投影、糖果粉 */
+html[data-style="cartoon"] {
+  color-scheme: light;
+  --bg: #fff3d4; --blob1: transparent; --blob2: transparent; --blob3: transparent;
+  --card: #fffdf6; --stroke: var(--ink); --bw: 2.5px;
+  --text: #2b2140; --muted: #6b5f85; --primary: #ff5c8a; --on-primary: #fff;
+  --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: #fff9e8; --line: #e2d3a8;
+  --edge1: var(--stroke); --edge2: var(--stroke); --edge3: var(--stroke); --shine: transparent; --shine2: transparent;
+  --card-tint: #ff5c8a;
+  --nav-bg: rgba(255, 253, 246, .96);
+  --pg-surface: rgba(255, 253, 246, .96); --pg-dot: #fffdf6;
+  --card-shadow: 4px 4px 0 var(--ink); --nav-shadow: 4px 4px 0 var(--ink);
+  --art: radial-gradient(circle at 14px 14px, #ffe2a0 3px, transparent 3.6px), radial-gradient(circle at 14px 14px, #ffe2a0 3px, transparent 3.6px);
+  --art-size: 28px 56px, 28px 56px; --art-pos: 0 0, 14px 28px;
+}
+
+/* ---------------------------------------------------------------- 手账纸：米色纸、点阵、纸纹、纸片投影；夜里是深棕纸面米色字 */
+html[data-style="paper"] {
+  color-scheme: light;
+  --bg: #f6f0e4; --blob1: transparent; --blob2: transparent; --blob3: transparent;
+  --card: #fffcf5; --stroke: rgba(160, 133, 96, .18);
+  --text: #3a3128; --muted: #7d7064; --primary: #c8643b; --on-primary: #fff;
+  --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: #fbf6ec; --line: #e6dccb;
+  --edge1: var(--stroke); --edge2: var(--stroke); --edge3: var(--stroke); --shine: transparent; --shine2: transparent;
+  --card-tint: #c8643b;
+  --nav-bg: rgba(255, 252, 245, .96);
+  --pg-surface: rgba(255, 252, 245, .94); --pg-dot: #fffcf5;
+  --sticker: #fffcf5; --tape: rgba(239, 223, 194, .95); --tape-line: rgba(138, 106, 69, .07);
+  --card-shadow: 0 .9px 0 .3px rgba(107, 82, 54, .07), 0 2.25px 0 .75px rgba(107, 82, 54, .05), 0 4.5px 0 1.5px rgba(107, 82, 54, .035);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .54 0 0 0 0 .42 0 0 0 0 .27 1.3 0 0 0 -.76'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
+  --art: radial-gradient(circle at 9px 9px, rgba(125, 106, 80, .30) 1.35px, transparent 1.9px), var(--grain);
+  --art-size: 18px 18px, 140px 140px; --art-pos: 0 0, 0 0;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-style="paper"] {
+    color-scheme: dark;
+    --bg: #211c17; --card: #2c261f; --stroke: rgba(232, 213, 181, .16);
+    --text: #ede3d3; --muted: #b3a593; --primary: #e58a62; --on-primary: #2a140a;
+    --income: #3dd68c; --amber: #f0a93a; --field: #302922; --line: #3d352d;
+    --card-tint: #e58a62;
+    --nav-bg: rgba(44, 38, 31, .96);
+    --pg-surface: rgba(44, 38, 31, .94); --pg-dot: #2c261f;
+    --sticker: #4a3f33; --tape: rgba(58, 49, 39, .94); --tape-line: rgba(255, 255, 255, .07);
+    --card-shadow: 0 .9px 0 .3px rgba(0, 0, 0, .21), 0 2.25px 0 .75px rgba(0, 0, 0, .15), 0 4.5px 0 1.5px rgba(0, 0, 0, .105);
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .91 0 0 0 0 .84 0 0 0 0 .71 .6 0 0 0 -.37'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
+    --art: radial-gradient(circle at 9px 9px, rgba(232, 213, 181, .20) 1.35px, transparent 1.9px), var(--grain);
+  }
+}
+
+/* ---------------------------------------------------------------- 四套实心外观共用：没有光晕、没有毛玻璃 */
+html.ap-solid body::before, html.ap-solid body::after { display: none; }
+html.ap-solid::before { background-image: var(--glow), var(--art); background-size: auto, auto, var(--art-size); background-position: 0 0, 0 0, var(--art-pos); }
+html.ap-solid .card:not(.cc) {
+  background: var(--card); border: var(--bw) solid var(--stroke); box-shadow: var(--card-shadow);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+html.ap-solid .card:not(.cc)::before, html.ap-solid .card:not(.cc)::after { display: none; }
+html.ap-solid .card.click:not(.cc):hover { box-shadow: var(--card-shadow); }
+html.ap-solid .modal .card:not(.cc) { background: var(--bg); }
+html.ap-solid .quick { background: var(--card); border: var(--bw) solid var(--stroke); box-shadow: var(--card-shadow); backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.ap-solid .seg { background: var(--card); border: var(--bw) solid var(--stroke); }
+html.ap-solid :is(.btn:not(.link):not(.primary), .round, .chip, .lang-sw, .tabs, .ed-box, .ed-sub, .hm-ib, .hm-chip, .hm-menu) { border-width: var(--bw); }
+html.ap-solid .tabs, html.ap-solid .ed-selbar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.ap-solid .fab { box-shadow: var(--nav-shadow); }
+/* 统计页图标方块上那层白色反光只给液态玻璃（图标的渐变这里已经画了） */
+.pg .tile.ap-ic::before { display: none; }
+/* 标题流光跟着主题色（账本色）走；便当格、卡通在系统深色时也用浅色外观的颜色。
+   :where 让它不高过 home.css 里"非首页标题不要流光"那条 */
+:where(html[data-style]) .top h1 { background-image: linear-gradient(100deg, var(--t1), var(--t2), var(--t3), var(--t1)); }
+
+/* 卡通：主按钮也描粗边；彩色卡片和手机端一样不加边 */
+html[data-style="cartoon"] .btn.primary { border: var(--bw) solid var(--ink); }
+html[data-style="cartoon"] .ed-box { box-shadow: 3px 3px 0 var(--ink); }
+
+/* 手账纸：卡片上叠一层很淡的纸纹（放在内容下面） */
+html[data-style="paper"] .card:not(.cc)::before {
+  display: block; content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: var(--grain); opacity: .7; mix-blend-mode: normal;
+}
+
+/* ---------------------------------------------------------------- 底栏（手机上）；选中页签底下那块是 home.css 的 .hm-pill */
+@media (max-width: 720px) {
+  html.ap-solid .bottom-nav { background: var(--nav-bg); border: var(--bw) solid var(--stroke); box-shadow: var(--nav-shadow); }
+  html.ap-solid .bottom-nav button:not(.nav-add) { color: var(--nav-off); }
+  html.ap-solid .bottom-nav button.on:not(.nav-add) { color: var(--nav-on); }
+  /* 选中页签底下那块（会滑动）每套外观都要，颜色跟底栏的选中色 */
+  html.ap-solid .bottom-nav > .hm-pill { display: block; background: color-mix(in srgb, var(--nav-on) 16%, transparent); }
+  html.ap-solid .st-sec .seg { box-shadow: var(--nav-shadow); }
+
+  /* 手账纸：底栏是一条两端带锯齿、有斜纹的纸胶带，稍微歪一点；选中的页签像贴上去的一张小贴纸 */
+  html[data-style="paper"] .bottom-nav {
+    border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 6px 14px;
+    background: repeating-linear-gradient(135deg, var(--tape-line) 0 3px, transparent 3px 6.4px), var(--tape);
+    transform: rotate(-.6deg);
+    clip-path: polygon(5.4px 0, calc(100% - 5.4px) 0,
+      100% 8.333%, calc(100% - 5.4px) 16.667%, 100% 25%, calc(100% - 5.4px) 33.333%, 100% 41.667%, calc(100% - 5.4px) 50%,
+      100% 58.333%, calc(100% - 5.4px) 66.667%, 100% 75%, calc(100% - 5.4px) 83.333%, 100% 91.667%, calc(100% - 5.4px) 100%,
+      5.4px 100%, 0 91.667%, 5.4px 83.333%, 0 75%, 5.4px 66.667%, 0 58.333%, 5.4px 50%,
+      0 41.667%, 5.4px 33.333%, 0 25%, 5.4px 16.667%, 0 8.333%);
+  }
+  html[data-style="paper"] .bottom-nav > .hm-pill { left: 14px; width: calc((100% - 28px) / 5); background: none; }
+  html[data-style="paper"] .bottom-nav > .hm-pill::before {
+    content: ""; position: absolute; inset: 2px 4px; border-radius: 16px; background: var(--sticker);
+    rotate: 1.5deg; box-shadow: 0 1px 3px rgba(60, 40, 20, .22);
+  }
+}
+
+/* ---------------------------------------------------------------- 分类图标的方块（手机端 IconTile） */
+/* 液态玻璃：由浅到深的渐变色块，白色线条 */
+html:not(.ap-solid):not(.line-icons) .tile.ap-ic { background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 72%, #fff), var(--tc)) !important; }
+/* 便当格：淡彩底，深一号的同色线条 */
+html[data-style="bento"]:not(.line-icons) .tile.ap-ic { background: color-mix(in srgb, var(--tc) 22%, #fff) !important; }
+html[data-style="bento"]:not(.line-icons) .tile.ap-ic svg { stroke: color-mix(in srgb, var(--tc) 65%, #000); }
+/* 深色金融：深灰底，亮色线条 */
+html[data-style="dark"]:not(.line-icons) .tile.ap-ic { background: #23262d !important; }
+html[data-style="dark"]:not(.line-icons) .tile.ap-ic svg { stroke: color-mix(in srgb, var(--tc) 65%, #fff); }
+/* 卡通：糖果色实底加粗描边 */
+html[data-style="cartoon"]:not(.line-icons) .tile.ap-ic { background: color-mix(in srgb, var(--tc) 85%, #fff) !important; border: 2px solid var(--ink); }
+/* 线性（手账纸总是）：淡淡的同色底，同色描边和线条 */
+html.line-icons .tile.ap-ic, html[data-style="paper"] .tile.ap-ic {
+  background: color-mix(in srgb, var(--tc) var(--li-bg), transparent) !important;
+  border: 1.5px solid color-mix(in srgb, var(--tc) 55%, transparent);
+}
+html.line-icons .tile.ap-ic svg, html[data-style="paper"] .tile.ap-ic svg { stroke: color-mix(in srgb, var(--tc) var(--li-pct), var(--li-to)); }
+html.line-icons .tile.mini.ap-ic, html[data-style="paper"] .tile.mini.ap-ic, html[data-style="cartoon"] .tile.mini.ap-ic { border-width: 1px; }
+
+/* ---------------------------------------------------------------- 账本主题色（放在最后：盖过各外观自带的主题色） */
+html.ap-accent { --primary: var(--accent); --on-primary: var(--on-accent); --card-tint: var(--accent); }
+/* 液态玻璃：背景的光也换成账本色 */
+html.ap-accent:not(.ap-solid) { --blob1: var(--accent); --blob2: color-mix(in srgb, var(--accent) 50%, #63c2ff); }
+@media (prefers-color-scheme: dark) { html.ap-accent:not(.ap-solid) { --blob2: color-mix(in srgb, var(--accent) 50%, #1d5c8f); } }
+/* 其余外观：左上角和右边各铺一团淡淡的账本色 */
+html.ap-solid.ap-accent {
+  --glow: radial-gradient(circle 95vw at 15% 60px, color-mix(in srgb, var(--accent) var(--glow-a), transparent), transparent),
+    radial-gradient(circle 80vw at 100% 55%, color-mix(in srgb, var(--accent) var(--glow-b), transparent), transparent);
+}
+
+/* ---------------------------------------------------------------- 外观页 */
+.ap-h { font-weight: 500; }
+.ap-styles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ap-opt { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px; border-radius: 16px; border: 1px solid var(--line); background: none; color: var(--text); text-align: left; cursor: pointer; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.ap-opt:active { transform: scale(.96); }
+.ap-opt.on { border: 2px solid var(--primary); padding: 9px; }
+.ap-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.ap-opt .ap-txt { min-width: 0; }
+.ap-opt b { display: block; font-size: 14px; font-weight: 500; line-height: 18px; }
+.ap-opt small { display: block; font-size: 11px; line-height: 14px; color: var(--muted); }
+/* 每个选项一小块预览：底色、卡片、主题色圆点（玻璃和手账纸跟着系统深浅色） */
+.ap-sw { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line); background: var(--sw-bg); }
+.ap-sw i { width: 24px; height: 16px; border-radius: 5px; display: grid; place-items: center; background: var(--sw-card); }
+.ap-sw em { width: 8px; height: 8px; border-radius: 50%; background: var(--sw-dot); }
+.ap-sw[data-p="glass"] { --sw-card: rgba(255, 255, 255, .8); --sw-dot: #6c5ce7;
+  background: radial-gradient(circle at 0 0, #9e88ff, transparent 70%), radial-gradient(circle at 100% 60%, #63c2ff, transparent 70%), radial-gradient(circle at 15% 100%, #ff9ccb, transparent 70%), #d9d2ff; }
+.ap-sw[data-p="bento"] { --sw-bg: #f2f2f0; --sw-card: #ffd9cf; --sw-dot: #171717; }
+.ap-sw[data-p="dark"] { --sw-bg: #0e0f12; --sw-card: #23262d; --sw-dot: #3ddc97; }
+.ap-sw[data-p="cartoon"] { --sw-card: #fffdf6; --sw-dot: #ff5c8a; background: radial-gradient(circle, #ffe2a0 1.5px, transparent 2px) 0 0 / 9px 9px, #fff3d4; }
+.ap-sw[data-p="cartoon"] i { border: 1.5px solid var(--ink); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.ap-sw[data-p="paper"] { --sw-card: #fffcf5; --sw-dot: #c8643b; background: radial-gradient(circle, rgba(125, 106, 80, .35) .8px, transparent 1.2px) 0 0 / 6px 6px, #f6f0e4; }
+.ap-sw[data-p="paper"] i { box-shadow: 0 1px 1px rgba(107, 82, 54, .18); }
+@media (prefers-color-scheme: dark) {
+  .ap-sw[data-p="glass"] { --sw-card: rgba(255, 255, 255, .16); --sw-dot: #a394ff;
+    background: radial-gradient(circle at 0 0, #4b3ca8, transparent 70%), radial-gradient(circle at 100% 60%, #1d5c8f, transparent 70%), radial-gradient(circle at 15% 100%, #7a2e63, transparent 70%), #0d0f1e; }
+  .ap-sw[data-p="paper"] { --sw-card: #2c261f; --sw-dot: #e58a62; background: radial-gradient(circle, rgba(232, 213, 181, .25) .8px, transparent 1.2px) 0 0 / 6px 6px, #211c17; }
+}
+.ap-seg { width: 150px; flex: none; }
+.ap-tiles { display: flex; gap: 8px; flex-wrap: wrap; }
+.ap-tiles .tile { width: 34px; height: 34px; border-radius: 11px; }
+.ap-colors { display: grid; grid-template-columns: repeat(5, 40px); gap: 10px; }
+.ap-colors button { width: 40px; height: 40px; border-radius: 12px; border: 0; padding: 0; cursor: pointer; color: #fff; font-size: 18px; font-weight: 700; line-height: 1; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.ap-colors button:active { transform: scale(.9); }
+.ap-colors button.on { outline: 2px solid var(--text); outline-offset: 2px; }
+.ap-colors button.on::after { content: "✓"; }

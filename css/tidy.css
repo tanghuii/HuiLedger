@@ -1,0 +1,53 @@
+/* tidy */
+/* 整理转账 / 整理分类（modules/tidy.js）：和手机端 TransfersScreen、CategoryCleanupScreen 一个样子 */
+
+/* 顶栏：返回、标题、右边的文字按钮。电脑宽屏也显示（右边的按钮只在这里） */
+.subbar[data-tdp] { display: flex; align-items: center; gap: 10px; }
+.subbar[data-tdp] > b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-acts { display: flex; flex: none; gap: 2px; }
+.td-tb { border: 0; background: none; color: var(--primary); font: inherit; font-size: 14px; font-weight: 500; padding: 8px 8px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.td-tb:active { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+
+.td-empty { margin: 4px 16px; }
+.td-sum { display: flex; align-items: center; gap: 8px; padding: 0 0 6px 16px; font-size: 14px; }
+.td-sum > span { flex: 1; min-width: 0; }
+.td-list { gap: 10px; }
+
+/* 一条建议：一张玻璃卡片，圆角 20、内边距 10 */
+.td-card { padding: 10px; border-radius: 20px; }
+.td-r1 { display: flex; align-items: center; min-height: 48px; }
+.td-r1 .tile.td-logo { width: 30px; height: 30px; border-radius: 9px; font-size: 10px; }
+.td-r1 .tile.td-ctile { width: 34px; height: 34px; border-radius: 10px; }
+.td-arrow { padding: 0 10px; color: var(--muted); }
+.td-name { flex: 1; min-width: 0; margin-left: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-amt { flex: none; margin-left: 8px; font-weight: 600; }
+.td-cname { margin-left: 10px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 勾选框：48px 的点击区里一个 18px 的方框，选中时填主题色 */
+.td-ck { flex: none; width: 48px; height: 48px; margin: -4px 0 -4px -6px; display: grid; place-items: center; border: 0; background: none; padding: 0; cursor: pointer; color: var(--on-primary); }
+.td-ck::before { content: ""; grid-area: 1 / 1; width: 18px; height: 18px; border-radius: 3px; border: 2px solid var(--muted); box-sizing: border-box; transition: background .15s, border-color .15s; }
+.td-ck svg { grid-area: 1 / 1; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .15s; }
+.td-ck.on::before { background: var(--primary); border-color: var(--primary); }
+.td-ck.on svg { opacity: 1; }
+.td-ck:focus-visible { outline: 2px solid var(--primary); outline-offset: -6px; border-radius: 12px; }
+
+.td-r2 { display: flex; align-items: center; padding-left: 42px; gap: 4px; }
+.td-what { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; color: var(--primary); }
+.td-ign { flex: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); padding: 6px 8px; border-radius: 999px; cursor: pointer; }
+.td-ign:active { background: color-mix(in srgb, var(--muted) 14%, transparent); }
+
+/* 两笔账单的完整记录：日期一行，下面一条账单（点开看全部内容） */
+.td-txs { padding: 0 6px; }
+.td-date { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.td-txs .row.click { margin: 0 -6px; padding: 6px; }
+
+/* 整理分类：每一项「X → 一级 · 子」，右边多少笔 */
+.td-mv { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px 0 42px; font-size: 14px; }
+.td-mv > span:first-child { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-cnt { flex: none; font-size: 12px; color: var(--muted); }
+
+/* 底部的按钮：贴在屏幕底边，留出手势条 */
+.td-foot { position: sticky; bottom: 0; z-index: 2; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); margin-top: 4px; }
+.td-go { width: 100%; padding: 13px 16px; font-size: 15px; box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--primary) 70%, transparent); }
+.td-go:disabled { box-shadow: none; }
+@media (min-width: 860px) { .td-foot { max-width: 520px; margin-left: auto; } }
