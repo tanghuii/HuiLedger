@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>行星账本 · Planet Ledger</title>
+<title>行星记账 · Planet Ledger</title>
 <meta name="description" content="可爱又好用的记账本：九大行星陪你记账，安卓 App 和 iPhone 网页版，数据云端同步。">
 <meta name="theme-color" content="#8e7cf8">
-<meta property="og:title" content="行星账本 · Planet Ledger">
+<meta property="og:title" content="行星记账 · Planet Ledger">
 <meta property="og:description" content="九大行星陪你记账：一笔几秒，AI 帮你整理账单，手机和网页同步。免费。">
 <meta property="og:image" content="https://tanghuii.github.io/HuiLedger/icons/icon-512.png">
 <meta property="og:url" content="https://tanghuii.github.io/HuiLedger/download/">
@@ -60,7 +60,7 @@ nav .logo img { width: 34px; height: 34px; border-radius: 10px; }
 
 /* 首屏 */
 .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 32px; align-items: center; padding: 36px 0 24px; }
-.hero h1 { font-size: clamp(40px, 7vw, 68px); line-height: 1.05; margin: 0 0 6px; letter-spacing: -.01em;
+.hero h1 { font-size: clamp(40px, 7vw, 68px); line-height: 1.2; margin: 0 0 4px; padding-bottom: .06em; letter-spacing: -.01em;
   background: linear-gradient(100deg, var(--primary), #5bb8f2 40%, #ff8fc2 70%, var(--primary)); background-size: 220% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 8s linear infinite; }
 @keyframes shine { to { background-position: -220% 0; } }
@@ -173,14 +173,14 @@ footer a { color: inherit; }
 <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
 <div class="wrap">
   <nav>
-    <span class="logo"><img src="../icons/planets/brand-180.png" alt=""><span data-zh="行星账本" data-en="Planet Ledger">行星账本</span></span>
+    <span class="logo"><img src="../icons/planets/brand-180.png" alt=""><span data-zh="行星记账" data-en="Planet Ledger">行星记账</span></span>
     <button class="chip" id="lang" type="button">English</button>
   </nav>
 
   <section class="hero">
     <div>
-      <h1 data-zh="行星账本" data-en="Planet Ledger">行星账本</h1>
-      <p class="en" data-zh="Planet Ledger" data-en="行星账本">Planet Ledger</p>
+      <h1 data-zh="行星记账" data-en="Planet Ledger">行星记账</h1>
+      <p class="en" data-zh="Planet Ledger" data-en="行星记账">Planet Ledger</p>
       <p class="lead" data-zh="九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。" data-en="Nine little planets keep you company while you track money. Log an entry in seconds, let AI sort your statements, and sync between phone and web. Free, no ads.">九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。</p>
       <div class="btns">
         <a class="btn primary" id="dl-android" href="https://github.com/tanghuii/HuiLedger/releases/latest">
@@ -269,7 +269,7 @@ footer a { color: inherit; }
   </section>
 
   <footer>
-    <p><span data-zh="行星账本 Planet Ledger" data-en="Planet Ledger · 行星账本">行星账本 Planet Ledger</span> · <span id="ver"></span> · <a href="https://github.com/tanghuii/HuiLedger/releases" data-zh="所有版本" data-en="All releases">所有版本</a></p>
+    <p><span data-zh="行星记账 Planet Ledger" data-en="Planet Ledger · 行星记账">行星记账 Planet Ledger</span> · <span id="ver"></span> · <a href="https://github.com/tanghuii/HuiLedger/releases" data-zh="所有版本" data-en="All releases">所有版本</a></p>
   </footer>
 </div>
 
@@ -284,7 +284,7 @@ function applyLang() {
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-zh]').forEach((el) => { el.textContent = el.dataset[lang]; });
   document.getElementById('lang').textContent = lang === 'zh' ? 'English' : '中文';
-  document.title = lang === 'zh' ? '行星账本 · Planet Ledger' : 'Planet Ledger · 行星账本';
+  document.title = lang === 'zh' ? '行星记账 · Planet Ledger' : 'Planet Ledger · 行星记账';
   drawPlanets();
   updateMeta();
 }

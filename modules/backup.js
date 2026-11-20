@@ -30,7 +30,7 @@ function bkDump() {
 function bkPeek(text) {
   let o;
   try { o = JSON.parse(text); } catch { o = null; }
-  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('不是行星账本的备份', 'Not a Planet Ledger backup'));
+  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('不是行星记账的备份', 'Not a Planet Ledger backup'));
   const data = {};
   for (const k of BK_KINDS) {
     data[k] = o[k].map(HL_JSON[k]);

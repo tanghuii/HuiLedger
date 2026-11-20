@@ -1,6 +1,6 @@
 {
-  "name": "行星账本",
-  "short_name": "行星账本",
+  "name": "行星记账",
+  "short_name": "行星记账",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",

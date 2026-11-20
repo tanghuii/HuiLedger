@@ -1,4 +1,4 @@
-// 行星账本网页版。没有构建步骤：纯 JS，直接连 Supabase。
+// 行星记账网页版。没有构建步骤：纯 JS，直接连 Supabase。
 // 数据和手机端同一套：云端 records 表里每行一条账单 / 分类 / 账户 / 账本，内容在 data 里。
 // 这里把全部数据读进内存，统计口径和手机端保持一致（见 computeLookup）。
 'use strict';
@@ -299,7 +299,7 @@ function render() {
   const tabOn = (k) => (k === 'ledger' ? state.tab === 'ledger' && !cal : k === 'calendar' ? cal : state.tab === k);
   app.innerHTML = `<div class="wrap hm-t-${h(state.tab)}${cal ? ' hm-cal' : ''}${hm.scrolled ? ' hm-scrolled' : ''}${entering && !viewing ? ' hm-enter' : ''}${opening ? ' dt-enter' : ''}${leaving ? ' dt-leave' : ''}${viewing ? ' dt-on' : ''}">
     <div class="top${main ? '' : ' hm-sub'}${state.tab === 'ledger' && !cal ? ' hm-shim' : ''}">
-      <h1><span class="hm-d">${tr('行星账本', 'Planet Ledger')}</span><span class="hm-p">${h(title)}</span>${typeof plTwinkle === 'function' ? plTwinkle() : ''}</h1>
+      <h1><span class="hm-d">${tr('行星记账', 'Planet Ledger')}</span><span class="hm-p">${h(title)}</span>${typeof plTwinkle === 'function' ? plTwinkle() : ''}</h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
       <div class="tabs">${tabs.map(([k, n]) => `<button class="${tabOn(k) ? 'on' : ''}" data-act="tab" data-v="${k}"${k === 'ledger' ? ' data-list="1"' : ''}>${n}</button>`).join('')}</div>
       <button class="search" data-act="search-open">${SEARCH_SVG}<span>${tr('搜索全部账单', 'Search all')}</span></button>
@@ -680,7 +680,7 @@ function loginView() {
     <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>` : '';
   return `<div class="wrap"><div class="card login grid" style="position:relative">
     ${langSwitch()}
-    <div class="pl-head">${typeof plLoginHero === 'function' ? plLoginHero() : ''}<h1 style="margin:0">${tr('行星账本', 'Planet Ledger')}</h1>
+    <div class="pl-head">${typeof plLoginHero === 'function' ? plLoginHero() : ''}<h1 style="margin:0">${tr('行星记账', 'Planet Ledger')}</h1>
     <div class="muted">${heading}</div></div>
     ${state.notice ? `<p class="ok">${h(state.notice)}</p>` : ''}
     ${CLOUD.url ? '' : `<label class="f">${tr('Supabase 项目地址', 'Supabase project URL')}<input id="l-url" value="${h(c.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>

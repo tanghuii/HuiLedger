@@ -1,4 +1,4 @@
-// 行星账本网页版的公共底座：最先加载，只放定义，不碰页面。
+// 行星记账网页版的公共底座：最先加载，只放定义，不碰页面。
 // 1. 和手机端共享的设置（预算、自动记账……）：云端 records 表里 kind = 'setting' 的那几行
 // 2. 功能模块的登记处：各个模块文件把自己的页面、按钮动作、"我的"页入口登记到 MOD 里，app.js 统一分发
 // 3. 离线：数据快照存在 IndexedDB，断网时的修改先排队，联网后自动补传
@@ -18,7 +18,7 @@ function setLang(l) {
   LANG = LANG_MODE === 'auto' ? sysLang() : LANG_MODE;
   try { localStorage.setItem('hl.lang', JSON.stringify(LANG_MODE)); } catch { /* 隐私模式存不了 */ }
   document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
-  document.title = tr('行星账本', 'Planet Ledger');
+  document.title = tr('行星记账', 'Planet Ledger');
   // 旧的提示是按旧语言写的，换语言就清掉
   if (typeof state !== 'undefined') { state.error = ''; state.notice = ''; }
   render();

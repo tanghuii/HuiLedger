@@ -1,4 +1,4 @@
-/* 行星账本网页版。配色跟手机端的"液态玻璃"外观一致，随系统深浅色切换。 */
+/* 行星记账网页版。配色跟手机端的"液态玻璃"外观一致，随系统深浅色切换。 */
 /* 数字用 Inter（SIL OFL，授权写在字体文件里），和手机端一样 */
 @font-face { font-family: "Inter Num"; src: url("fonts/inter_regular.otf") format("opentype"); font-weight: 100 500; font-display: swap; }
 @font-face { font-family: "Inter Num"; src: url("fonts/inter_semibold.otf") format("opentype"); font-weight: 600 900; font-display: swap; }

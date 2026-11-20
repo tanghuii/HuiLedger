@@ -1,4 +1,4 @@
-/* 行星账本的星球（modules/cosmos.js）：首页的本月行星和"土星月"、选星球、登录页小星系、彩色卡片的星环装饰、
+/* 行星记账的星球（modules/cosmos.js）：首页的本月行星和"土星月"、选星球、登录页小星系、彩色卡片的星环装饰、
    底栏 ＋ 的轨道、流星、预算环上的小月亮。颜色用 style.css 的变量，各外观跟着变；系统要求少动画时都停住。 */
 
 svg.planet { display: block; flex: none; overflow: visible; }

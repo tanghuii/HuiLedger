@@ -1,4 +1,4 @@
-// 行星账本网页版：和手机端对齐的那些页面（详情、搜索、日历、统计、报销项目、补贴、周期性收支、账户明细、导出）。
+// 行星记账网页版：和手机端对齐的那些页面（详情、搜索、日历、统计、报销项目、补贴、周期性收支、账户明细、导出）。
 // 这个文件在 app.js 之前加载，只放函数；用到的 state、money、txRow 等都在 app.js 里，调用时才去找。
 'use strict';
 
@@ -759,7 +759,7 @@ function exportCsv() {
       (t.kind === KIND.EXPENSE ? '-' : '') + (t.amountCents / 100).toFixed(2), q(state.data.ledger.get(t.ledgerId)?.name), q(state.data.account.get(t.accountId)?.name), q(state.data.account.get(t.toAccountId)?.name),
       q(t.note), ['', '待报销', '已报销'][t.reimburse ?? 0], q((t.tags ?? '').split(' ').filter(Boolean).map((x) => '#' + x).join(' ')), foreign ? t.currency : HOME, ((foreign ? t.origCents : t.amountCents) / 100).toFixed(2)].join(','));
   }
-  const name = `${tr('行星账本', 'PlanetLedger')}-${new Date().toISOString().slice(0, 10)}.csv`, blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+  const name = `${tr('行星记账', 'PlanetLedger')}-${new Date().toISOString().slice(0, 10)}.csv`, blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
   // iPhone 上装成主屏幕 App 时下载链接没反应：用系统的分享面板（存到"文件"、发给别人）
   const file = typeof File === 'function' ? new File([blob], name, { type: 'text/csv' }) : null;
   if (IS_IOS && file && navigator.canShare?.({ files: [file] })) { navigator.share({ files: [file] }).catch(() => { /* 用户取消了 */ }); return; }

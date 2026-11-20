@@ -1,4 +1,4 @@
-// 行星账本网页版：要用到 AI 的那些功能（一句话记账 / 问账本、月度复盘、对账），以及净资产曲线、修正余额。
+// 行星记账网页版：要用到 AI 的那些功能（一句话记账 / 问账本、月度复盘、对账），以及净资产曲线、修正余额。
 // 和手机端一一对应：AskScreen.kt、InsightScreens.kt（ReviewScreen / NetWorthCard）、ReconcileScreen.kt + ai/Reconcile.kt、
 // AccountsScreen.kt 的修正余额弹窗 + LedgerViewModel.checkBalance。
 // 这个页面没有服务器，所以是浏览器直接连 AI 服务（Claude 或 DeepSeek，在 AI 设置里选）：
