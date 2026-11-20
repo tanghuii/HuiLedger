@@ -2,7 +2,7 @@
 // 1. 记一笔 / 修改（EditScreen.kt）：标题栏里切支出收入转账、大金额（能选币种、改折合金额）、一行六个分类图标、小胶囊、备注、
 //    收入可以抵扣支出（补贴、退款）、支出下面列出抵扣它的补贴，自带数字键盘（能算 + −，再记 / 保存）
 // 2. 账单行（TxRow.kt）：侧滑（Gestures.kt SwipeRow）左滑删除、右滑复制，拉过一半多才生效，都能撤销；账户明细里按账户的角度显示
-// 3. 多选：长按一行（手指、鼠标都行，电脑上也可以右键），批量改项目、资金来源、分类、报销状态，或者一起删
+// 3. 多选：长按一行（手指、鼠标都行，电脑上也可以右键），批量改项目、资金来源、分类、账户、报销状态，或者一起删
 // app.js 的 render() 在 state.editing 不为空时画 editorView()；txRow() 也在这里。
 // 撤销提示、多选操作条、删除确认画在 #app 外面的一层（#ed-layer），整页重画不影响它们。
 // 关联支出 / 退款报销的面板和打分在 modules/links.js。
@@ -757,7 +757,7 @@ function edPaintRows() {
   for (const r of document.querySelectorAll('#app .row.click.ed-tx')) r.classList.toggle('sel-on', !!state.sel?.has(Number(r.dataset.v)));
 }
 function edSelect(set) {
-  state.sel = set; ed.bulk = { project: null, fund: null, categoryId: null, reimburse: null }; ed.bulkPick = null;
+  state.sel = set; ed.bulk = { project: null, fund: null, categoryId: null, reimburse: null, accountId: null }; ed.bulkPick = null;
   edPaintLayer(); edPaintRows();
 }
 function edExitSelect() { state.sel = null; ed.bulk = null; ed.bulkPick = null; ed.busy = ''; edPaintLayer(); edPaintRows(); }
@@ -779,7 +779,9 @@ function edBulkPlan() {
       if (cat && !!cat.isIncome === (t.kind === KIND.INCOME)) n.categoryId = cat.id;
     }
     if (b.reimburse != null && t.kind === KIND.EXPENSE) n.reimburse = b.reimburse;
-    if (['project', 'fund', 'categoryId', 'reimburse'].some((k) => String(n[k] ?? '') !== String(t[k] ?? ''))) out.push({ old: t, now: n });
+    // 账户：支出、收入改记账账户；转账改转出账户（不能和转入的同一个）
+    if (b.accountId != null && (t.kind !== KIND.TRANSFER || t.toAccountId !== b.accountId)) n.accountId = b.accountId;
+    if (['project', 'fund', 'categoryId', 'reimburse', 'accountId'].some((k) => String(n[k] ?? '') !== String(t[k] ?? ''))) out.push({ old: t, now: n });
   }
   return out;
 }
@@ -796,6 +798,7 @@ function edSelBar() {
       <button class="chip ${b.project != null ? 'on' : ''}" data-ed="pick" data-v="project">${edSvg('target')}${lab(tr('项目', 'Project'), b.project)}</button>
       <button class="chip ${b.fund != null ? 'on' : ''}" data-ed="pick" data-v="fund">${edSvg('coins')}${lab(tr('资金来源', 'Funding'), b.fund)}</button>
       <button class="chip ${cat ? 'on' : ''}" data-ed="pick" data-v="categoryId">${edSvg('layers')}${cat ? tr('分类 · ', 'Category · ') + h(edCatName(cat)) : tr('分类', 'Category')}</button>
+      <button class="chip ${b.accountId != null ? 'on' : ''}" data-ed="pick" data-v="accountId">${edSvg('wallet')}${b.accountId != null ? tr('账户 · ', 'Account · ') + h(state.data.account.get(b.accountId)?.name ?? '') : tr('账户', 'Account')}</button>
       <button class="chip ${b.reimburse != null ? 'on' : ''}" data-ed="pick" data-v="reimburse">${edSvg('receipt')}${b.reimburse != null ? tr('报销 · ', 'Reimburse · ') + edReimburse()[b.reimburse] : tr('报销', 'Reimburse')}</button>
     </div>
     <div class="ed-selbtns"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>${tr('删除', 'Delete')}</button>
@@ -814,6 +817,9 @@ function edBulkPop() {
   } else if (p === 'reimburse') {
     title = tr('报销', 'Reimburse');
     body += edReimburse().map((n, i) => opt(i, n, b.reimburse === i)).join('');
+  } else if (p === 'accountId') {
+    title = tr('账户', 'Account');
+    body += edAccounts().map((a) => opt(a.id, h(a.name), b.accountId === a.id, accountTile(a, 'sm'))).join('');
   } else if (p === 'categoryId') {
     title = tr('分类', 'Category');
     const cats = [...state.data.category.values()].sort((x, y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0) || x.id - y.id);
@@ -874,7 +880,7 @@ async function edLayerClick(ev) {
     case 'pick': ed.bulkPick = v; break;
     case 'pop-close': if (ev.target !== el) return; ed.bulkPick = null; break;
     case 'pop-x': ed.bulkPick = null; break;
-    case 'bset': { const k = el.dataset.k; ed.bulk[k] = el.dataset.none ? null : k === 'categoryId' || k === 'reimburse' ? Number(v) : v; ed.bulkPick = null; break; }
+    case 'bset': { const k = el.dataset.k; ed.bulk[k] = el.dataset.none ? null : k === 'categoryId' || k === 'reimburse' || k === 'accountId' ? Number(v) : v; ed.bulkPick = null; break; }
     case 'bnew': { const name = ed.layer.querySelector('#ed-bnew')?.value.trim(); if (!name) return; ed.bulk[v] = name; ed.bulkPick = null; break; }
     case 'apply': edBulkApply(); return;
     case 'del': edBulkDelete(); return;
