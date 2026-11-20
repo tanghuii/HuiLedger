@@ -1,24 +1,65 @@
 // 行星账本网页版：要用到 AI 的那些功能（一句话记账 / 问账本、月度复盘、对账），以及净资产曲线、修正余额。
 // 和手机端一一对应：AskScreen.kt、InsightScreens.kt（ReviewScreen / NetWorthCard）、ReconcileScreen.kt + ai/Reconcile.kt、
 // AccountsScreen.kt 的修正余额弹窗 + LedgerViewModel.checkBalance。
-// 这个页面没有服务器，所以是浏览器直接连 Claude API：密钥只存在这个浏览器的本地存储里，请求直接发给 api.anthropic.com。
+// 这个页面没有服务器，所以是浏览器直接连 AI 服务（Claude 或 DeepSeek，在 AI 设置里选）：
+// 密钥只存在这个浏览器的本地存储里，请求直接发给 api.anthropic.com / api.deepseek.com。
 // 这个文件在 app.js 之前加载，只放函数；别的页面会调用：askView、quickBar、sendAsk、reviewView、netWorthCard、fixBalance、reconcileView、aiAction、aiChange。
 'use strict';
 
-const AI_MODEL_DEFAULT = 'claude-opus-5-5';
-const aiKey = () => store.get('hl.apiKey', '');
-const aiModel = () => store.get('hl.model', '') || AI_MODEL_DEFAULT;
+// ---------------------------------------------------------------- AI 服务：Claude 或 DeepSeek（只存在这台设备上，不同步）
+// 每家各有自己的密钥、选中的模型、上次刷新到的模型列表。Claude 的密钥和模型还用原来的 hl.apiKey / hl.model。
+const AI_PROVIDERS = {
+  claude: {
+    name: 'Claude', keyK: 'hl.apiKey', modelK: 'hl.model', listK: 'hl.aiModels.claude', ph: 'sk-ant-…',
+    models: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5' }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' }, { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' }],
+  },
+  deepseek: {
+    name: 'DeepSeek', keyK: 'hl.deepseekKey', modelK: 'hl.deepseekModel', listK: 'hl.aiModels.deepseek', ph: 'sk-…',
+    models: [{ id: 'deepseek-chat', name: '' }, { id: 'deepseek-reasoner', name: '' }],
+  },
+};
+const AI_MODEL_DEFAULT = AI_PROVIDERS.claude.models[0].id;
+const aiProvider = () => (store.get('hl.aiProvider', '') === 'deepseek' ? 'deepseek' : 'claude');
+const aiKey = (p = aiProvider()) => store.get(AI_PROVIDERS[p].keyK, '') || '';
+const aiModel = (p = aiProvider()) => store.get(AI_PROVIDERS[p].modelK, '') || AI_PROVIDERS[p].models[0].id;
+/** 可选的模型：上次刷新到的列表（没刷新过是默认的几个）；之前存的模型不在里面也留着。 */
+function aiModelList(p, chosen = aiModel(p)) {
+  const saved = store.get(AI_PROVIDERS[p].listK, null);
+  const list = Array.isArray(saved) && saved.length ? saved : AI_PROVIDERS[p].models;
+  return list.some((m) => m.id === chosen) ? list : [{ id: chosen, name: '' }, ...list];
+}
 
 class AiError extends Error {}
 
+/** DeepSeek 只认文字：要发图片或 PDF 时在发送之前就停下。 */
+const aiNoFilesMsg = () => tr('DeepSeek 不能读图片和 PDF，请在 AI 设置里换成 Claude', "DeepSeek can't read images or PDFs. Switch to Claude in AI settings.");
+function aiCheckFiles() { if (aiProvider() === 'deepseek') throw new AiError(aiNoFilesMsg()); }
+
+const aiNetErr = () => new AiError(tr('网络连接失败，请检查网络后重试。', 'Connection failed. Check your network and try again.'));
+/** 两家共用的错误说法。 */
+function aiHttpErr(status, msg, model) {
+  if (status === 401 || status === 403) return new AiError(tr('API 密钥无效或没有权限，请检查设置。', 'The API key is invalid or lacks permission. Check the settings.'));
+  if (status === 402) return new AiError(tr('账户余额不足，请先充值。', 'Out of balance. Top up your account first.'));
+  if (status === 404 || /model.*(not ?exist|not found)/i.test(msg)) return new AiError(tr(`找不到模型「${model}」，请在 AI 设置里换一个。`, `Model "${model}" not found. Pick another in AI settings.`));
+  if (status === 413) return new AiError(tr('内容太大，这次发不过去。', 'Too large to send.'));
+  if (status === 429) return new AiError(tr('请求太频繁或额度已用完，请稍后再试。', 'Rate limited or out of credit. Try again later.'));
+  if (status >= 500) return new AiError(tr('AI 服务暂时繁忙，请稍后再试。', 'The AI service is busy. Try again later.'));
+  return new AiError(tr(`没成功（${status}）：`, `Failed (${status}): `) + msg);
+}
+const aiTooLong = () => Object.assign(new AiError(tr('内容太长，AI 没写完。', 'Too long; the AI ran out of space.')), { tooLong: true });
+const aiBadJson = () => new AiError(tr('AI 返回的结果无法解析，请重试。', "Couldn't parse the AI's answer. Try again."));
+
 /**
  * 发一次请求，让模型按 schema 返回 JSON。content 可以是字符串，也可以是内容块数组（带 PDF、图片时）。
- * 被安全策略拒绝时开了服务端的备用模型（fallbacks），仍然被拒就报错。输出被截断时错误带 tooLong，调用方可以拆小再试。
+ * 按 AI 设置里选的服务分开走：Claude 用下面这段，DeepSeek 用 aiDeepseekJson。
+ * Claude 被安全策略拒绝时开了服务端的备用模型（fallbacks），仍然被拒就报错。输出被截断时错误带 tooLong，调用方可以拆小再试。
  */
 async function aiJson(system, content, schema, maxTokens = 16000) {
   if (!aiKey()) throw new AiError(tr('还没有填 API 密钥。', 'No API key set.'));
+  if (aiProvider() === 'deepseek') return aiDeepseekJson(system, content, schema, maxTokens);
+  const model = aiModel('claude'), key = aiKey('claude');
   const body = {
-    model: aiModel(), max_tokens: maxTokens, system,
+    model, max_tokens: maxTokens, system,
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
     fallbacks: 'default',
@@ -26,7 +67,7 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
   const send = (b, beta) => fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2023-06-01',
+      'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true', ...(beta ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {}),
     },
     body: JSON.stringify(b),
@@ -39,31 +80,124 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
       const text = await res.clone().text();
       if (/fallback/i.test(text)) { const { fallbacks, ...plain } = body; res = await send(plain, false); }
     }
-  } catch { throw new AiError(tr('网络连接失败，请检查网络后重试。', 'Connection failed. Check your network and try again.')); }
+  } catch { throw aiNetErr(); }
   const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg = json?.error?.message ?? `HTTP ${res.status}`;
-    if (res.status === 401 || res.status === 403) throw new AiError(tr('API 密钥无效或没有权限，请检查设置。', 'The API key is invalid or lacks permission. Check the settings.'));
-    if (res.status === 404) throw new AiError(tr(`找不到模型「${aiModel()}」，请检查设置里的模型名称。`, `Model "${aiModel()}" not found. Check the model name in settings.`));
-    if (res.status === 413) throw new AiError(tr('内容太大，这次发不过去。', 'Too large to send.'));
-    if (res.status === 429) throw new AiError(tr('请求太频繁或额度已用完，请稍后再试。', 'Rate limited or out of credit. Try again later.'));
-    if (res.status >= 500) throw new AiError(tr('AI 服务暂时繁忙，请稍后再试。', 'The AI service is busy. Try again later.'));
-    throw new AiError(tr(`没成功（${res.status}）：`, `Failed (${res.status}): `) + msg);
-  }
+  if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
   if (json.stop_reason === 'refusal') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
-  if (json.stop_reason === 'max_tokens') throw Object.assign(new AiError(tr('内容太长，AI 没写完。', 'Too long; the AI ran out of space.')), { tooLong: true });
+  if (json.stop_reason === 'max_tokens') throw aiTooLong();
   const text = (json.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-  try { return JSON.parse(text); } catch { throw new AiError(tr('AI 返回的结果无法解析，请重试。', "Couldn't parse the AI's answer. Try again.")); }
+  try { return JSON.parse(text); } catch { throw aiBadJson(); }
 }
 
+/**
+ * DeepSeek（OpenAI 那种 chat/completions 接口）：只收文字。JSON 的格式写进 system，打开 json_object 模式；
+ * 模型不认 response_format 就去掉再发一次。max_tokens 按模型的上限压一下（chat 8K，reasoner 64K）。
+ */
+async function aiDeepseekJson(system, content, schema, maxTokens) {
+  const parts = typeof content === 'string' ? [content] : content.map((b) => { if (b.type !== 'text') throw new AiError(aiNoFilesMsg()); return b.text; });
+  const model = aiModel('deepseek'), key = aiKey('deepseek');
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: `${system}\n\n只输出 JSON（一个 json 对象），不要任何别的文字。它必须符合这个 JSON Schema：\n${JSON.stringify(schema)}` },
+      { role: 'user', content: parts.join('\n\n') },
+    ],
+    response_format: { type: 'json_object' },
+    max_tokens: Math.min(maxTokens, /reasoner/i.test(model) ? 64000 : 8192),
+    stream: false,
+  };
+  const send = (b) => fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(b),
+  });
+  let res;
+  try {
+    res = await send(body);
+    if (res.status === 400) {
+      const text = await res.clone().text();
+      if (/response_format|json_object/i.test(text)) { const { response_format, ...plain } = body; res = await send(plain); }
+    }
+  } catch { throw aiNetErr(); }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
+  const choice = json?.choices?.[0];
+  if (choice?.finish_reason === 'length') throw aiTooLong();
+  if (choice?.finish_reason === 'content_filter') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
+  const text = String(choice?.message?.content ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try { return JSON.parse(text); } catch { throw aiBadJson(); }
+}
+
+/** 用填的密钥取这家的模型列表：[{ id, name }]。失败抛 AiError（话很短，显示在设置框里）。 */
+async function aiFetchModels(p, key) {
+  const fail = (status) => new AiError(status === 401 || status === 403 ? tr('密钥无效', 'Invalid key') : status === 402 ? tr('余额不足', 'Out of balance')
+    : status === 429 ? tr('太频繁，稍后再试', 'Too many requests. Try later') : tr(`没成功（${status}）`, `Failed (${status})`));
+  const get = async (url, headers) => {
+    let res;
+    try { res = await fetch(url, { headers }); } catch { throw new AiError(tr(`浏览器连不上 ${AI_PROVIDERS[p].name}`, `Can't reach ${AI_PROVIDERS[p].name}`)); }
+    if (!res.ok) throw fail(res.status);
+    const json = await res.json().catch(() => null);
+    if (!Array.isArray(json?.data)) throw new AiError(tr('返回的列表看不懂', "Couldn't read the list"));
+    return json;
+  };
+  const out = [];
+  if (p === 'claude') {
+    const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    let after = '';
+    for (let page = 0; page < 20; page++) {
+      const json = await get(`https://api.anthropic.com/v1/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`, headers);
+      for (const m of json.data) if (/^claude-/.test(m?.id ?? '')) out.push({ id: m.id, name: String(m.display_name ?? '') });
+      if (!json.has_more || !json.last_id) break;
+      after = json.last_id;
+    }
+  } else {
+    const json = await get('https://api.deepseek.com/models', { Authorization: `Bearer ${key}` });
+    for (const m of json.data) if (m?.id) out.push({ id: String(m.id), name: '' });
+  }
+  if (!out.length) throw new AiError(tr('没有可用的模型', 'No models available'));
+  return out;
+}
+
+// ---------------------------------------------------------------- AI 设置（弹窗）
+// 打开时把现在的设置抄一份草稿（state.aiDraft），切换 Claude / DeepSeek、刷新列表都只改草稿；点保存才写进本机。
+
+function aiDraftNew() {
+  const d = { p: aiProvider(), keys: {}, models: {}, status: '', busy: false, open: false };
+  for (const p of Object.keys(AI_PROVIDERS)) { d.keys[p] = ''; d.models[p] = aiModel(p); }
+  return d;
+}
+const aiDraft = () => state.aiDraft ?? (state.aiDraft = aiDraftNew());
+
 function aiSettingsView() {
+  const d = aiDraft(), P = AI_PROVIDERS[d.p], saved = aiKey(d.p), chosen = d.models[d.p];
+  const list = aiModelList(d.p, chosen), cur = list.find((m) => m.id === chosen);
+  const label = (m) => `<span class="ai-mn"><b>${h(m.name || m.id)}</b>${m.name ? `<small>${h(m.id)}</small>` : ''}</span>`;
+  const seg = Object.entries(AI_PROVIDERS).map(([k, v]) => `<button type="button" class="${k === d.p ? 'on' : ''}" data-act="ai-prov" data-v="${k}" aria-pressed="${k === d.p}">${v.name}</button>`).join('');
   return `<div class="modal" data-act="ai-close"><div class="card grid" role="dialog" aria-label="${tr('AI 设置', 'AI settings')}">
     <b style="font-size:18px">${tr('AI 设置', 'AI settings')}</b>
-    <label class="f">${tr('Claude API 密钥', 'Claude API key')}<input id="ai-key" type="password" autocomplete="off" placeholder="${aiKey() ? tr('已保存，留空表示不改', 'Saved; leave blank to keep') : 'sk-ant-…'}"></label>
-    <label class="f">${tr('模型', 'Model')}<input id="ai-model" value="${h(aiModel())}" autocomplete="off"></label>
-    <p class="muted small" style="margin:0">${tr('密钥只存在这个浏览器里。公用电脑上不要保存。', "The key stays in this browser. Don't save it on a shared computer.")}</p>
-    <div class="between"><span>${aiKey() ? `<button class="btn danger" data-act="ai-clear">${tr('清除密钥', 'Remove key')}</button>` : ''}</span><span><button class="btn" data-act="ai-close-btn">${tr('取消', 'Cancel')}</button> <button class="btn primary" data-act="ai-save">${tr('保存', 'Save')}</button></span></div>
+    <div class="seg">${seg}</div>
+    <label class="f">${tr('API 密钥', 'API key')}<input id="ai-key" type="password" autocomplete="off" value="${h(d.keys[d.p])}" placeholder="${saved ? tr('已保存，留空表示不改', 'Saved; leave blank to keep') : P.ph}"></label>
+    <div class="f ai-mf"><span>${tr('模型', 'Model')}</span>
+      <div class="ai-mrow"><button type="button" class="ai-msel${d.open ? ' open' : ''}" data-act="ai-mopen" aria-haspopup="listbox" aria-expanded="${d.open}">${label(cur)}<i aria-hidden="true">▾</i></button>
+        <button type="button" class="btn" data-act="ai-refresh" ${d.busy ? 'disabled' : ''}>${d.busy ? `<span class="ai-spin" role="status" aria-label="${tr('正在刷新', 'Refreshing')}"></span>` : tr('刷新', 'Refresh')}</button></div>
+      ${d.open ? `<div class="ai-mlist" role="listbox">${list.map((m) => `<button type="button" role="option" aria-selected="${m.id === chosen}" class="${m.id === chosen ? 'on' : ''}" data-act="ai-mpick" data-v="${h(m.id)}">${label(m)}</button>`).join('')}</div>` : ''}
+      ${d.status ? `<div class="err small">${h(d.status)}</div>` : ''}</div>
+    <p class="muted small" style="margin:0">${tr('密钥只保存在这台设备上', 'The key stays on this device')}</p>
+    <div class="between"><span>${saved ? `<button class="btn danger" data-act="ai-clear">${tr('清除密钥', 'Remove key')}</button>` : ''}</span><span><button class="btn" data-act="ai-close-btn">${tr('取消', 'Cancel')}</button> <button class="btn primary" data-act="ai-save">${tr('保存', 'Save')}</button></span></div>
   </div></div>`;
+}
+
+/** 刷新：用框里新填的密钥（没填就用存着的）取列表；取到就记下来（只是列表，不含密钥）。 */
+async function aiRefreshModels() {
+  const d = aiDraft(), p = d.p, key = d.keys[p].trim() || aiKey(p);
+  if (d.busy) return;
+  if (!key) { d.status = tr('先填密钥', 'Enter a key first'); render(); return; }
+  d.busy = true; d.status = ''; render();
+  try {
+    const list = await aiFetchModels(p, key);
+    store.set(AI_PROVIDERS[p].listK, list);
+    if (state.aiDraft === d) d.open = true;
+  } catch (e) { d.status = e instanceof AiError ? e.message : tr('没成功', 'Failed'); }
+  d.busy = false;
+  if (state.aiDraft === d && state.aiSettings) render();
 }
 
 // ---------------------------------------------------------------- 小零件
@@ -255,7 +389,7 @@ function aiDraftCard(m, i, L) {
 
 function askView() {
   if (!aiKey()) {
-    return `<div class="ai-ask"><div class="card ai-nokey"><b>${tr('需要 Claude API 密钥。', 'This needs a Claude API key.')}</b><div class="muted small">${tr('在「我的 → 设置」里填。', 'Set it under Me → Settings.')}</div>
+    return `<div class="ai-ask"><div class="card ai-nokey"><b>${tr('需要 API 密钥。', 'This needs an API key.')}</b><div class="muted small">${tr('在「我的 → 设置」里填。', 'Set it under Me → Settings.')}</div>
       <button class="btn primary" data-act="ai-settings">${tr('AI 设置', 'AI settings')}</button></div></div>`;
   }
   const L = computeLookup(), busy = state.asking;
@@ -700,9 +834,11 @@ async function aiReadStatements(files, target, onProgress) {
   for (const f of files) {
     const name = f.name || 'file', type = f.type || '';
     if (/\.pdf$/i.test(name) || type === 'application/pdf') {
+      aiCheckFiles();
       if (f.size > 30 * 1024 * 1024) throw new AiError(tr(`「${name}」超过 30 MB，请拆开再试。`, `"${name}" is over 30 MB. Split it and retry.`));
       jobs.push({ name, content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await aiBase64(f) } }, { type: 'text', text: '读出这份账单里的全部交易。' }] });
     } else if (type.startsWith('image/') || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(name)) {
+      aiCheckFiles();
       jobs.push({ name, content: [...await aiImageBlocks(f), { type: 'text', text: '读出这份账单里的全部交易。' }] });
     } else {
       const text = /\.xlsx?$/i.test(name) || /spreadsheet|ms-excel/.test(type) ? await aiXlsxText(f) : await aiFileText(f);
@@ -936,11 +1072,25 @@ async function aiAction(act, v) {
   const rec = aiRec();
   const pair = () => String(v).split(':').map(Number);
   switch (act) {
-    case 'ai-settings': state.aiSettings = true; break;
-    case 'ai-close': if (lastClickTarget?.dataset?.act !== 'ai-close') return true; state.aiSettings = false; break;
-    case 'ai-close-btn': state.aiSettings = false; break;
-    case 'ai-clear': store.del('hl.apiKey'); state.aiSettings = false; break;
-    case 'ai-save': { const k = document.getElementById('ai-key').value.trim(); if (k) store.set('hl.apiKey', k); store.set('hl.model', document.getElementById('ai-model').value.trim()); state.aiSettings = false; break; }
+    case 'ai-settings': state.aiSettings = true; state.aiDraft = aiDraftNew(); break;
+    case 'ai-close': if (lastClickTarget?.dataset?.act !== 'ai-close') return true; state.aiSettings = false; state.aiDraft = null; break;
+    case 'ai-close-btn': state.aiSettings = false; state.aiDraft = null; break;
+    case 'ai-prov': { const d = aiDraft(); if (AI_PROVIDERS[v] && d.p !== v) Object.assign(d, { p: v, open: false, status: '' }); break; }
+    case 'ai-mopen': aiDraft().open = !aiDraft().open; break;
+    case 'ai-mpick': { const d = aiDraft(); if (v) d.models[d.p] = v; d.open = false; break; }
+    case 'ai-refresh': aiRefreshModels(); return true;
+    // 清除的是正在看的那一家的密钥
+    case 'ai-clear': store.del(AI_PROVIDERS[aiDraft().p].keyK); state.aiSettings = false; state.aiDraft = null; break;
+    case 'ai-save': {
+      const d = aiDraft();
+      for (const [p, P] of Object.entries(AI_PROVIDERS)) {
+        const k = d.keys[p].trim();
+        if (k) store.set(P.keyK, k);
+        store.set(P.modelK, d.models[p]);
+      }
+      store.set('hl.aiProvider', d.p);
+      state.aiSettings = false; state.aiDraft = null; break;
+    }
     case 'ai-pick': state.aiPick = state.aiPick === v ? null : v; break;
     // 问账本
     case 'ask-hint': sendAsk(v); return true;
@@ -1017,5 +1167,7 @@ async function aiChange(ev) {
 document.addEventListener('input', (ev) => {
   if (typeof state === 'undefined') return;
   if (ev.target.id === 'rec-bal') { aiRec().balanceText = ev.target.value; return; }
+  // AI 设置里填的密钥先记在草稿里：切换 Claude / DeepSeek、刷新列表时页面会重画
+  if (ev.target.id === 'ai-key') { if (state.aiDraft) state.aiDraft.keys[state.aiDraft.p] = ev.target.value; return; }
   if (ev.target.id === 'quick') { const b = ev.target.closest('.ai-ask')?.querySelector('.send'); if (b) b.disabled = !ev.target.value.trim() || state.asking; }
 });

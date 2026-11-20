@@ -55,6 +55,14 @@ svg.planet { display: block; flex: none; overflow: visible; }
 .pl-now { display: flex; align-items: center; gap: 12px; }
 .pl-now b { font-size: 16px; font-weight: 600; }
 .pl-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px; }
+/* 桌面图标：和真的图标一样的圆角方块，五个一行 */
+.pl-icons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px 6px; max-width: 420px; }
+.pl-icons button { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font-size: 12px; line-height: 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
+.pl-icons button:active { transform: scale(.92); }
+.pl-icons img { display: block; width: 52px; height: 52px; border-radius: 12px; box-shadow: 0 2px 6px -2px rgba(20, 16, 60, .3); }
+.pl-icons span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-icons button.on img { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pl-icons button.on span { color: var(--primary); font-weight: 600; }
 .pl-next { display: flex; justify-content: space-between; gap: 6px; padding-top: 2px; }
 .pl-next span { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .pl-next small { font-size: 11px; color: var(--muted); }
@@ -124,6 +132,6 @@ svg.planet { display: block; flex: none; overflow: visible; }
   .pl-sat:nth-child(2) { transform: rotate(150deg) translateX(74px) rotate(-150deg); z-index: 2; }
   .pl-sat:nth-child(3) { transform: rotate(270deg) translateX(74px) rotate(-270deg); }
   .pl-sat:nth-child(4) { transform: rotate(30deg) translateX(74px) rotate(-30deg); z-index: 2; }
-  .hm-av.pl-av, .pl-opt, .pl-ml, .pl-mpop button, .pl-row button { transition: none; }
+  .hm-av.pl-av, .pl-opt, .pl-ml, .pl-mpop button, .pl-row button, .pl-icons button { transition: none; }
   .pl-bmoon { transition: none; }
 }

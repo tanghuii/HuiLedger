@@ -472,12 +472,14 @@ async function impImageBlocks(file) {
 async function impJobsFor(file, name) {
   const lower = name.toLowerCase(), mime = file.type ?? '';
   if (mime.startsWith('image/')) {
+    aiCheckFiles(); // DeepSeek 读不了图片：发之前就停
     // 一张长截图切出来的几片相邻且有重叠，尽量放在同一次请求里
     const blocks = await impImageBlocks(file), jobs = [];
     for (let i = 0; i < blocks.length; i += 6) jobs.push({ blocks: blocks.slice(i, i + 6), name: '', header: '', lines: [], fallback: null });
     return jobs;
   }
   if (mime === 'application/pdf' || lower.endsWith('.pdf')) {
+    aiCheckFiles();
     if (file.size > IMP_MAX_PDF) throw new AiError(tr(`「${name}」超过 20 MB，请拆分后再导入。`, `“${name}” is over 20 MB. Split it and import again.`));
     const data = impB64(new Uint8Array(await file.arrayBuffer()));
     return [{ blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, title: name }], name: '', header: '', lines: [], fallback: null }];
@@ -946,10 +948,10 @@ function impPickView() {
   return `${IMP.error ? `<div class="card"><div class="err" style="font-size:15px">${h(IMP.error)}</div></div>` : ''}
     <div class="card">
       <div class="imp-head">${iconTile('sparkle', 'imp-tile38')}<span>${tr('截图和银行账单', 'Screenshots and bank statements')}</span></div>
-      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 Claude API 密钥，目前还没有填写。', 'This needs a Claude API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('去设置密钥', 'Set the key')}</button></div>`}
+      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，目前还没有填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('去设置密钥', 'Set the key')}</button></div>`}
       <label class="btn primary imp-pick">${tr('选择截图（可多选）', 'Choose screenshots')}<input type="file" data-imp="pick" accept="image/*" multiple hidden></label>
       ${canPaste ? `<button class="btn imp-pick" data-act="imp-paste">${tr('粘贴截图', 'Paste screenshot')}</button>` : ''}
-      <div class="muted small imp-note">${tr('文件会发送到 Claude API 识别。', 'Files are sent to the Claude API.')}</div>
+      <div class="muted small imp-note">${tr(`文件会发送到 ${AI_PROVIDERS[aiProvider()].name} 识别。`, `Files are sent to ${AI_PROVIDERS[aiProvider()].name}.`)}</div>
     </div>
     <div class="card">
       <div class="imp-head">${iconTile('document', 'imp-tile38')}<span>${tr('账单文件', 'Statement files')}</span></div>

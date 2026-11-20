@@ -129,7 +129,7 @@ function appearanceView() {
     <span class="ap-h">${tr(`「${h(ledger.name)}」的主题色`, `Color for “${h(ledger.name)}”`)}</span>
     <div class="ap-colors">${AP_COLORS.map((c) => `<button class="${cur === c ? 'on' : ''}" style="background:${c}" data-act="ap-color" data-v="${c}" aria-label="${c}"></button>`).join('')}</div>
     <div><button class="chip ${cur ? '' : 'on'}" data-act="ap-color" data-v="">${tr('跟随外观', 'Use the theme\'s color')}</button></div></div>` : '';
-  // 最上面两张：我的星球、本月行星（modules/cosmos.js）
+  // 最上面三张：我的星球、桌面图标、本月行星（modules/cosmos.js）
   const planets = typeof plAppearanceCards === 'function' ? plAppearanceCards() : '';
   return `${back}<div class="grid">${planets}
     <div class="card grid"><span class="ap-h">${tr('外观', 'Appearance')}</span><div class="ap-styles">${styles}</div></div>

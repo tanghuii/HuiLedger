@@ -592,7 +592,7 @@ function settingsView() {
     </div>
     ${currency}
     <div class="card hm-list">
-      ${row('chip', tr('AI 设置', 'AI settings'), 'data-act="ai-settings"', store.get('hl.apiKey', '') ? '' : tr('未设置', 'Not set'))}
+      ${row('chip', tr('AI 设置', 'AI settings'), 'data-act="ai-settings"', aiKey() ? AI_PROVIDERS[aiProvider()].name : tr('未设置', 'Not set'))}
       <label class="hm-li"><span class="tile" style="background:#FF8A3D">${hmSvg(ICONS.user.d)}</span><span class="hm-li-t">${tr('本人姓名', 'Your name')}</span><input class="hm-in" id="hm-owner" value="${h(store.get('hl.ownerName', '') ?? '')}" placeholder="${tr('导入时认出本人', 'For imports')}" autocomplete="name" enterkeyhint="done"></label>
     </div>
     ${cloud}${version}${progress}${menu}

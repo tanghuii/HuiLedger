@@ -1,7 +1,8 @@
 // 行星账本的星球都在这里摆：首页卡片上的本月行星、月份旁边的"土星月"、"我的"头像、外观里的"我的星球""本月行星"、
-// 登录页的小星系、彩色卡片上的星环装饰、底栏 ＋ 的小轨道、记完一笔的流星、主屏幕图标。
+// 登录页的小星系、彩色卡片上的星环装饰、底栏 ＋ 的小轨道、记完一笔的流星；外观里的"桌面图标"。
 // 星球的画法在 planets.js（生成的文件，别手改）；这里只管放在哪、选哪颗。样式在 css/cosmos.css。
 // 两个和手机共享的设置：planet（自己的星球，'saturn' 这样的字符串）、monthPlanet（每月轮换的锚点 { ym, i }）。
+// 桌面图标是另一个设置，只存在这台设备上（hl.launcherIcon，不同步），默认紫色的品牌星；自己的星球不再换图标。
 'use strict';
 
 const PL_KEYS = PLANETS_NINE.map((p) => p.key);
@@ -26,17 +27,25 @@ function plAnchor() {
 /** 某年某月的主题行星。 */
 const plOfMonth = (y, m) => monthPlanet(planetYm(y, m), plAnchor());
 
-// ---------------------------------------------------------------- 主屏幕图标（iPhone"添加到主屏幕"时取 apple-touch-icon）
+// ---------------------------------------------------------------- 桌面图标（iPhone"添加到主屏幕"时取 apple-touch-icon）
 
-/** 自己的星球记在这台设备上（hl.planet），index.html 一打开就按它换图标；数据读出来以后跟着云端走。 */
-function plSyncIcon() {
-  if (!state.session || !state.data.ledger.size) return; // 数据还没读出来：先用记着的
-  const k = plMine()?.key ?? '';
-  if (store.get('hl.planet', '') !== k) { if (k) store.set('hl.planet', k); else store.del('hl.planet'); }
-  const href = `icons/planets/${k || 'brand'}-180.png`;
+/** 可选的桌面图标：品牌星（默认）+ 九颗星。 */
+const PL_ICONS = ['brand', ...PL_KEYS];
+/** 这台设备选的桌面图标（hl.launcherIcon）；没选过或坏了是 'brand'。index.html 一打开就按它换图标。 */
+function plLauncher() {
+  let k = '';
+  try { k = JSON.parse(localStorage.getItem('hl.launcherIcon')); } catch { /* 没有或坏了 */ }
+  return PL_ICONS.includes(k) ? k : 'brand';
+}
+function plApplyIcon() {
+  const href = `icons/planets/${plLauncher()}-180.png`;
   for (const link of document.querySelectorAll('link[rel="apple-touch-icon"]')) if (link.getAttribute('href') !== href) link.setAttribute('href', href);
 }
-MOD.onLoad.push(async () => plSyncIcon());
+addEventListener('DOMContentLoaded', () => {
+  // 3.0 用 hl.planet 记"图标 = 自己的星球"；现在图标单独选，旧的不要了（升级上来是默认紫色星球）
+  try { localStorage.removeItem('hl.planet'); } catch { /* 存不了就算了 */ }
+  plApplyIcon();
+});
 
 // ---------------------------------------------------------------- 首页：汇总卡片上的星球、月份旁的"土星月"
 
@@ -74,13 +83,22 @@ function plSheet() {
     <div class="between"><b class="pl-sh">${tr('我的星球', 'My planet')}</b><button class="ed-x" data-act="pl-sheet-close" aria-label="${tr('关闭', 'Close')}">✕</button></div>${plMineGrid()}</div></div>`;
 }
 
-/** 外观页最上面的两张卡：我的星球、本月行星（换这个月的星，后面的月份跟着往后推）。 */
+/** 桌面图标：十个小图标（和真的图标一样的紫色底），品牌星排第一，写"默认"。 */
+function plIconCard() {
+  const cur = plLauncher();
+  const note = IS_IOS ? tr('删掉主屏幕图标，在 Safari 重新添加后生效', 'Delete the Home Screen icon and re-add it from Safari')
+    : tr('重新安装到桌面后生效', 'Reinstall to the home screen to apply');
+  const name = (k) => (k === 'brand' ? tr('默认', 'Default') : planetName(planetByKey(k)));
+  return `<div class="card grid"><span class="ap-h">${tr('桌面图标', 'App icon')}</span>
+    <div class="pl-icons">${PL_ICONS.map((k) => `<button class="${k === cur ? 'on' : ''}" data-act="pl-icon" data-v="${k}" aria-pressed="${k === cur}"><img src="icons/planets/${k}-180.png" alt="" width="52" height="52"><span>${h(name(k))}</span></button>`).join('')}</div>
+    <div class="muted small">${note}</div></div>`;
+}
+
+/** 外观页最上面的三张卡：我的星球、桌面图标、本月行星（换这个月的星，后面的月份跟着往后推）。 */
 function plAppearanceCards() {
-  const note = IS_IOS ? tr('主屏幕图标：删掉后在 Safari 重新添加才会换', 'Home Screen icon: re-add it from Safari to change')
-    : tr('安装到桌面后图标不会自动换', 'Installed icons don\'t change by themselves');
   const now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1, ym = planetYm(y, m), a = plAnchor(), cur = monthPlanet(ym, a);
   const next = [1, 2, 3, 4, 5].map((k) => { const d = new Date(y, m - 1 + k, 1); return [d.getMonth() + 1, monthPlanet(planetYm(d.getFullYear(), d.getMonth() + 1), a)]; });
-  return `<div class="card grid"><span class="ap-h">${tr('我的星球', 'My planet')}</span>${plMineGrid()}<div class="muted small">${note}</div></div>
+  return `<div class="card grid"><span class="ap-h">${tr('我的星球', 'My planet')}</span>${plMineGrid()}</div>${plIconCard()}
     <div class="card grid"><span class="ap-h">${tr('本月行星', 'Planet of the month')}</span>
       <div class="pl-now">${planetSvg(cur, { px: 56 })}<b>${tr(`${PL_MONTH_ZH[m - 1]} · ${cur.zh}`, `${PL_MONTH_EN[m - 1]} · ${cur.en}`)}</b></div>
       <div class="pl-row">${PLANETS_NINE.map((p, i) => `<button class="${p.key === cur.key ? 'on' : ''}" data-act="pl-mset" data-v="${i}" data-ym="${ym}" aria-pressed="${p.key === cur.key}" aria-label="${h(planetName(p))}">${planetSvg(p, { px: 28, spin: false })}</button>`).join('')}</div>
@@ -104,11 +122,16 @@ MOD.actions.push(async (act, v, el) => {
     // 点小窗外面的遮罩才关
     case 'pl-sheet-x': if (lastClickTarget !== el) return true; state.plSheet = false; break;
     case 'pl-sheet-close': state.plSheet = false; break;
+    case 'pl-icon': {
+      if (!PL_ICONS.includes(v)) return true;
+      try { localStorage.setItem('hl.launcherIcon', JSON.stringify(v)); } catch { /* 存不了就算了 */ }
+      plApplyIcon();
+      break;
+    }
     case 'pl-mine': {
       if (!PL_KEYS.includes(v)) return true;
       state.plSheet = false;
       try { await shared.set('planet', v); state.error = ''; } catch (e) { state.error = e.message; }
-      plSyncIcon();
       break;
     }
     default: return false;
@@ -221,7 +244,7 @@ function plDecorate(cards) {
 }
 
 // 页面每次重画（app.js 的 render 换掉 #app 的内容）都会到这里，浏览器画出来之前处理完：
-// 新的彩色卡片加装饰；新画的星球接着上一帧转；自己的星球变了（本机或手机同步过来）就换主屏幕图标
+// 新的彩色卡片加装饰；新画的星球接着上一帧转
 new MutationObserver((records) => {
   const cards = [], svgs = [];
   for (const rec of records) for (const n of rec.addedNodes) {
@@ -235,5 +258,4 @@ new MutationObserver((records) => {
     const t = plNow();
     for (const s of svgs) { try { s.setCurrentTime(s.classList.contains('pl-orbit') ? t + plNav.extra : t); } catch { /* 老浏览器 */ } }
   }
-  try { plSyncIcon(); } catch { /* state 还没准备好 */ }
 }).observe(document.body, { childList: true, subtree: true });
