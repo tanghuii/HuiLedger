@@ -476,7 +476,7 @@ function accountDetailView() {
   const pay = a.type === 2 && typeof lkStartRepay === 'function' ? `<div class="lk-paybox"><button class="pg-pill lk-pay" data-act="acc-pay" data-v="${a.id}">${tr('还款', 'Pay off')}</button>${due ? `<div class="small muted">${tr(`还款日 ${due} 号`, `Due day ${due}`)}</div>` : ''}</div>` : '';
   const card = `<div class="card cc acard" style="--cc:${accountFace(a)}">
       <div class="row" style="padding:0"><span class="logo-w lg">${accountTile(a)}</span><div class="main"><div class="title acard-name">${h(a.name)}</div><div class="small muted">${tr(`${type}账户`, `${type} account`)}</div></div>
-        <span class="small muted acard-cur"><span class="flag">${flagOf(cur)}</span>${cur}</span></div>
+        <span class="small muted acard-cur">${flagSvg(cur)}${cur}</span></div>
       <div class="small muted acard-lbl">${tr('余额', 'Balance')}</div>
       ${pay ? `<div class="lk-balrow"><div class="big bal">${show(balance)}</div>${pay}</div>` : `<div class="big bal">${show(balance)}</div>`}
       ${notes ? `<div class="small muted">${notes}</div>` : ''}

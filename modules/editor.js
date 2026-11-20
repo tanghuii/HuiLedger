@@ -59,11 +59,8 @@ function edCalc(text) {
 const ED_CODES = ['EUR', 'CNY', 'USD', 'GBP', 'JPY', 'HKD', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK', 'HUF', 'TRY', 'AUD', 'CAD', 'SGD', 'KRW', 'THB', 'MYR', 'INR', 'NZD', 'ISK', 'RON'];
 const ED_SYM = { EUR: '€', CNY: '¥', USD: '$', GBP: '£', JPY: 'JP¥', HKD: 'HK$', CHF: 'CHF', AUD: 'A$', CAD: 'C$', SGD: 'S$', KRW: '₩', THB: '฿', INR: '₹', TRY: '₺', PLN: 'zł' };
 const edSym = (c) => ED_SYM[c] ?? c;
-/** 币种的旗帜（表情字符）：这 24 种的国家代码都是前两个字母，欧元用 EU。 */
-function edFlag(c) {
-  const cc = c === 'EUR' ? 'EU' : ED_CODES.includes(c) ? c.slice(0, 2) : '';
-  return cc ? String.fromCodePoint(...[...cc].map((x) => 0x1F1E6 + x.charCodeAt(0) - 65)) : (typeof flagOf === 'function' ? flagOf(c) : '');
-}
+/** 币种的国旗：和手机端一样的圆角矩形小旗（flags.js）。 */
+const edFlag = (c) => flagSvg(c);
 
 // 某一天的汇率表（1 EUR = ?）：今天和以后用最新的；过去的日期联网取那天的，取到的存在浏览器里；取不到先用最新的（和 Fx.ratesOn 一样）
 // （app.js 比这个文件后加载，store 要用的时候再读）

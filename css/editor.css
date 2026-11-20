@@ -13,7 +13,8 @@
 .ed-search .ed-ic { stroke: var(--muted); }
 .ed-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; padding: 0; font-size: 16px; color: var(--text); outline: none; border-radius: 0; box-shadow: none; }
 .ed-search input::placeholder { color: var(--muted); }
-.ed-opt > span.ed-flag, .ed-flag { flex: none; width: 30px; text-align: center; font-size: 22px; line-height: 1; }
+.ed-opt > span.ed-flag, .ed-flag { flex: none; width: 30px; text-align: center; font-size: 19px; line-height: 1; }
+.ed-cur .flg { font-size: 17px; }
 .ed-none { padding: 10px; }
 /* 能搜索的面板高度固定，打字筛选时搜索框不跳 */
 .ed-pop.search .ed-popcard { height: 72%; }

@@ -549,8 +549,8 @@ const WEB_VERSION = (() => {
   return v;
 })();
 
-/** 币种的旗帜（表情）：这 24 种的国家代码都是前两个字母，欧元用 EU（和手机端 Fx.flag 一样）。 */
-const hmFlag = (c) => String.fromCodePoint(...[...(c === 'EUR' ? 'EU' : c.slice(0, 2))].map((x) => 0x1F1E6 + x.charCodeAt(0) - 65));
+/** 币种的国旗：和手机端一样的圆角矩形小旗（flags.js）。 */
+const hmFlag = (c) => flagSvg(c);
 const hmCurLabel = (c) => { const sym = (SYMBOL[c] ?? '').trim(); return sym && sym !== c ? `${c} ${sym}` : c; };
 
 /** 设置：和 App 的设置页同样的几块——语言、数据安全、提醒、外观、货币、AI、云端同步、版本。 */

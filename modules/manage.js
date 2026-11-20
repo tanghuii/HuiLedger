@@ -247,7 +247,7 @@ function mgAccountDialog(e) {
   return `<div class="between"><b style="font-size:18px">${e.isNew ? tr('添加账户', 'Add account') : tr('账户设置', 'Account settings')}</b>${e.isNew ? '' : `<button class="btn link danger" data-act="mg-acc-delete">${tr('删除', 'Delete')}</button>`}</div>
     <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(a.name)}" placeholder="${tr('如 ING、支付宝', 'e.g. ING, PayPal')}"></label>
     ${seg('mg-type', mgTypes(), a.type ?? 0)}
-    <div class="two"><label class="f">${tr('币种', 'Currency')}<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${flagOf(c)} ${c}</option>`).join('')}</select></label>
+    <div class="two"><label class="f">${tr('币种', 'Currency')}<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
       <label class="f">${tr('初始余额', 'Opening balance')}<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="${tr('0.00，欠款填负数', '0.00, negative if owed')}"></label></div>
     ${a.type === 2 ? `<label class="f">${tr('还款日（每月几号）', 'Due day (of month)')}<input id="mg-due" inputmode="numeric" value="${h(a._due)}" placeholder="1–31"></label>` : ''}
     ${e.isNew ? '' : `<label class="sc-check"><input type="checkbox" id="mg-arch" ${a.archived ? 'checked' : ''}> ${tr('归档', 'Archived')}</label>`}`;
