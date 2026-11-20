@@ -22,7 +22,7 @@
 .pl-in-c i, .pl-in-c div { position: absolute; }
 .pl-in-p { left: calc(var(--s) / -2); top: calc(var(--s) / -2); width: var(--s); height: var(--s); will-change: transform, opacity; }
 .pl-in-p svg.planet, .pl-in-sm svg.planet { width: 100%; height: 100%; }
-.pl-in-go, .pl-in-x, .pl-in-y { left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.pl-in-go, .pl-in-gy, .pl-in-f, .pl-in-x, .pl-in-y { left: 0; top: 0; width: 0; height: 0; will-change: transform; }
 .pl-in-k2, .pl-in-sm { inset: 0; }
 .pl-in-sm { opacity: 0; }
 
@@ -34,3 +34,6 @@
 }
 /* 往外划的星线 */
 .pl-in-k { left: 0; top: -1px; width: 34px; height: 2px; transform-origin: 0 50%; opacity: 0; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff); }
+
+/* 开场动画还盖着时，首页卡片上那颗星先藏着：动画的星飞进来落到它的位置，动画拿掉那一刻接上 */
+.pl-intro-on #app .hm-sum .hm-top1 > .pl-face { opacity: 0; }
