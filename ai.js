@@ -121,7 +121,8 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: Math.min(maxTokens, 393216), // 官方上限 384K
+    // DeepSeek 默认先"思考"再回答，思考的字数也算在 max_tokens 里：多给 32K 给思考用（用多少算多少钱），官方上限 384K
+    max_tokens: Math.min(maxTokens + 32000, 393216),
     stream: false,
   };
   const send = (b) => fetch('https://api.deepseek.com/chat/completions', {
