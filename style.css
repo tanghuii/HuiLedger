@@ -491,3 +491,8 @@ body.ed-selecting .ed-toast:not(.top) { bottom: 210px; }
 .seg { min-width: 0; }
 .seg button { padding: 7px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 @media (max-width: 420px) { .seg button { font-size: 13.5px; } }
+
+/* iPhone：输入框文字小于 16px 时，一点输入 Safari 就会自动放大页面。输入框统一用 16px，页面不再跳。 */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea, [contenteditable] { font-size: max(16px, 1em) !important; }
+}
