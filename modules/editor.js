@@ -106,6 +106,8 @@ const ED_CNY = /微信|支付宝|云闪付|财付通|余额宝|中国银行|工�
 function edAcctCur(a) {
   if (!a) return HOME;
   if (a.currency) return a.currency;
+  const ai = edProfile()?.currency?.[String(a.id)];
+  if (ai) return ai;
   if ((ED_CNY.test(a.name ?? '') || ED_CNY_ABBR.test(a.name ?? '')) && HOME !== 'CNY') return 'CNY';
   const since = today() - 365, n = new Map();
   let all = 0;
@@ -116,8 +118,52 @@ function edAcctCur(a) {
   const [c, k] = [...n.entries()].sort((x, y) => y[1] - x[1])[0] ?? [HOME, 0];
   return c !== HOME && k >= 3 && k * 2 > all ? c : HOME;
 }
+// ---- AI 分析账户（和手机端 ai/AccountProfile.kt 一样）：每个账户平时用什么货币、默认用哪个账户。
+// 结果存在共享设置 accountProfile 里：{ default, currency: { 账户 id: 'CNY' }, sig, at }。账户清单变了或超过 30 天，重新分析一次。
+const edProfile = () => { const p = shared.get('accountProfile', null); return p && typeof p === 'object' ? p : null; };
+const edSig = (accs) => [...accs].sort((a, b) => a.id - b.id).map((a) => `${a.id}:${a.name}:${a.currency ?? ''}:${!!a.archived}`).join('|') + '|' + HOME;
+let edProfiling = false;
+async function edRefreshProfile(force = false) {
+  if (edProfiling || typeof aiKey !== 'function' || !aiKey() || !state.session) return;
+  const accs = [...state.data.account.values()];
+  if (!accs.some((a) => !a.archived)) return;
+  const p = edProfile(), sig = edSig(accs);
+  if (!force && p && p.sig === sig && Date.now() - (Number(p.at) || 0) < 30 * 86400000) return;
+  edProfiling = true;
+  try {
+    const now = today(), year = [...state.data.tx.values()].filter((t) => t.date >= now - 365);
+    const types = ACCOUNT_TYPE_NAMES();
+    const lines = accs.filter((a) => !a.archived).map((a) => {
+      const list = year.filter((t) => t.accountId === a.id), n = new Map();
+      for (const t of list) { const c = edForeign(t) ? t.currency : HOME; n.set(c, (n.get(c) ?? 0) + 1); }
+      const cur = [...n.entries()].sort((x, y) => y[1] - x[1]).map(([c, k]) => `${c}×${k}`).join(', ') || '无';
+      const recent = list.filter((t) => t.date >= now - 90 && t.kind !== KIND.TRANSFER), last = Math.max(0, ...recent.map((t) => t.date));
+      const notes = [...new Set(list.sort((x, y) => y.date - x.date).map((t) => stripIban(t.note).replace(/\n/g, ' ').trim().slice(0, 30)).filter(Boolean))].slice(0, 6);
+      return `id=${a.id} | ${a.name} | 类型：${types[a.type] ?? ''} | 账户上设的币种：${a.currency || '没设'} | 近一年账单的币种：${cur} | 近90天记了 ${recent.length} 笔${last ? `，最近一次 ${dayISO(last)}` : ''} | 最近的备注：${notes.join('；') || '无'}`;
+    }).join('\n');
+    const system = `你在帮用户整理记账 App 的账户。用户的主货币是 ${HOME}。\n`
+      + `1. 判断每个账户平时用什么货币记账（只能从这些代码里选：${FX_CODES.join(',')}）。依据账户名（银行、钱包、所在国家）、账户上设的币种、账单的币种和备注里的商户。`
+      + '注意：用户过去可能把外币账户误记成了主货币，所以账单币种只作参考；比如微信、支付宝、国内银行的账户应是人民币。\n'
+      + '2. 选出新记一笔时默认用的账户：主货币账户里日常花钱最常用的那个（看近90天的笔数和最近一次的日期，不选投资、借款、押金这类账户）。\n每个账户都要给出币种。只输出 JSON。';
+    const schema = { type: 'object', properties: {
+      accounts: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, currency: { type: 'string' } }, required: ['id', 'currency'], additionalProperties: false } },
+      default_account: { type: 'integer' } }, required: ['accounts', 'default_account'], additionalProperties: false };
+    const o = await aiJson(system, lines, schema, 2000);
+    const ids = new Set(accs.map((a) => a.id)), currency = {};
+    for (const r of o.accounts ?? []) { const c = String(r.currency ?? '').toUpperCase(); if (ids.has(Number(r.id)) && FX_CODES.includes(c)) currency[String(r.id)] = c; }
+    const def = ids.has(Number(o.default_account)) ? Number(o.default_account) : 0;
+    await shared.set('accountProfile', { default: def, currency, sig, at: Date.now() });
+  } catch (e) { console.warn('account profile', e); }
+  edProfiling = false;
+}
+// 打开网页几秒后（数据读完了）看一眼要不要分析
+setTimeout(() => edRefreshProfile(), 8000);
+
 /** 新记一笔默认用哪个账户：最近 90 天在这个账本里用得最多、币种是主货币的账户；最近没记过就用上次用的账户。 */
 function edDefaultAccount(accs) {
+  // AI 分析过就用它选的默认账户
+  const ai = Number(edProfile()?.default) || 0;
+  if (ai && accs.some((a) => a.id === ai)) return ai;
   const since = today() - 90, uses = new Map(), last = new Map();
   const recent = [...state.data.tx.values()].filter((t) => t.date >= since && t.kind !== KIND.TRANSFER);
   const mine = recent.filter((t) => t.ledgerId === state.ledgerId);
@@ -210,6 +256,7 @@ function startEdit(t, quiet = false) {
   }
   edInit(state.editing);
   if (!quiet) render();
+  edRefreshProfile();
 }
 
 /**
