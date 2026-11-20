@@ -111,7 +111,8 @@ function vcStart() {
   try {
     rec = new VC_SR();
     rec.lang = LANG === 'en' ? 'en-US' : 'zh-CN';
-    rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    // 连续听：停顿时不会提前结束；电脑上松开鼠标、手机上点"说完了"才算说完（和手机端按住说话一样）
+    rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
   } catch { vcTypeInstead(tr('语音识别没成功，可以点键盘上的麦克风说', 'Voice didn\'t work. Use the mic on your keyboard.')); return; }
   vc.rec = rec;
   let final = '', failed = false;
@@ -187,7 +188,9 @@ function vcRelease(ev) {
   if (!p.fired) return;
   // 长按之后跟着来的那一下点击不算"记一笔"
   vc.swallowUntil = Date.now() + 800;
-  if (!p.started) { vc.cancelled = false; vc.done = false; vcStart(); }
+  // 电脑：按着鼠标说，松开就算说完。手机：浏览器要等手指松开才让开麦克风，所以松手后才开始听，说完点"说完了"
+  if (p.started) vcStop();
+  else { vc.cancelled = false; vc.done = false; vcStart(); }
 }
 document.addEventListener('pointerup', vcRelease);
 document.addEventListener('pointercancel', vcRelease);
