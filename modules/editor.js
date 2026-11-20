@@ -96,10 +96,41 @@ function edRate(from, table) {
 // ---------------------------------------------------------------- 记一笔 / 修改
 
 const edForeign = (e) => !!(e.currency && e.origCents > 0 && e.currency !== HOME);
+
+// ---- 账户的币种和默认账户（和手机端 LedgerViewModel.accountCurrencies / takeDefaultAccount 一样）
+const ED_CNY = /微信|支付宝|云闪付|财付通|余额宝|中国银行|工商银行|农业银行|建设银行|招商银行|民生银行|交通银行|中信银行|浦发|兴业银行|光大银行|平安银行|邮储|邮政储蓄|华夏银行|广发银行|wechat|alipay/i, ED_CNY_ABBR = /\b(BOC|ICBC|ABC|CCB|CMB|CMBC|BOCOM|PSBC|CNY|RMB)\b/;
+/**
+ * 账户实际用的币种（记账页选了账户，币种就跟着变）：账户上设了就用设的；没设的，名字是微信、支付宝、国内银行的算人民币；
+ * 再不行看这个账户近一年的账单，过半（至少 3 笔）是同一种外币就用它；都没有就是主货币。
+ */
+function edAcctCur(a) {
+  if (!a) return HOME;
+  if (a.currency) return a.currency;
+  if ((ED_CNY.test(a.name ?? '') || ED_CNY_ABBR.test(a.name ?? '')) && HOME !== 'CNY') return 'CNY';
+  const since = today() - 365, n = new Map();
+  let all = 0;
+  for (const t of state.data.tx.values()) {
+    if (t.accountId !== a.id || t.date < since) continue;
+    all++; const c = edForeign(t) ? t.currency : HOME; n.set(c, (n.get(c) ?? 0) + 1);
+  }
+  const [c, k] = [...n.entries()].sort((x, y) => y[1] - x[1])[0] ?? [HOME, 0];
+  return c !== HOME && k >= 3 && k * 2 > all ? c : HOME;
+}
+/** 新记一笔默认用哪个账户：最近 90 天在这个账本里用得最多、币种是主货币的账户；最近没记过就用上次用的账户。 */
+function edDefaultAccount(accs) {
+  const since = today() - 90, uses = new Map(), last = new Map();
+  const recent = [...state.data.tx.values()].filter((t) => t.date >= since && t.kind !== KIND.TRANSFER);
+  const mine = recent.filter((t) => t.ledgerId === state.ledgerId);
+  for (const t of (mine.length ? mine : recent)) { uses.set(t.accountId, (uses.get(t.accountId) ?? 0) + 1); last.set(t.accountId, Math.max(last.get(t.accountId) ?? 0, t.date)); }
+  const pick = accs.filter((a) => uses.get(a.id) > 0 && edAcctCur(a) === HOME)
+    .sort((x, y) => uses.get(y.id) - uses.get(x.id) || (last.get(y.id) ?? 0) - (last.get(x.id) ?? 0))[0];
+  const prev = store.get('hl.lastAccount', 0);
+  return pick?.id ?? (accs.some((a) => a.id === prev) ? prev : accs[0]?.id ?? 0);
+}
 /** 金额按什么币种输入：自己选过的；新记的跟着账户走；改外币账单时是它原来的币种；其余是主货币。 */
 function edCur(e) {
   if (e._curPicked && e._cur) return e._cur;
-  if (e._isNew) return acctCur(state.data.account.get(e.accountId) ?? {});
+  if (e._isNew) return edAcctCur(state.data.account.get(e.accountId));
   return edForeign(e) ? e.currency : HOME;
 }
 /**
@@ -170,9 +201,9 @@ function startEdit(t, quiet = false) {
   if (t) {
     state.editing = { ...t, _amount: edInput(edForeign(t) ? t.origCents : t.amountCents), _isNew: false };
   } else {
-    const accs = edAccounts(), last = store.get('hl.lastAccount', 0);
+    const accs = edAccounts();
     state.editing = {
-      id: newId(), kind: KIND.EXPENSE, amountCents: 0, categoryId: 0, accountId: accs.some((a) => a.id === last) ? last : accs[0]?.id ?? 0, toAccountId: 0,
+      id: newId(), kind: KIND.EXPENSE, amountCents: 0, categoryId: 0, accountId: edDefaultAccount(accs), toAccountId: 0,
       ledgerId: state.ledgerId, date: today(), note: '', tags: '', reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false,
       offsetOf: 0, offsetParts: '', project: '', fund: '', _amount: '', _isNew: true,
     };
@@ -353,7 +384,7 @@ function edPopList(e) {
   if (p === 'acc' || p === 'to') {
     const k = p === 'to' ? 'toAccountId' : 'accountId', sel = p === 'to' ? edTo(e)?.id : e.accountId;
     const list = edAccounts(sel).filter((a) => (p !== 'to' || a.id !== e.accountId) && (!q || a.name.toLowerCase().includes(q)));
-    return list.map((a) => opt(k, a.id, `${h(a.name)}${acctCur(a) !== HOME ? ` <small class="muted">${h(acctCur(a))}</small>` : ''}`, a.id === sel, accountTile(a))).join('') || none;
+    return list.map((a) => opt(k, a.id, `${h(a.name)}${edAcctCur(a) !== HOME ? ` <small class="muted">${h(edAcctCur(a))}</small>` : ''}`, a.id === sel, accountTile(a))).join('') || none;
   }
   if (p === 'cur') {
     const cur = edCur(e), codes = ED_CODES.includes(cur) ? ED_CODES : [cur, ...ED_CODES];
