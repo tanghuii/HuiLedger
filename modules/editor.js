@@ -106,6 +106,9 @@ const ED_CNY = /微信|支付宝|云闪付|财付通|余额宝|中国银行|工�
 function edAcctCur(a) {
   if (!a) return HOME;
   if (a.currency) return a.currency;
+  // 记账时自己给这个账户选过的币种（比如中国银行选成欧元），比 AI 的判断优先
+  const pin = edPins()[String(a.id)];
+  if (pin) return pin;
   const ai = edProfile()?.currency?.[String(a.id)];
   if (ai) return ai;
   if ((ED_CNY.test(a.name ?? '') || ED_CNY_ABBR.test(a.name ?? '')) && HOME !== 'CNY') return 'CNY';
@@ -120,6 +123,7 @@ function edAcctCur(a) {
 }
 // ---- AI 分析账户（和手机端 ai/AccountProfile.kt 一样）：每个账户平时用什么货币、默认用哪个账户。
 // 结果存在共享设置 accountProfile 里：{ default, currency: { 账户 id: 'CNY' }, sig, at }。账户清单变了或超过 30 天，重新分析一次。
+const edPins = () => { const p = shared.get('accountPins', null); return p && typeof p === 'object' ? p : {}; };
 const edProfile = () => { const p = shared.get('accountProfile', null); return p && typeof p === 'object' ? p : null; };
 const edSig = (accs) => [...accs].sort((a, b) => a.id - b.id).map((a) => `${a.id}:${a.name}:${a.currency ?? ''}:${!!a.archived}`).join('|') + '|' + HOME;
 let edProfiling = false;
@@ -143,7 +147,7 @@ async function edRefreshProfile(force = false) {
     }).join('\n');
     const system = `你在帮用户整理记账 App 的账户。用户的主货币是 ${HOME}。\n`
       + `1. 判断每个账户平时用什么货币记账（只能从这些代码里选：${FX_CODES.join(',')}）。依据账户名（银行、钱包、所在国家）、账户上设的币种、账单的币种和备注里的商户。`
-      + '注意：用户过去可能把外币账户误记成了主货币，所以账单币种只作参考；比如微信、支付宝、国内银行的账户应是人民币。\n'
+      + '微信、支付宝和中国的银行默认是人民币，但中国的银行也可能开外币账户（比如欧元账户），账户名或账单显示是外币就按外币。用户过去可能把人民币误记成了主货币，所以主货币的账单只作参考。\n'
       + '2. 选出新记一笔时默认用的账户：主货币账户里日常花钱最常用的那个（看近90天的笔数和最近一次的日期，不选投资、借款、押金这类账户）。\n每个账户都要给出币种。只输出 JSON。';
     const schema = { type: 'object', properties: {
       accounts: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, currency: { type: 'string' } }, required: ['id', 'currency'], additionalProperties: false } },
@@ -576,6 +580,11 @@ async function saveEditing(again = false) {
     // 报销收入：新关联的支出标成已报销，不再关联的改回待报销（links.js）
     if (typeof lkSyncClaims === 'function') await lkSyncClaims(before, t);
     store.set('hl.lastAccount', t.accountId);
+    // 自己选过币种：把这个账户记成这种货币，下次选它就默认这个币种（和手机同步）
+    if (e._curUser) {
+      const cur = edCur(e), acc = state.data.account.get(t.accountId);
+      if (acc && cur !== edAcctCur(acc)) await shared.set('accountPins', { ...edPins(), [String(acc.id)]: cur }).catch(() => {});
+    }
     if (t.project) rememberName('hl.projects', t.project);
     if (t.fund) rememberName('hl.funds', t.fund);
     state.error = '';
@@ -1104,10 +1113,11 @@ MOD.actions.push(async (act, v, el) => {
       const k = el.dataset.k;
       if (k === 'cur') {
         // 自己选的币种：折合金额回到按汇率算
-        e._cur = v; e._curPicked = true; e._equiv = ''; e._keep = false;
+        e._cur = v; e._curPicked = true; e._curUser = true; e._equiv = ''; e._keep = false;
       } else {
         e[k] = k === 'excluded' ? v === '1' : k === 'project' || k === 'fund' ? v : Number(v);
         // 新记的一笔换了账户：币种跟着新账户走
+        if (k === 'accountId') e._curUser = false;
         if (k === 'accountId' && e._isNew) { e._curPicked = false; e._equiv = ''; }
       }
       e._pick = null; break;
