@@ -162,8 +162,10 @@ function detailView() {
     t.loanPerson ? cell(t.loanSide === 1 ? tr('借出给', 'Lent to') : tr('借自', 'Borrowed from'), h(t.loanPerson)) : '',
     cell(tr('账本', 'Ledger'), h(state.data.ledger.get(t.ledgerId)?.name ?? '')),
   ].filter(Boolean).join('');
-  return `<div class="modal" data-act="close-view"><div class="card grid" role="dialog" aria-label="${tr('账单详情', 'Entry details')}">
-    <div class="card cc hero" style="--cc:${tint}"><button class="x" data-act="close-view-btn" aria-label="${tr('关闭', 'Close')}">✕</button>
+  // 和 App 一样是一整页（不是弹窗）：顶上返回栏，中间可以滚，底下三个按钮贴着底边
+  return `<div class="pg dt" role="region" aria-label="${tr('账单详情', 'Entry details')}">${pgBar(tr('账单详情', 'Entry details'), { back: ['close-view-btn'] })}
+    <div class="dt-body">
+    <div class="card cc hero" style="--cc:${tint}">
       <div class="halo">${transfer ? accountTile(to) : iconTile(leaf?.icon ?? 'tag')}</div>
       <div class="muted" style="font-weight:600">${title}</div>
       <div class="big amt ${t.kind === KIND.INCOME ? 'in' : t.kind === KIND.EXPENSE ? 'out' : ''}">${t.kind === KIND.INCOME ? '+' : t.kind === KIND.EXPENSE ? '-' : ''}${foreign ? money(t.origCents, t.currency) : money(t.amountCents)}</div>
@@ -175,9 +177,24 @@ function detailView() {
     ${linked.length ? `<div><div class="muted small">${tr('它抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
     ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}
     ${t.kind === KIND.EXPENSE && typeof startOffset === 'function' ? `<div class="dt-offs">${[['补贴', tr('＋ 补贴', '＋ Subsidy')], ['退款', tr('＋ 退款', '＋ Refund')], ['代付收回', tr('＋ 代付收回', '＋ Paid back')]].map(([k, n]) => `<button class="btn link" data-act="view-offset" data-v="${k}">${n}</button>`).join('')}</div>` : ''}
-    <div class="btns3"><button class="btn danger" data-act="view-delete">${tr('删除', 'Delete')}</button><button class="btn" data-act="view-copy">${tr('复制', 'Copy')}</button><button class="btn primary" data-act="edit" data-v="${t.id}">${tr('修改', 'Edit')}</button></div>
-  </div></div>`;
+    </div>
+    <div class="dt-foot"><div class="btns3"><button class="btn danger" data-act="view-delete">${tr('删除', 'Delete')}</button><button class="btn" data-act="view-copy">${tr('复制', 'Copy')}</button><button class="btn primary" data-act="edit" data-v="${t.id}">${tr('修改', 'Edit')}</button></div></div>
+  </div>`;
 }
+/** 正在看的这笔账（state.view 指的那笔还在）。 */
+const viewingTx = () => state.view != null && !state.loading && state.data.tx.has(state.view);
+/** 详情页的返回：回到上一笔的详情（从详情里点进来的），没有就回到原来的页面。 */
+function viewBack() {
+  let prev = state.viewStack?.pop();
+  while (prev != null && !state.data.tx.has(prev)) prev = state.viewStack.pop();
+  state.view = prev ?? null;
+  if (state.view == null) state.viewStack = [];
+}
+// 电脑上按 Esc 也能从详情页退回去
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || !viewingTx() || state.editing || document.querySelector('.modal, .ui-confirm')) return;
+  viewBack(); render();
+});
 
 // ---------------------------------------------------------------- 搜索：所有账本、所有时间
 
@@ -756,7 +773,8 @@ function exportCsv() {
 async function moreAction(act, v, el) {
   const toggle = (key, value) => { state[key] = state[key] === value ? null : value; };
   switch (act) {
-    case 'view': if (state.q.trim()) rememberSearch(state.q); state.view = Number(v); break;
+    // 详情里点它抵扣的那几笔：一页一页往里走，返回时一页一页回来（和 App 的页面栈一样）
+    case 'view': if (state.q.trim()) rememberSearch(state.q); if (state.view != null && state.view !== Number(v)) (state.viewStack ??= []).push(state.view); state.view = Number(v); break;
     // 给这笔支出记一笔补贴、退款或代付收回（editor.js 的 startOffset 带好抵扣关系）
     case 'view-offset': {
       const t = state.data.tx.get(state.view);
@@ -793,9 +811,9 @@ async function moreAction(act, v, el) {
       if (typeof LOAN !== 'undefined') Object.assign(LOAN, { open: null, loose: false, add: null, assign: null, err: '' });
       state.assetTab = 'accounts'; state.project = null; state.openKey = null; render(); scrollTo(0, state.assetsY ?? 0); return true;
     case 'trend-pick': { const i = Number(v), k = trendKey(); state.trendPick = state.trendPick?.key === k && state.trendPick.i === i ? null : { key: k, i }; break; }
-    case 'close-view-btn': state.view = null; break;
+    case 'close-view-btn': viewBack(); break;
     case 'view-delete': if (!await pgConfirm(tr('删除这笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true })) return true;
-      if (typeof edRemove === 'function') { const t = state.data.tx.get(state.view); state.view = null; await edRemove(t); return true; } try { await deleteRecord('tx', state.view); state.view = null; } catch (e) { state.error = e.message; } break;
+      if (typeof edRemove === 'function') { const t = state.data.tx.get(state.view); viewBack(); await edRemove(t); return true; } try { await deleteRecord('tx', state.view); viewBack(); } catch (e) { state.error = e.message; } break;
     case 'period': state.period = v; break;
     case 'section': state.section = v; state.openTop = null; state.openSub = null; state.openTag = null; break;
     case 'chart': state.line = v === '1'; break;

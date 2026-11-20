@@ -34,10 +34,18 @@ const apLum = (hex) => [1, 3, 5].map((i) => { const c = parseInt(hex.slice(i, i 
 
 const apMeta = document.querySelector('meta[name="theme-color"]');
 const apMetaDefault = apMeta?.content;
-/** 浏览器顶栏的颜色跟着外观的底色。 */
+const apIsHex = (c) => /^#[0-9a-f]{6}$/i.test(c ?? '');
+/** 两个 #RRGGBB 按比例混（t 是第一个的占比）。 */
+const apMix = (a, b, t) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * t + parseInt(b.slice(i, i + 2), 16) * (1 - t)).toString(16).padStart(2, '0')).join('');
+/** 状态栏（安卓上装到桌面后还有浏览器顶栏）的颜色 = 页面最上面那一截的颜色：
+ *  液态玻璃是底色叠一团主题色的光晕（选了账本色就是那个颜色），其他外观就是底色。 */
 function apThemeColor() {
   if (!apMeta) return;
-  apMeta.content = apPrefs.style === 'glass' ? apMetaDefault : getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || apMetaDefault;
+  const cs = getComputedStyle(document.documentElement), bg = cs.getPropertyValue('--bg').trim();
+  if (!apIsHex(bg)) { apMeta.content = apMetaDefault; return; }
+  if (apPrefs.style !== 'glass') { apMeta.content = bg; return; }
+  const glow = apIsHex(apPrefs.accent) ? apPrefs.accent : cs.getPropertyValue('--blob1').trim();
+  apMeta.content = apIsHex(glow) ? apMix(glow, bg, matchMedia('(prefers-color-scheme: dark)').matches ? 0.4 : 0.55) : bg;
 }
 
 function apSetAccent(hex) {

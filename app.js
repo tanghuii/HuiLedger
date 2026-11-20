@@ -270,9 +270,15 @@ function render() {
   if (!state.session) { app.innerHTML = loginView(); return; }
   // 日历不再是单独的页面：它是"明细"的另一种看法（和 App 一样），state.tab = 'calendar' 只是个别名
   if (state.tab === 'calendar') { state.tab = 'ledger'; state.calendarMode = true; }
-  // 画之前对一下滚动位置：换页时已经回到顶上了，卡片就直接画成展开的，不要先收着再弹开
-  if (window.scrollY <= 24 || state.tab !== 'ledger' || state.calendarMode) hm.mini = false;
-  hm.scrolled = state.tab === 'ledger' && hmNarrow.matches && window.scrollY > 2;
+  // 账单详情是一整页（和 App 一样）：盖住当前页面，底栏收起；退回来时列表还停在原来的位置
+  const viewing = viewingTx(), opening = viewing && hm.viewId !== state.view;
+  if (viewing && hm.viewId == null) hm.viewY = window.scrollY;
+  const leaving = !viewing && hm.viewId != null;
+  hm.viewId = viewing ? state.view : null;
+  // 画之前对一下滚动位置：换页时已经回到顶上了，卡片就直接画成展开的，不要先收着再弹开（看详情时列表的样子原样留着）
+  const y = leaving ? hm.viewY ?? 0 : window.scrollY;
+  if (!viewing && (y <= 24 || state.tab !== 'ledger' || state.calendarMode)) hm.mini = false;
+  hm.scrolled = !viewing && state.tab === 'ledger' && hmNarrow.matches && y > 2;
   const entering = hm.prev != null && (hm.prev !== state.tab || (state.tab === 'ledger' && hm.prevCal !== !!state.calendarMode));
   hm.prevCal = !!state.calendarMode;
   hmTrack();
@@ -280,18 +286,18 @@ function render() {
   const tabs = [['ledger', tr('明细', 'Ledger')], ['calendar', tr('日历', 'Calendar')], ['stats', tr('统计', 'Stats')], ['accounts', tr('资产', 'Assets')], ['ask', tr('问账本', 'Ask')], ['me', tr('我的', 'Me')]];
   const ledgers = [...state.data.ledger.values()].sort((a, b) => a.id - b.id);
   const searching = state.searching || !!state.q.trim();
-  const main = HM_MAIN.includes(state.tab) && !searching;
+  const main = HM_MAIN.includes(state.tab) && !searching && !viewing;
   const cal = state.tab === 'ledger' && !!state.calendarMode;
   const title = cal ? tr('日历', 'Calendar') : state.tab === 'ledger' ? state.data.ledger.get(state.ledgerId)?.name ?? tr('记账本', 'Ledger')
     : { stats: tr('统计', 'Stats'), accounts: tr('资产', 'Assets'), me: tr('我的', 'Me') }[state.tab] ?? '';
-  let body = state.loading ? `<p class="muted">${tr('正在读取…', 'Loading…')}</p>` : searching ? searchView() : pageView();
+  let body = state.loading ? `<p class="muted">${tr('正在读取…', 'Loading…')}</p>` : viewing ? detailView() : searching ? searchView() : pageView();
   // 二级页面自己没带返回栏的（比如别的模块新加的页面），补一条，免得手机上没有底栏时回不去
-  if (!state.loading && !searching && !HM_MAIN.includes(state.tab) && !body.includes('class="subbar"')) body = hmBackBar() + body;
+  if (!state.loading && !searching && !viewing && !HM_MAIN.includes(state.tab) && !body.includes('class="subbar"')) body = hmBackBar() + body;
   const navIdx = { ledger: 0, calendar: 0, stats: 1, accounts: 3, me: 4 }[state.tab];
   const navBtn = ([k, n, i]) => `<button class="${navIdx === { ledger: 0, stats: 1, accounts: 3, me: 4 }[k] ? 'on' : ''}" data-act="tab" data-v="${k}">${navIcon(i)}<span>${n}</span></button>`;
   // 电脑宽屏那一排页签：明细 / 日历 分开亮
   const tabOn = (k) => (k === 'ledger' ? state.tab === 'ledger' && !cal : k === 'calendar' ? cal : state.tab === k);
-  app.innerHTML = `<div class="wrap hm-t-${h(state.tab)}${cal ? ' hm-cal' : ''}${hm.scrolled ? ' hm-scrolled' : ''}${entering ? ' hm-enter' : ''}">
+  app.innerHTML = `<div class="wrap hm-t-${h(state.tab)}${cal ? ' hm-cal' : ''}${hm.scrolled ? ' hm-scrolled' : ''}${entering && !viewing ? ' hm-enter' : ''}${opening ? ' dt-enter' : ''}${leaving ? ' dt-leave' : ''}${viewing ? ' dt-on' : ''}">
     <div class="top${main ? '' : ' hm-sub'}${state.tab === 'ledger' && !cal ? ' hm-shim' : ''}">
       <h1><span class="hm-d">${tr('辉记账本', 'HuiLedger')}</span><span class="hm-p">${h(title)}</span></h1>
       ${ledgers.length > 1 ? `<select style="width:auto" data-act="ledger">${ledgers.map((l) => `<option value="${l.id}" ${l.id === state.ledgerId ? 'selected' : ''}>${h(l.name)}</option>`).join('')}</select>` : ''}
@@ -308,13 +314,15 @@ function render() {
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}${state.notice ? `<p class="ok small" data-act="notice-x">${h(state.notice)}</p>` : ''}
     ${body}
   </div>
-  ${state.tab === 'ledger' && !state.loading ? `<button class="fab" data-act="new" aria-label="${tr('记一笔', 'Add')}">+</button>` : ''}
-  ${navIdx != null && !searching ? `<nav class="bottom-nav"><i class="hm-pill" style="--i:${navIdx}" data-i="${navIdx}"></i>
+  ${state.tab === 'ledger' && !state.loading && !viewing ? `<button class="fab" data-act="new" aria-label="${tr('记一笔', 'Add')}">+</button>` : ''}
+  ${navIdx != null && !searching && !viewing ? `<nav class="bottom-nav"><i class="hm-pill" style="--i:${navIdx}" data-i="${navIdx}"></i>
     ${[['ledger', tr('明细', 'Ledger'), 'list'], ['stats', tr('统计', 'Stats'), 'pie']].map(navBtn).join('')}
     <button class="nav-add" data-act="new" aria-label="${tr('记一笔', 'Add')}">${hmSvg(ICONS.plus.d)}</button>
     ${[['accounts', tr('资产', 'Assets'), 'wallet'], ['me', tr('我的', 'Me'), 'user']].map(navBtn).join('')}
   </nav>` : ''}
-  ${state.aiSettings ? aiSettingsView() : ''}${state.view != null && !state.editing ? detailView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+  ${state.aiSettings ? aiSettingsView() : ''}${state.editing ? editorView() : ''}${state.patch ? patchView() : ''}`;
+  if (opening) window.scrollTo(0, 0);
+  if (leaving) { hm.viewY = null; window.scrollTo(0, y); }
   hmAfter();
 }
 
@@ -405,6 +413,7 @@ document.addEventListener('scroll', (ev) => {
 const hmNarrow = matchMedia('(max-width: 720px)');
 function hmFold() {
   hm.raf = 0;
+  if (hm.viewId != null) return; // 在看账单详情：列表那边的样子不动，退回去时原样
   const card = app.querySelector('.hm-sum'), wrap = app.querySelector('.wrap.hm-t-ledger'), y = window.scrollY;
   let mini = false;
   if (card && hmNarrow.matches) {
@@ -738,7 +747,7 @@ function ledgerView() {
     return `<div class="card"><div class="dayhead"><span>${dayLabel(day)}</span><span class="hm-dh">${head.map((x) => `<span>${x}</span>`).join('')}</span></div>${items.map((t) => txRow(t, L)).join('')}</div>`;
   }).join('');
   // 预算已经是汇总卡片的第二页，不再单独放一张预算卡
-  const extra = MOD.homeCards.map((f) => { try { return f(); } catch (e) { console.warn(e); return ''; } }).filter((x) => x && !x.includes('bud-home') && (txs.length || !x.includes('ed-listbar'))).join('');
+  const extra = MOD.homeCards.map((f) => { try { return f(); } catch (e) { console.warn(e); return ''; } }).filter((x) => x && !x.includes('bud-home')).join('');
   return `<div class="cols hm-home"><div class="grid sticky hm-head">${monthBar()}${summaryCard(totals)}${hmQuick()}${extra}</div>
     <div class="grid hm-days">${list || (typeof emptyState === 'function' ? emptyState('receipt', tr('这个月还没有账单', 'Nothing this month yet')) : `<div class="hm-empty muted">${hmSvg(ICONS.receipt.d)}<span>${tr('这个月还没有账单', 'Nothing this month yet')}</span></div>`)}</div></div>`;
 }

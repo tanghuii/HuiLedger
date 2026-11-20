@@ -238,6 +238,20 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .cells { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .btns3 { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px; }
 .btns3 .btn { height: 44px; }
+/* 账单详情：和 App 一样是一整页。顶上返回栏，底下三个按钮贴着屏幕底边，中间的内容从按钮下面滑过去 */
+.pg.dt { max-width: 640px; width: 100%; margin: 0 auto; grid-template-rows: auto 1fr auto; }
+.dt-body { display: grid; gap: 12px; align-content: start; }
+.dt-foot { position: sticky; bottom: 0; z-index: 20; margin: 0 -12px; padding: 14px 12px calc(env(safe-area-inset-bottom) + 12px);
+  backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
+  -webkit-mask-image: linear-gradient(transparent, #000 14px); mask-image: linear-gradient(transparent, #000 14px); }
+.dt-foot .btns3 .btn { height: 48px; }
+.wrap.dt-on { padding-bottom: 0; }
+@keyframes dt-in { from { opacity: 0; transform: translateX(32px); } }
+@keyframes dt-back { from { opacity: 0; transform: translateX(-24px); } }
+.wrap.dt-enter > .pg.dt { animation: dt-in .3s cubic-bezier(.2, .9, .3, 1); }
+.wrap.dt-leave > :not(.top) { animation: dt-back .26s cubic-bezier(.2, .9, .3, 1); }
+@media (max-width: 720px) { .pg.dt { min-height: 100dvh; } }
+@media (prefers-reduced-motion: reduce) { .wrap.dt-enter > .pg.dt, .wrap.dt-leave > :not(.top) { animation: none; } }
 
 /* 报销项目：进度环 */
 .ring { flex: none; position: relative; width: 62px; height: 62px; display: grid; place-items: center; }
@@ -425,8 +439,6 @@ body.ed-selecting .row.click.sel-on { background: color-mix(in srgb, var(--prima
 .ed-swstrip.armed { opacity: 1; }
 .ed-swstrip.armed span { animation: ed-pop .22s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes ed-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
-.ed-listbar { display: flex; justify-content: flex-end; }
-.ed-selbtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 13px; }
 /* #app 外面那一层：多选操作条、选项面板、删除确认、撤销提示 */
 #ed-layer .modal.ed-lmodal { z-index: 45; }
 .ed-bcard { display: grid; gap: 10px; align-content: start; }

@@ -2,7 +2,7 @@
 // 1. 记一笔 / 修改（EditScreen.kt）：标题栏里切支出收入转账、大金额（能选币种、改折合金额）、一行六个分类图标、小胶囊、备注、
 //    收入可以抵扣支出（补贴、退款）、支出下面列出抵扣它的补贴，自带数字键盘（能算 + −，再记 / 保存）
 // 2. 账单行（TxRow.kt）：侧滑（Gestures.kt SwipeRow）左滑删除、右滑复制，拉过一半多才生效，都能撤销；账户明细里按账户的角度显示
-// 3. 多选：长按一行或点"多选"，批量改项目、资金来源、分类、报销状态，或者一起删
+// 3. 多选：长按一行（手指、鼠标都行，电脑上也可以右键），批量改项目、资金来源、分类、报销状态，或者一起删
 // app.js 的 render() 在 state.editing 不为空时画 editorView()；txRow() 也在这里。
 // 撤销提示、多选操作条、删除确认画在 #app 外面的一层（#ed-layer），整页重画不影响它们。
 // 给别的页面用的：startEdit(tx)、startEditWith({ date, accountId, kind, categoryId })、startOffset(expense, '补贴' | '退款' | '代付收回')、
@@ -627,7 +627,7 @@ function edConfirmView() {
 // ---- 多选
 
 /** 页面上现在看得见的账单行（详情弹窗里的不算）。 */
-const edVisibleIds = () => [...new Set([...document.querySelectorAll('#app .row.click.ed-tx')].filter((r) => !r.closest('.modal')).map((r) => Number(r.dataset.v)))];
+const edVisibleIds = () => [...new Set([...document.querySelectorAll('#app .row.click.ed-tx')].filter((r) => !r.closest('.modal, .dt')).map((r) => Number(r.dataset.v)))];
 function edPaintRows() {
   for (const r of document.querySelectorAll('#app .row.click.ed-tx')) r.classList.toggle('sel-on', !!state.sel?.has(Number(r.dataset.v)));
 }
@@ -761,7 +761,7 @@ async function edLayerClick(ev) {
   edPaintLayer();
 }
 
-// ---------------------------------------------------------------- 侧滑和长按（只管手指，鼠标用"多选"按钮）
+// ---------------------------------------------------------------- 侧滑和长按（侧滑只管手指；长按手指、鼠标都管）
 // 左滑删除、右滑复制。前 64px 跟手，之后像橡皮筋（只走 0.32 倍）；手指拉过行宽 55% 才"上膛"，
 // 没上膛松手就弹回去什么都不做。上膛松手：复制直接做，删除先确认；两种都能撤销。
 
@@ -769,7 +769,8 @@ const sw = { row: null, x0: 0, y0: 0, dx: 0, mode: '', armed: false, lp: 0, swal
 const SW_FOLLOW = 64, SW_RUBBER = 0.32, SW_ARM = 0.55;
 function swRowAt(target) {
   const r = target?.closest?.('.row.click.ed-tx');
-  return r && r.closest('#app') && !r.closest('.modal') ? r : null;
+  // 弹窗里、账单详情页里的那几行只能点开看，不能滑、不能多选（和 App 一样）
+  return r && r.closest('#app') && !r.closest('.modal, .dt') ? r : null;
 }
 const swOffset = (d) => Math.sign(d) * (Math.abs(d) <= SW_FOLLOW ? Math.abs(d) : SW_FOLLOW + (Math.abs(d) - SW_FOLLOW) * SW_RUBBER);
 function swPaint(row, d) {
@@ -810,6 +811,7 @@ document.addEventListener('touchstart', (ev) => {
   sw.lp = setTimeout(() => {
     if (sw.row !== row || sw.mode) return;
     sw.mode = 'lp'; sw.swallow = Date.now() + 900;
+    try { navigator.vibrate?.(12); } catch { /* 不支持震动（iPhone）就算了 */ }
     const id = Number(row.dataset.v);
     if (!state.sel) edSelect(new Set([id])); else edToggleSel(id);
   }, 500);
@@ -848,6 +850,37 @@ function swEnd() {
 document.addEventListener('touchend', swEnd);
 document.addEventListener('touchcancel', swEnd);
 document.addEventListener('contextmenu', (ev) => { if (sw.mode === 'lp' || (sw.row && swRowAt(ev.target))) ev.preventDefault(); });
+
+// 鼠标：按住一行半秒也进多选（按着时挪动了就不算）；右键一行 = 勾上 / 取消
+{
+  let t = 0, x = 0, y = 0;
+  document.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType !== 'mouse') return;
+    if (sw.swallow === Infinity) sw.swallow = 0;
+    if (ev.button !== 0 || state.editing) return;
+    const row = swRowAt(ev.target);
+    if (!row) return;
+    x = ev.clientX; y = ev.clientY;
+    clearTimeout(t);
+    t = setTimeout(() => {
+      t = 0;
+      if (!row.isConnected) return;
+      sw.swallow = Infinity; // 松开鼠标后的那一下点击不算（下一次按下时作废）
+      const id = Number(row.dataset.v);
+      if (!state.sel) edSelect(new Set([id])); else edToggleSel(id);
+    }, 500);
+  });
+  document.addEventListener('pointermove', (ev) => { if (t && ev.pointerType === 'mouse' && Math.hypot(ev.clientX - x, ev.clientY - y) > 6) { clearTimeout(t); t = 0; } });
+  for (const n of ['pointerup', 'pointercancel']) document.addEventListener(n, (ev) => { if (ev.pointerType === 'mouse') { clearTimeout(t); t = 0; } });
+  document.addEventListener('contextmenu', (ev) => {
+    if (sw.row || state.editing || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    const row = swRowAt(ev.target);
+    if (!row) return;
+    ev.preventDefault();
+    const id = Number(row.dataset.v);
+    if (!state.sel) edSelect(new Set([id])); else edToggleSel(id);
+  });
+}
 
 // 侧滑、长按之后跟着来的那一下点击不算；多选时点一行 = 勾上 / 取消
 document.addEventListener('click', (ev) => {
@@ -915,7 +948,6 @@ document.addEventListener('keydown', (ev) => {
 
 // ---------------------------------------------------------------- 登记
 
-MOD.homeCards.push(() => `<div class="ed-listbar"><button class="btn ed-selbtn" data-act="ed-sel-start">${edSvg('check')}${tr('多选', 'Select')}</button></div>`);
 
 MOD.changes.push(async (ev) => {
   if (ev.target.id !== 'e-date' || !state.editing) return false;

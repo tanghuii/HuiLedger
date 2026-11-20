@@ -183,8 +183,6 @@ div.hm-li { cursor: default; }
   .hm-home .hm-sum { margin: 6px 0; }
   .hm-home .quick { height: 42px; margin: 2px 0; padding: 0 4px 0 16px; gap: 10px; }
   .hm-home .quick input { font-size: 16px; padding: 0; }
-  .hm-home .ed-listbar { margin-top: 8px; }
-  .hm-home .ed-selbtn { padding: 4px 12px; font-size: 12.5px; }
   .hm-days { gap: 10px; padding-top: 8px; }
   .hm-days > .card { padding: 12px; }
   .hm-days .dayhead { padding: 0 2px 2px; }
