@@ -271,6 +271,7 @@ function startEditWith(o = {}) {
   state.error = '';
   startEdit(null, true);
   const e = state.editing;
+  e._preset = true;
   if (o.date != null && o.date !== '') e.date = typeof o.date === 'string' ? isoToDay(o.date) : Number(o.date);
   const cat = o.categoryId ? state.data.category.get(Number(o.categoryId)) : null;
   const kind = typeof o.kind === 'string' ? { expense: KIND.EXPENSE, income: KIND.INCOME, transfer: KIND.TRANSFER }[o.kind.toLowerCase()] ?? Number(o.kind) : o.kind;
@@ -414,7 +415,7 @@ function editorView() {
   const heading = e._isNew ? tr('记一笔', 'New') : tr('修改', 'Edit');
   return `<div class="modal ed-modal" data-act="close-backdrop"><div class="card ed-sheet" role="dialog" aria-label="${heading}">
     <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${seg('e-kind', [[0, tr('支出', 'Out')], [1, tr('收入', 'In')], [2, tr('转账', 'Move')]], e.kind)}</div>
-    ${edAmountCard(e)}
+    ${edImportStrip(e)}${edAmountCard(e)}
     <div class="ed-scroll">
       ${head}
       <div class="ed-chips">${chips}</div>
@@ -507,6 +508,38 @@ function edRefresh() {
   if (s) s.scrollTop = top;
 }
 
+/**
+ * 新记一笔时顶上的一行导入按钮（和手机端一样）：截图、文件、拍照三个小胶囊，选好就关掉记账页、去导入页让 AI 识别。
+ * 一开始输金额就收起来。还没填 AI 密钥时点哪个都先去导入页，那里会提示去填密钥。
+ */
+function edImportStrip(e) {
+  if (!e._isNew || e._preset) return '';
+  const key = typeof aiKey === 'function' && aiKey();
+  const btn = (kind, icon, label, accept, extra = '') => key
+    ? `<label class="ed-imp-b">${hmSvg(ICONS[icon].d)}<span>${label}</span><input type="file" data-edimp="${kind}" accept="${accept}" ${extra} hidden></label>`
+    : `<button class="ed-imp-b" data-act="ed-imp-key">${hmSvg(ICONS[icon].d)}<span>${label}</span></button>`;
+  const files = `image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf${typeof IMP_XLSX_MIME === 'string' ? ',' + IMP_XLSX_MIME : ''}`;
+  return `<div class="ed-imp${e._amount ? ' gone' : ''}"><div><span class="ed-imp-h">${hmSvg(ICONS.sparkle.d)}${tr('AI 识别', 'AI import')}</span>
+    ${btn('pick', 'phone', tr('截图', 'Screenshot'), 'image/*', 'multiple')}${btn('files', 'document', tr('文件', 'File'), files, 'multiple')}${btn('camera', 'camera', tr('拍照', 'Photo'), 'image/*', 'capture="environment"')}</div></div>`;
+}
+/** 去导入页：关掉记账页（没保存的这笔不要了），切到导入页。 */
+function edGoImport() { state.editing = null; state.error = ''; state.tab = 'import'; scrollTo(0, 0); render(); }
+MOD.changes.push(async (ev) => {
+  const k = ev.target.dataset?.edimp;
+  if (!k) return false;
+  const files = [...(ev.target.files ?? [])];
+  ev.target.value = '';
+  if (!files.length) return true;
+  edGoImport();
+  if (typeof impStart === 'function') await impStart(k === 'pick' ? files.slice(0, 10) : files);
+  return true;
+});
+MOD.actions.push(async (act) => {
+  if (act !== 'ed-imp-key') return false;
+  edGoImport();
+  return true;
+});
+
 /** 只重画金额卡片、抵扣合计和保存键（打字时不整页重画，输入框的光标不会丢）。 */
 function edPaintAmount() {
   const e = state.editing;
@@ -514,6 +547,7 @@ function edPaintAmount() {
   const box = document.querySelector('.ed-amount');
   if (!box) return render();
   box.outerHTML = edAmountCard(e);
+  document.querySelector('.ed-imp')?.classList.toggle('gone', !!e._amount);
   const sum = document.querySelector('.ed-offsum');
   if (sum) sum.innerHTML = edOffSum(e);
   document.querySelector('.ed-key.save')?.classList.toggle('dim', !edCheck(e).ok);

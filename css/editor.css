@@ -70,3 +70,11 @@
 /* 标签面板里选中的标签：实心主色（和手机端一样） */
 .chip.ed-tagpick.on { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 .ed-offline .btn.link { color: var(--muted); flex: none; }
+
+/* 记一笔页顶上的一行导入按钮：截图、文件、拍照（和手机端一样）。一开始输金额就收起来 */
+.ed-imp { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .25s ease, opacity .2s ease, margin .25s ease; margin-bottom: 8px; }
+.ed-imp > div { min-height: 0; overflow: hidden; display: flex; align-items: center; gap: 6px; }
+.ed-imp.gone { grid-template-rows: 0fr; opacity: 0; margin-bottom: 0; pointer-events: none; }
+.ed-imp-h { flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--primary); white-space: nowrap; }
+.ed-imp-h svg, .ed-imp-b svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ed-imp-b { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
