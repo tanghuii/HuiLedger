@@ -34,14 +34,14 @@ body {
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 .wrap { max-width: 1040px; margin: 0 auto; padding: 20px 16px 80px; }
-.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .top h1 { font-size: 24px; margin: 0; flex: 1; min-width: 140px; }
 .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); border: 1px solid var(--stroke); }
 .tabs button { border: 0; background: none; padding: 7px 16px; border-radius: 999px; cursor: pointer; color: var(--muted); }
 .tabs button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
 /* 液态玻璃：半透明的面、一圈由亮到暗再到亮的边、上沿一道反光，背后的颜色被模糊并提亮 */
 .card {
-  position: relative; border-radius: 24px; padding: 18px; border: 1px solid transparent;
+  position: relative; border-radius: 22px; padding: 14px; border: 1px solid transparent;
   background: linear-gradient(var(--card), var(--card)) padding-box,
     linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box;
   backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
@@ -52,7 +52,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card > * { position: relative; }
 .card.click { cursor: pointer; }
 .card.click:hover { transform: translateY(-3px) scale(1.01); box-shadow: inset 0 1px 0 var(--shine), 0 18px 40px -14px rgba(40, 30, 110, .4); }
-.grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.grid { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 /* 网格里的每一块都不许被一行不换行的长文字撑宽，否则整列会冲出屏幕，金额被挤到外面 */
 .grid > *, .cols > * { min-width: 0; }
 .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
@@ -66,7 +66,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .num { font-family: var(--num-font); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .big { font-family: var(--num-font); font-size: 32px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; }
 .in { color: var(--income); } .out { color: var(--expense); } .amber { color: var(--amber); }
-.row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .row.click { cursor: pointer; border-radius: 12px; margin: 0 -8px; padding: 8px; }
 .row.click:hover { background: color-mix(in srgb, var(--primary) 9%, transparent); }
 .row .main { flex: 1; min-width: 0; }
@@ -535,3 +535,26 @@ body { background: transparent; min-height: 100vh; min-height: 100dvh; }
 .flg { position: relative; display: inline-block; flex: none; width: 1.333em; height: 1em; border-radius: .26em; overflow: hidden; vertical-align: -.15em; box-shadow: 0 1px 0 rgba(0, 0, 0, .16); }
 .flg svg { display: block; width: 100% !important; height: 100% !important; stroke: none !important; fill: none; opacity: 1; transform: none; }
 .flg::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, rgba(255, 255, 255, .28), transparent 60%); box-shadow: inset 0 0 0 .8px rgba(255, 255, 255, .55); }
+
+/* 分类管理（modules/manage.js）：紧凑的一行一个分类，子分类是小胶囊；点了弹出操作 */
+.mg-clist { padding: 4px; }
+.mg-crow { padding: 6px 8px; border-radius: 16px; }
+.mg-crow + .mg-crow { border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent); border-radius: 0; }
+.mg-chead { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; cursor: pointer; text-align: left; }
+.mg-chead b { flex: 1; font-weight: 500; }
+.mg-chead .tile { width: 32px; height: 32px; }
+.mg-more svg, .mg-chip svg, .mg-act svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mg-more { color: var(--muted); display: grid; }
+.mg-chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 5px 0 2px 42px; }
+.mg-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border: 1px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.mg-chip svg { width: 13px; height: 13px; color: var(--primary); }
+.mg-chip.add { background: none; border-color: color-mix(in srgb, var(--primary) 40%, transparent); color: var(--primary); }
+.mg-sheet { gap: 4px; }
+.mg-acthead { display: flex; align-items: center; gap: 10px; font-size: 17px; padding: 2px 4px 8px; }
+.mg-act, .mg-mopt { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 6px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 15px; cursor: pointer; text-align: left; }
+.mg-act:hover, .mg-mopt:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.mg-act.danger { color: var(--expense); }
+.mg-mlist { max-height: 60vh; overflow: auto; }
+.mg-mopt { padding: 6px 4px; }
+.mg-mopt.sub { padding-left: 34px; font-size: 14px; }
+.mg-mopt.sub .tile { width: 24px; height: 24px; }

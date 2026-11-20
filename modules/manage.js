@@ -163,20 +163,54 @@ document.addEventListener('click', (ev) => {
 // ---------------------------------------------------------------- 分类
 
 function mgCategoriesView() {
+  // 紧凑的列表（和手机端一样）：一行一个分类，子分类是名字下面的小胶囊；点分类或子分类弹出"修改 / 合并 / 删除"
   const m = mgState(), cats = [...state.data.category.values()].sort(mgOrder);
   const tops = cats.filter((c) => !c.parentId && !!c.isIncome === m.income);
+  const chip = (s) => `<button class="mg-chip" data-act="mg-cat-act" data-v="${s.id}">${hmSvg((ICONS[s.icon] ?? ICONS.tag).d)}<span>${h(catName(s))}</span></button>`;
   const rows = tops.map((c) => {
-    const subs = cats.filter((s) => s.parentId === c.id), open = m.open === c.id;
-    return `<div class="mg-item" data-ro-id="${c.id}"><div class="row click" data-act="mg-open" data-v="${c.id}">${iconTile(c.icon)}
-        <div class="main"><div class="title">${h(c.name)} <span class="small muted">${open ? '▴' : '▾'}</span></div>${subs.length ? `<div class="sub">${subs.map((s) => h(s.name)).join(tr('、', ', '))}</div>` : ''}</div>
-        <button class="btn link small" data-act="mg-cat-edit" data-v="${c.id}">${tr('修改', 'Edit')}</button></div>
-      ${open ? `<div class="indent">${subs.map((s) => `<div class="row click indent" data-act="mg-cat-edit" data-v="${s.id}">${iconTile(s.icon, 'sm')}<div class="main">${h(s.name)}</div><span class="muted">›</span></div>`).join('')}
-        <button class="btn link small" data-act="mg-cat-new" data-v="${c.id}">${tr('＋ 子分类', '＋ Subcategory')}</button></div>` : ''}</div>`;
+    const subs = cats.filter((s) => s.parentId === c.id);
+    return `<div class="mg-crow" data-ro-id="${c.id}"><button class="mg-chead" data-act="mg-cat-act" data-v="${c.id}">${iconTile(c.icon, 'sm')}<b>${h(catName(c))}</b><span class="mg-more">${hmSvg(ICONS.more.d)}</span></button>
+      <div class="mg-chips">${subs.map(chip).join('')}<button class="mg-chip add" data-act="mg-cat-new" data-v="${c.id}">＋ ${tr('子分类', 'Sub')}</button></div></div>`;
   }).join('');
-  return `<div class="card grid">${seg('mg-income', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], m.income ? 1 : 0)}
-    <div class="between"><span class="muted small">${tr(`${tops.length} 个分类`, `${tops.length} ${tops.length === 1 ? 'category' : 'categories'}`)}</span><button class="btn link" data-act="mg-cat-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div></div>
-    ${tops.length > 1 ? `<div class="muted small mg-hint">${tr('长按拖动排序', 'Long-press to reorder')}</div>` : ''}
-    <div class="card">${rows ? `<div data-ro="category">${rows}</div>` : `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
+  return `<div class="card grid mg-cbar">${seg('mg-income', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], m.income ? 1 : 0)}
+    <div class="between"><span class="muted small">${tr(`${tops.length} 个分类 · 长按拖动排序`, `${tops.length} ${tops.length === 1 ? 'category' : 'categories'} · long-press to reorder`)}</span><button class="btn link" data-act="mg-cat-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div></div>
+    <div class="card mg-clist">${rows ? `<div data-ro="category">${rows}</div>` : `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
+}
+
+/** 点了一个分类：修改 / 合并到… / 删除。 */
+function mgCatActDialog(e) {
+  const c = state.data.category.get(e.id);
+  if (!c) return '';
+  const tops = [...state.data.category.values()].filter((x) => !x.parentId && !!x.isIncome === !!c.isIncome);
+  const item = (act, icon, label, cls = '') => `<button class="mg-act ${cls}" data-act="${act}" data-v="${c.id}">${hmSvg(ICONS[icon].d)}<span>${label}</span></button>`;
+  return `<div class="mg-acthead">${iconTile(c.icon, 'sm')}<b>${h(catName(c))}</b></div>
+    ${item('mg-cat-edit', 'pencil', tr('修改名称和图标', 'Rename / icon'))}${item('mg-cat-merge', 'transfer', tr('合并到其他分类', 'Merge into…'))}
+    ${c.parentId || tops.length > 1 ? item('mg-cat-del', 'trash', tr('删除', 'Delete'), 'danger') : ''}`;
+}
+/** 合并：选要并进哪个分类（同为支出或收入；不能并进自己和自己的子分类）。 */
+function mgMergeDialog(e) {
+  const from = state.data.category.get(e.id);
+  if (!from) return '';
+  const cats = [...state.data.category.values()].sort(mgOrder);
+  const opt = (c, sub) => `<button class="mg-mopt ${sub ? 'sub' : ''}" data-act="mg-merge-to" data-v="${c.id}">${iconTile(c.icon, 'sm')}<span>${h(catName(c))}</span></button>`;
+  const list = cats.filter((c) => !c.parentId && !!c.isIncome === !!from.isIncome && c.id !== from.id)
+    .map((t) => opt(t, false) + cats.filter((s) => s.parentId === t.id && s.id !== from.id).map((s) => opt(s, true)).join('')).join('');
+  return `<b style="font-size:17px">${tr(`把「${h(catName(from))}」合并到`, `Merge “${h(catName(from))}” into`)}</b><div class="mg-mlist">${list}</div>`;
+}
+
+/** 合并分类（同手机端 mergeCategory）：from 的账单都改记到 into，然后删掉 from；from 的子分类挪到 into 下面（into 是子分类时连账单一起并进去）。 */
+async function mgMergeCategory(from, into) {
+  if (!from || !into || from.id === into.id || into.parentId === from.id || !!from.isIncome !== !!into.isIncome) return;
+  const cats = [...state.data.category.values()], move = new Map([[from.id, into.id]]), gone = [from.id], moved = [];
+  if (!from.parentId) {
+    for (const s of cats.filter((x) => x.parentId === from.id)) {
+      if (!into.parentId) moved.push(HL_JSON.category({ ...s, parentId: into.id }));
+      else { move.set(s.id, into.id); gone.push(s.id); }
+    }
+  }
+  await mgPutMany('tx', allTxs().filter((t) => move.has(t.categoryId)).map((t) => ({ ...t, categoryId: move.get(t.categoryId) })));
+  if (moved.length) await mgPutMany('category', moved);
+  await mgPutMany('category', gone, true);
 }
 
 function mgCategoryDialog(e) {
@@ -261,6 +295,12 @@ const mgAccountUsed = (id) => allTxs().some((t) => t.accountId === id || t.toAcc
 function mgDialog() {
   const e = mgState().edit;
   if (!e) return '';
+  // 只有选项、没有表单的弹窗（分类操作、合并）：下面只放一个"取消"
+  if (e.kind === 'catact' || e.kind === 'merge') {
+    return `<div class="modal" data-bg="mg"><div class="card grid mg-sheet" role="dialog" aria-label="${tr('分类', 'Category')}">${e.kind === 'catact' ? mgCatActDialog(e) : mgMergeDialog(e)}
+      ${mgState().error ? `<p class="err" style="margin:0">${h(mgState().error)}</p>` : ''}
+      <button class="btn" data-act="mg-cancel">${tr('取消', 'Cancel')}</button></div></div>`;
+  }
   const body = e.kind === 'category' ? mgCategoryDialog(e) : e.kind === 'account' ? mgAccountDialog(e)
     : `<b style="font-size:18px">${e.isNew ? tr('新建账本', 'New ledger') : tr('账本改名', 'Rename ledger')}</b><label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(e.obj.name)}"></label>`;
   return `<div class="modal" data-bg="mg"><div class="card grid" role="dialog" aria-label="${tr('管理', 'Manage')}">${body}
@@ -324,6 +364,26 @@ MOD.actions.push(async (act, v) => {
         break;
       }
       case 'mg-cat-edit': m.edit = { kind: 'category', isNew: false, obj: { ...state.data.category.get(id) } }; break;
+      case 'mg-cat-act': m.edit = { kind: 'catact', id }; break;
+      case 'mg-cat-merge': m.edit = { kind: 'merge', id }; break;
+      case 'mg-merge-to': {
+        const from = state.data.category.get(m.edit?.id), into = state.data.category.get(id);
+        if (!from || !into) break;
+        const n = allTxs().filter((t) => t.categoryId === from.id || state.data.category.get(t.categoryId)?.parentId === from.id).length;
+        const subsMove = !from.parentId && !into.parentId && [...state.data.category.values()].some((x) => x.parentId === from.id);
+        if (!await uiConfirm(tr(`合并到「${catName(into)}」？`, `Merge into “${catName(into)}”?`), { ok: tr('合并', 'Merge'),
+          detail: h(tr(`${n ? `「${catName(from)}」的 ${n} 笔账单改记到「${catName(into)}」${subsMove ? '，子分类一起移过去' : ''}，然后` : subsMove ? `子分类移到「${catName(into)}」下面，然后` : ''}删掉「${catName(from)}」。`,
+            `${n ? `${n} ${n === 1 ? 'entry moves' : 'entries move'} to “${catName(into)}”${subsMove ? ', with its subcategories' : ''}, then ` : subsMove ? `Its subcategories move to “${catName(into)}”, then ` : ''}“${catName(from)}” is removed.`)) })) return true;
+        await mgMergeCategory(from, into); m.edit = null;
+        break;
+      }
+      case 'mg-cat-del': {
+        const c = state.data.category.get(id), n = allTxs().filter((t) => t.categoryId === c.id || state.data.category.get(t.categoryId)?.parentId === c.id).length;
+        if (!await uiConfirm(tr(`删除「${catName(c)}」？`, `Delete "${catName(c)}"?`), { ok: tr('删除', 'Delete'), danger: true,
+          detail: n ? h(tr(`${n} 笔账单并入${c.parentId ? '上级分类' : '「其他」'}`, `${n} ${n === 1 ? 'entry moves' : 'entries move'} to ${c.parentId ? 'the parent' : '"Other"'}`)) : '' })) return true;
+        await mgDeleteCategory(c); m.edit = null;
+        break;
+      }
       case 'mg-icon': mgCollect(); m.edit.obj.icon = v; break;
       case 'mg-cat-delete': {
         const c = m.edit.obj, n = allTxs().filter((t) => t.categoryId === c.id || state.data.category.get(t.categoryId)?.parentId === c.id).length;
