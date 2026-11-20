@@ -7,7 +7,7 @@
 <meta name="description" content="可爱又好用的记账本：九大行星陪你记账，安卓 App 和 iPhone 网页版，数据云端同步。">
 <meta name="theme-color" content="#8e7cf8">
 <meta property="og:title" content="行星记账 · Planet Ledger">
-<meta property="og:description" content="九大行星陪你记账：一笔几秒，AI 帮你整理账单，手机和网页同步。免费。">
+<meta property="og:description" content="九大行星陪你记账：快速记账，AI 帮你整理账单，手机和网页同步。免费。">
 <meta property="og:image" content="https://planet.tanghui.app/icons/icon-512.png">
 <meta property="og:url" content="https://planet.tanghui.app/download/">
 <link rel="icon" type="image/png" href="../icons/favicon-32.png">
@@ -97,7 +97,7 @@ h2 { font-size: clamp(26px, 4vw, 36px); margin: 56px 0 8px; text-align: center; 
 .sub { text-align: center; color: var(--muted); margin: 0 auto 22px; max-width: 36em; }
 .planets { display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px; padding: 18px 14px; }
 .planets div { text-align: center; font-size: 13px; color: var(--muted); }
-.planets div svg { width: 100%; max-width: 72px; height: auto; display: block; margin: 0 auto 4px; transition: transform .3s cubic-bezier(.2, .9, .3, 1.5); }
+.planets div svg { width: 70%; max-width: 64px; height: auto; display: block; margin: 0 auto 4px; transition: transform .3s cubic-bezier(.2, .9, .3, 1.5); }
 .planets div:hover svg { transform: translateY(-6px) scale(1.08); }
 .planets div:nth-child(odd) svg { animation: bob 5s ease-in-out infinite; }
 .planets div:nth-child(even) svg { animation: bob 5s ease-in-out infinite .8s; }
@@ -112,6 +112,8 @@ h2 { font-size: clamp(26px, 4vw, 36px); margin: 56px 0 8px; text-align: center; 
 /* 手机样机 */
 .show { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px; align-items: center; margin-top: 56px; }
 .phone { width: min(320px, 100%); margin: 0 auto; border-radius: 44px; padding: 12px; background: #15122b; box-shadow: 0 40px 80px -30px rgba(30, 20, 90, .6), inset 0 0 0 2px rgba(255, 255, 255, .08); }
+.screen.shot { padding: 0; min-height: 0; background: #e9ecfb; }
+.screen.shot img { display: block; width: 100%; height: auto; }
 .screen { border-radius: 34px; overflow: hidden; padding: 18px 14px 16px; min-height: 560px; position: relative;
   background: radial-gradient(80% 50% at 0% 0%, #b9a8ff 0, transparent 70%), radial-gradient(70% 50% at 100% 40%, #9fd8ff 0, transparent 70%), radial-gradient(70% 50% at 0% 100%, #ffc4e0 0, transparent 70%), #eceffd; color: #1b1f33; }
 .screen .t { display: flex; align-items: center; justify-content: space-between; margin: 6px 4px 10px; }
@@ -122,7 +124,7 @@ h2 { font-size: clamp(26px, 4vw, 36px); margin: 56px 0 8px; text-align: center; 
 .sum .v { font-size: 30px; font-weight: 800; letter-spacing: -.01em; }
 .sum .row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; }
 .sum .row b { display: block; font-size: 16px; }
-.sum .face { position: absolute; right: 12px; top: 10px; width: 64px; height: 64px; }
+.sum .face { position: absolute; right: 16px; top: 10px; width: 64px; height: 64px; }
 .sum::after { content: ""; position: absolute; width: 220px; height: 60px; border: 1.5px solid rgba(255, 255, 255, .16); border-radius: 50%; right: -60px; top: 18px; transform: rotate(-14deg); }
 .list { margin-top: 12px; border-radius: 22px; padding: 10px 12px; background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .9); }
 .list .d { font-size: 11px; color: #5d6480; margin: 2px 2px 4px; }
@@ -181,7 +183,7 @@ footer a { color: inherit; }
     <div>
       <h1 data-zh="行星记账" data-en="Planet Ledger">行星记账</h1>
       <p class="en" data-zh="Planet Ledger" data-en="行星记账">Planet Ledger</p>
-      <p class="lead" data-zh="九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。" data-en="Nine little planets keep you company while you track money. Log an entry in seconds, let AI sort your statements, and sync between phone and web. Free, no ads.">九大行星陪你记账。一笔几秒钟，AI 帮你整理账单，手机和网页随时同步。免费，没有广告。</p>
+      <p class="lead" data-zh="太阳系的行星陪你记账。银行、微信、支付宝账单一键导入，AI 智能识别分类，帮你理清千丝万缕的收支；手机与网页数据实时同步，永久免费，无广告。" data-en="The planets of the solar system keep you company while you track money. Import bank, WeChat and Alipay statements in one tap and let AI sort every entry into the right category. Syncs between phone and web. Free, no ads.">太阳系的行星陪你记账。银行、微信、支付宝账单一键导入，AI 智能识别分类，帮你理清千丝万缕的收支；手机与网页数据实时同步，永久免费，无广告。</p>
       <div class="btns">
         <a class="btn primary" id="dl-android" href="https://planet.tanghui.app/download/latest.apk">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.2 9.5h9.6c.6 0 1 .4 1 1v6.3c0 .6-.4 1-1 1h-.7v2.4a1.1 1.1 0 0 1-2.2 0v-2.4h-3.8v2.4a1.1 1.1 0 0 1-2.2 0v-2.4h-.7c-.6 0-1-.4-1-1v-6.3c0-.6.4-1 1-1Zm-2.8 0a1.1 1.1 0 0 1 1.1 1.1v4.6a1.1 1.1 0 0 1-2.2 0v-4.6c0-.6.5-1.1 1.1-1.1Zm15.2 0a1.1 1.1 0 0 1 1.1 1.1v4.6a1.1 1.1 0 0 1-2.2 0v-4.6c0-.6.5-1.1 1.1-1.1ZM8.6 4.1l-1-1.7a.3.3 0 0 1 .5-.3l1 1.8A6.6 6.6 0 0 1 12 3.3c1 0 2 .2 2.9.6l1-1.8a.3.3 0 0 1 .5.3l-1 1.7a5.4 5.4 0 0 1 2.8 4.5H5.8a5.4 5.4 0 0 1 2.8-4.5Zm1 2.2a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Zm4.8 0a.7.7 0 1 0 0 1.4.7.7 0 0 0 0-1.4Z"/></svg>
@@ -189,10 +191,10 @@ footer a { color: inherit; }
         </a>
         <a class="btn" id="open-web" href="../">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8a4.7 4.7 0 0 0-4 2.4c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.5-1-2.5-4ZM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.6 2.8-1.4Z"/></svg>
-          <span><span data-zh="iPhone · 网页版" data-en="iPhone · Web app">iPhone · 网页版</span><small data-zh="Safari 打开，添加到主屏幕" data-en="Open in Safari, add to Home Screen">Safari 打开，添加到主屏幕</small></span>
+          <span><span data-zh="iPhone · 网页版" data-en="iPhone · Web app">iPhone · 网页版</span><small data-zh="在 Safari 中打开并添加至主屏幕" data-en="Open in Safari, add to Home Screen">在 Safari 中打开并添加至主屏幕</small></span>
         </a>
       </div>
-      <p class="note" id="hint" data-zh="电脑上也能直接用网页版。" data-en="The web app also works on a computer.">电脑上也能直接用网页版。</p>
+      <p class="note" id="hint" data-zh="网页版同样可在电脑上使用。" data-en="The web app also works on a computer.">网页版同样可在电脑上使用。</p>
     </div>
     <div class="orbit" aria-hidden="true">
       <div class="ring"></div>
@@ -203,57 +205,44 @@ footer a { color: inherit; }
   </section>
 
   <section class="reveal">
-    <h2 data-zh="选一颗你的星球" data-en="Pick your planet">选一颗你的星球</h2>
-    <p class="sub" data-zh="每个月有一颗主题行星轮流值班；花得比赚得多，它会皱眉。桌面图标也可以换成你喜欢的那颗。" data-en="Each month has its own planet on duty. Spend more than you earn and it frowns. You can make any of them your app icon.">每个月有一颗主题行星轮流值班；花得比赚得多，它会皱眉。桌面图标也可以换成你喜欢的那颗。</p>
+    <h2 data-zh="选择你的星球" data-en="Pick your planet">选择你的星球</h2>
+    <p class="sub" data-zh="每月由一颗行星担任主题；当月支出超过收入时，它会露出愁容。应用图标亦可更换为任一行星。" data-en="Each month has its own planet on duty. Spend more than you earn and it frowns. You can make any of them your app icon.">每月由一颗行星担任主题；当月支出超过收入时，它会露出愁容。应用图标亦可更换为任一行星。</p>
     <div class="card planets" id="nine"></div>
   </section>
 
   <section class="reveal">
     <h2 data-zh="记账，原来可以这么轻松" data-en="Bookkeeping, made easy">记账，原来可以这么轻松</h2>
-    <p class="sub" data-zh="好看只是开始，该有的功能一样不少。" data-en="Pretty is just the start. Everything you need is here.">好看只是开始，该有的功能一样不少。</p>
+    <p class="sub" data-zh="在美观之外，功能同样完备。" data-en="Pretty is just the start. Everything you need is here.">在美观之外，功能同样完备。</p>
     <div class="feats">
-      <div class="card feat"><div class="ic" style="--c:#6c5ce7"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z M8 9h2 M14 9h2 M8 13h2 M14 13h2 M8 17h8"/></svg></div>
-        <h3 data-zh="一笔几秒" data-en="Seconds per entry">一笔几秒</h3><p data-zh="自带数字键盘和常用分类；左右一拉复制或删除，长按多选批量改。" data-en="Built-in keypad and quick categories. Swipe to copy or delete, long-press to edit many at once.">自带数字键盘和常用分类；左右一拉复制或删除，长按多选批量改。</p></div>
       <div class="card feat"><div class="ic" style="--c:#e0569b"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg></div>
-        <h3 data-zh="AI 帮你记" data-en="AI does the typing">AI 帮你记</h3><p data-zh="说一句「午饭 12 欧」就记好；银行截图、账单文件一键导入；还能直接问账本。支持 Claude 和 DeepSeek。" data-en="Say “lunch 12 euros” and it's logged. Import bank screenshots and statements, or just ask your ledger. Works with Claude and DeepSeek.">说一句「午饭 12 欧」就记好；银行截图、账单文件一键导入；还能直接问账本。支持 Claude 和 DeepSeek。</p></div>
+        <h3 data-zh="账单一键导入 · AI 智能分类" data-en="One-tap import · AI categories">账单一键导入 · AI 智能分类</h3><p data-zh="支持银行、微信、支付宝账单一键导入（文件或截图均可），AI 智能识别并自动分类，帮你理清千丝万缕的收支。也可输入一句话完成记账，或直接向账本提问。支持 Claude 与 DeepSeek。" data-en="Import bank, WeChat and Alipay statements in one tap, as files or screenshots. AI recognises and categorises every entry, so even a tangled month makes sense. You can also log by typing one sentence, or just ask your ledger. Works with Claude and DeepSeek.">支持银行、微信、支付宝账单一键导入（文件或截图均可），AI 智能识别并自动分类，帮你理清千丝万缕的收支。也可输入一句话完成记账，或直接向账本提问。支持 Claude 与 DeepSeek。</p></div>
+      <div class="card feat"><div class="ic" style="--c:#6c5ce7"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z M8 9h2 M14 9h2 M8 13h2 M14 13h2 M8 17h8"/></svg></div>
+        <h3 data-zh="快速记账" data-en="Seconds per entry">快速记账</h3><p data-zh="内置数字键盘与常用分类；左右滑动即可复制或删除，长按可多选并批量编辑。" data-en="Built-in keypad and quick categories. Swipe to copy or delete, long-press to edit many at once.">内置数字键盘与常用分类；左右滑动即可复制或删除，长按可多选并批量编辑。</p></div>
       <div class="card feat"><div class="ic" style="--c:#0ea5a4"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M3 12h18 M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg></div>
-        <h3 data-zh="多币种" data-en="Many currencies">多币种</h3><p data-zh="24 种货币，按当天的欧洲央行汇率自动折算；出国旅行、海外生活都好用。" data-en="24 currencies, converted at the day's ECB rate. Great for travel or living abroad.">24 种货币，按当天的欧洲央行汇率自动折算；出国旅行、海外生活都好用。</p></div>
+        <h3 data-zh="多币种" data-en="Many currencies">多币种</h3><p data-zh="支持 24 种货币，按当日欧洲央行汇率自动折算，适合出行与海外生活。" data-en="24 currencies, converted at the day's ECB rate. Great for travel or living abroad.">支持 24 种货币，按当日欧洲央行汇率自动折算，适合出行与海外生活。</p></div>
       <div class="card feat"><div class="ic" style="--c:#3b82f6"><svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z M12 11v6 M9.5 14.5L12 17l2.5-2.5"/></svg></div>
-        <h3 data-zh="云端同步" data-en="Cloud sync">云端同步</h3><p data-zh="安卓、iPhone、电脑看到的是同一本账；没网也能记，联网后自动上传。" data-en="Android, iPhone and computer share one ledger. Works offline and uploads when you're back online.">安卓、iPhone、电脑看到的是同一本账；没网也能记，联网后自动上传。</p></div>
+        <h3 data-zh="云端同步" data-en="Cloud sync">云端同步</h3><p data-zh="安卓、iPhone 与电脑共享同一账本；离线时亦可记账，联网后自动上传。" data-en="Android, iPhone and computer share one ledger. Works offline and uploads when you're back online.">安卓、iPhone 与电脑共享同一账本；离线时亦可记账，联网后自动上传。</p></div>
       <div class="card feat"><div class="ic" style="--c:#f07c2b"><svg viewBox="0 0 24 24"><path d="M12 3v9h9 M12 3a9 9 0 1 0 9 9"/></svg></div>
-        <h3 data-zh="看懂钱去哪了" data-en="See where it goes">看懂钱去哪了</h3><p data-zh="分类、标签、预算、净资产；每月一组复盘小卡片，花了多少一眼看清。" data-en="Categories, tags, budgets and net worth, plus a monthly review in swipeable story cards.">分类、标签、预算、净资产；每月一组复盘小卡片，花了多少一眼看清。</p></div>
+        <h3 data-zh="清晰的收支分析" data-en="See where it goes">清晰的收支分析</h3><p data-zh="提供分类、标签、预算与净资产统计，并按月生成复盘卡片，收支状况一目了然。" data-en="Categories, tags, budgets and net worth, plus a monthly review in swipeable story cards.">提供分类、标签、预算与净资产统计，并按月生成复盘卡片，收支状况一目了然。</p></div>
       <div class="card feat"><div class="ic" style="--c:#22a06b"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10c-4-1.8-7-5.5-7-10V6z M9 12l2 2l4-4"/></svg></div>
-        <h3 data-zh="安心" data-en="Peace of mind">安心</h3><p data-zh="应用锁（指纹、面容）、自动备份；每个人只能看到自己的账。五种外观随心换。" data-en="App lock with fingerprint or Face ID, automatic backups, and only you can see your data. Five looks to choose from.">应用锁（指纹、面容）、自动备份；每个人只能看到自己的账。五种外观随心换。</p></div>
+        <h3 data-zh="安全可靠" data-en="Peace of mind">安全可靠</h3><p data-zh="支持应用锁（指纹、面容）与自动备份，各账户数据相互隔离；提供五种外观可供选择。" data-en="App lock with fingerprint or Face ID, automatic backups, and only you can see your data. Five looks to choose from.">支持应用锁（指纹、面容）与自动备份，各账户数据相互隔离；提供五种外观可供选择。</p></div>
     </div>
   </section>
 
   <section class="show reveal">
-    <div class="phone" aria-hidden="true"><div class="screen">
-      <div class="t"><b>Daily</b><span><i data-planet="saturn" data-px="18" style="display:inline-flex"></i><em style="font-style:normal" data-zh="土星月" data-en="Saturn month">土星月</em></span></div>
-      <div class="sum"><div class="face" data-planet="saturn" data-px="64"></div>
-        <div class="k" data-zh="本月结余" data-en="This month">本月结余</div><div class="v">€1,286.40</div>
-        <div class="row"><div><span data-zh="支出" data-en="Spent">支出</span><b style="color:#ffd0d0">€913.60</b></div><div style="text-align:right"><span data-zh="收入" data-en="Income">收入</span><b style="color:#c9ffe3">€2,200.00</b></div></div></div>
-      <div class="list">
-        <div class="d" data-zh="今天 · 星期五" data-en="Today · Friday">今天 · 星期五</div>
-        <div class="tx"><span class="ti" style="--c:#f07c2b"><svg viewBox="0 0 24 24"><path d="M4 11h16a8 8 0 0 1-16 0z M9 5c0 1.5 1 1.5 1 3 M13 5c0 1.5 1 1.5 1 3"/></svg></span><span class="m"><span data-zh="餐饮 · 午饭" data-en="Food · Lunch">餐饮 · 午饭</span><small data-zh="和同事" data-en="with colleagues">和同事</small></span><span class="a">-€12.50</span></div>
-        <div class="tx"><span class="ti" style="--c:#3b82f6"><svg viewBox="0 0 24 24"><path d="M6 4h12v11H6z M6 11h12 M8 18l-1 2 M16 18l1 2 M9 15v.01 M15 15v.01"/></svg></span><span class="m"><span data-zh="交通" data-en="Transport">交通</span><small data-zh="火车" data-en="Train">火车</small></span><span class="a">-€8.90</span></div>
-        <div class="tx"><span class="ti" style="--c:#e0569b"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z M9 8a3 3 0 0 1 6 0"/></svg></span><span class="m"><span data-zh="购物" data-en="Shopping">购物</span><small data-zh="新耳机" data-en="Headphones">新耳机</small></span><span class="a">-€59.00</span></div>
-        <div class="tx"><span class="ti" style="--c:#22a06b"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z"/></svg></span><span class="m"><span data-zh="工资" data-en="Salary">工资</span><small data-zh="十一月" data-en="November">十一月</small></span><span class="a in">+€2,200.00</span></div>
-      </div>
-      <div class="navbar"><span data-zh="明细" data-en="Ledger">明细</span><span data-zh="统计" data-en="Stats">统计</span><i>+</i><span data-zh="资产" data-en="Assets">资产</span><span data-zh="我的" data-en="Me">我的</span></div>
-    </div></div>
+    <div class="phone"><div class="screen shot"><img src="app-home.jpg" width="390" height="844" alt="行星记账首页截图 / Planet Ledger home screen" loading="lazy"></div></div>
     <div>
-      <h2 style="text-align:left;margin-top:0" data-zh="三步开始" data-en="Start in three steps">三步开始</h2>
+      <h2 style="text-align:left;margin-top:0" data-zh="三步开始使用" data-en="Start in three steps">三步开始使用</h2>
       <div class="tabs" role="tablist"><button class="on" data-os="android" role="tab">Android</button><button data-os="ios" role="tab">iPhone</button></div>
       <div class="card steps" id="steps-android">
-        <div class="step"><span class="n">1</span><p><span data-zh="点上面的「下载安卓版」" data-en="Tap “Get it for Android” above">点上面的「下载安卓版」</span><small data-zh="下载一个 APK 安装包（约 25 MB）。" data-en="It downloads an APK (about 25 MB).">下载一个 APK 安装包（约 25 MB）。</small></p></div>
-        <div class="step"><span class="n">2</span><p><span data-zh="打开安装包，允许安装" data-en="Open it and allow the install">打开安装包，允许安装</span><small data-zh="手机会提示「未知来源」，在提示里允许浏览器安装应用即可。之后在 App 里就能一键更新。" data-en="Your phone will ask about unknown sources: allow your browser to install apps. Later updates happen inside the app.">手机会提示「未知来源」，在提示里允许浏览器安装应用即可。之后在 App 里就能一键更新。</small></p></div>
-        <div class="step"><span class="n">3</span><p><span data-zh="用邮箱注册，开始记账" data-en="Sign up with your email">用邮箱注册，开始记账</span><small data-zh="点邮件里的确认链接就能登录。常用分类已经准备好了。" data-en="Confirm the link in the email and you're in. Common categories are ready to go.">点邮件里的确认链接就能登录。常用分类已经准备好了。</small></p></div>
+        <div class="step"><span class="n">1</span><p><span data-zh="点击上方「下载安卓版」" data-en="Tap “Get it for Android” above">点击上方「下载安卓版」</span><small data-zh="下载 APK 安装包（约 25 MB）。" data-en="It downloads an APK (about 25 MB).">下载 APK 安装包（约 25 MB）。</small></p></div>
+        <div class="step"><span class="n">2</span><p><span data-zh="打开安装包并允许安装" data-en="Open it and allow the install">打开安装包并允许安装</span><small data-zh="系统将提示「未知来源」，请在提示中允许浏览器安装应用。此后可在应用内一键更新。" data-en="Your phone will ask about unknown sources: allow your browser to install apps. Later updates happen inside the app.">系统将提示「未知来源」，请在提示中允许浏览器安装应用。此后可在应用内一键更新。</small></p></div>
+        <div class="step"><span class="n">3</span><p><span data-zh="使用邮箱注册" data-en="Sign up with your email">使用邮箱注册</span><small data-zh="点击确认邮件中的链接即可登录，常用分类已预先设置；也可选择「离线使用」，暂不注册。" data-en="Confirm the link in the email and you're in. Common categories are ready to go.">点击确认邮件中的链接即可登录，常用分类已预先设置；也可选择「离线使用」，暂不注册。</small></p></div>
       </div>
       <div class="card steps" id="steps-ios" hidden>
-        <div class="step"><span class="n">1</span><p><span data-zh="用 Safari 打开网页版" data-en="Open the web app in Safari">用 Safari 打开网页版</span><small data-zh="点上面的「iPhone · 网页版」。" data-en="Tap “iPhone · Web app” above.">点上面的「iPhone · 网页版」。</small></p></div>
-        <div class="step"><span class="n">2</span><p><span data-zh="分享 → 添加到主屏幕" data-en="Share → Add to Home Screen">分享 → 添加到主屏幕</span><small data-zh="桌面上会多一个行星图标，打开就是全屏的 App，没有地址栏。" data-en="A planet icon appears on your Home Screen and opens full-screen like an app.">桌面上会多一个行星图标，打开就是全屏的 App，没有地址栏。</small></p></div>
-        <div class="step"><span class="n">3</span><p><span data-zh="用邮箱注册，开始记账" data-en="Sign up with your email">用邮箱注册，开始记账</span><small data-zh="同一个账号在安卓、iPhone、电脑上都能用。" data-en="The same account works on Android, iPhone and computer.">同一个账号在安卓、iPhone、电脑上都能用。</small></p></div>
+        <div class="step"><span class="n">1</span><p><span data-zh="在 Safari 中打开网页版" data-en="Open the web app in Safari">在 Safari 中打开网页版</span><small data-zh="点击上方「iPhone · 网页版」。" data-en="Tap “iPhone · Web app” above.">点击上方「iPhone · 网页版」。</small></p></div>
+        <div class="step"><span class="n">2</span><p><span data-zh="选择「分享」→「添加到主屏幕」" data-en="Share → Add to Home Screen">选择「分享」→「添加到主屏幕」</span><small data-zh="主屏幕将出现行星图标，打开后以全屏方式运行，无地址栏。" data-en="A planet icon appears on your Home Screen and opens full-screen like an app.">主屏幕将出现行星图标，打开后以全屏方式运行，无地址栏。</small></p></div>
+        <div class="step"><span class="n">3</span><p><span data-zh="使用邮箱注册" data-en="Sign up with your email">使用邮箱注册</span><small data-zh="同一账号可在安卓、iPhone 与电脑上通用。" data-en="The same account works on Android, iPhone and computer.">同一账号可在安卓、iPhone 与电脑上通用。</small></p></div>
       </div>
     </div>
   </section>
@@ -261,10 +250,12 @@ footer a { color: inherit; }
   <section class="reveal">
     <h2 data-zh="常见问题" data-en="Questions">常见问题</h2>
     <div class="faq">
-      <div class="card"><h3 data-zh="要钱吗？" data-en="Is it free?">要钱吗？</h3><p data-zh="免费，没有广告，也没有会员。" data-en="Yes. No ads, no subscriptions.">免费，没有广告，也没有会员。</p></div>
-      <div class="card"><h3 data-zh="我的账别人能看到吗？" data-en="Can others see my data?">我的账别人能看到吗？</h3><p data-zh="不能。每个账号只能读写自己的数据；还可以打开应用锁。" data-en="No. Each account can only read and write its own data, and you can turn on the app lock.">不能。每个账号只能读写自己的数据；还可以打开应用锁。</p></div>
-      <div class="card"><h3 data-zh="一定要用 AI 吗？" data-en="Do I need AI?">一定要用 AI 吗？</h3><p data-zh="不用。手动记账功能全部免费可用；想用 AI 时，在设置里填自己的 Claude 或 DeepSeek 密钥就行。" data-en="No. Everything works without it. If you want AI features, add your own Claude or DeepSeek key in settings.">不用。手动记账功能全部免费可用；想用 AI 时，在设置里填自己的 Claude 或 DeepSeek 密钥就行。</p></div>
-      <div class="card"><h3 data-zh="iPhone 为什么是网页版？" data-en="Why a web app on iPhone?">iPhone 为什么是网页版？</h3><p data-zh="添加到主屏幕后和 App 一样全屏使用、离线可用，功能和安卓版一致，还不用上架审核。" data-en="Once added to the Home Screen it runs full-screen and offline, with the same features as Android.">添加到主屏幕后和 App 一样全屏使用、离线可用，功能和安卓版一致，还不用上架审核。</p></div>
+      <div class="card"><h3 data-zh="是否收费？" data-en="Is it free?">是否收费？</h3><p data-zh="完全免费，无广告，无会员服务。" data-en="Yes. No ads, no subscriptions.">完全免费，无广告，无会员服务。</p></div>
+      <div class="card"><h3 data-zh="数据是否会被他人查看？" data-en="Can others see my data?">数据是否会被他人查看？</h3><p data-zh="不会。每个账号只能访问自己的数据，并可开启应用锁。" data-en="No. Each account can only read and write its own data, and you can turn on the app lock.">不会。每个账号只能访问自己的数据，并可开启应用锁。</p></div>
+      <div class="card"><h3 data-zh="是否必须使用 AI？" data-en="Do I need AI?">是否必须使用 AI？</h3><p data-zh="不必。手动记账功能均可免费使用；如需 AI 功能，可在设置中填入个人的 Claude 或 DeepSeek 密钥。" data-en="No. Everything works without it. If you want AI features, add your own Claude or DeepSeek key in settings.">不必。手动记账功能均可免费使用；如需 AI 功能，可在设置中填入个人的 Claude 或 DeepSeek 密钥。</p></div>
+      <div class="card"><h3 data-zh="iPhone 为何使用网页版？" data-en="Why a web app on iPhone?">iPhone 为何使用网页版？</h3><p data-zh="添加至主屏幕后，可像原生应用一样全屏运行并离线使用，功能与安卓版一致，且无需经过应用商店审核。" data-en="Once added to the Home Screen it runs full-screen and offline, with the same features as Android.">添加至主屏幕后，可像原生应用一样全屏运行并离线使用，功能与安卓版一致，且无需经过应用商店审核。</p></div>
+      <div class="card"><h3 data-zh="中国大陆能否使用？" data-en="Does it work in mainland China?">中国大陆能否使用？</h3><p data-zh="可以。应用经由 planet.tanghui.app 连接云端，中国大陆可正常注册、同步与更新；也可选择离线使用。" data-en="Yes. The app connects through planet.tanghui.app, so sign-up, sync and updates work in mainland China. You can also use it offline.">可以。应用经由 planet.tanghui.app 连接云端，中国大陆可正常注册、同步与更新；也可选择离线使用。</p></div>
+      <div class="card"><h3 data-zh="如何更新？" data-en="How do I update?">如何更新？</h3><p data-zh="安卓版可在应用内一键更新；网页版每次打开时自动获取最新版本。" data-en="Android updates with one tap inside the app; the web app always loads the latest version.">安卓版可在应用内一键更新；网页版每次打开时自动获取最新版本。</p></div>
     </div>
   </section>
 
@@ -273,7 +264,7 @@ footer a { color: inherit; }
   </footer>
 </div>
 
-<script src="../planets.js?v=20261120170239"></script>
+<script src="../planets.js?v=20261120174656"></script>
 <script>
 'use strict';
 // 语言：跟着浏览器，右上角可以切换

@@ -55,11 +55,14 @@ function plFace(happy, px = 58) {
   return planetSvg(plOfMonth(y, m), { px, mood: happy ? 1 : -1, cls: px >= 40 ? 'hm-face pl-face' : 'pl-face' });
 }
 
-/** 月份旁边：小星球 + "土星月"（是自己的星球就是"本命月 ✦"）；点一下换这个月的星。 */
+/** "Saturn 土星月" / "Saturn month"：中文界面也带英文名（和 App 一样）。月份旁边、复盘第一张都用它。 */
+const plMonthName = (p) => tr(`${p.en} ${p.zh}月`, `${p.en} month`);
+
+/** 月份旁边：小星球 + "Saturn 土星月"；点一下换这个月的星。 */
 function plMonthTag(y, m) {
-  const p = plOfMonth(y, m), own = plMine()?.key === p.key, open = !!state.plMPick;
+  const p = plOfMonth(y, m), open = !!state.plMPick;
   const pop = open ? `<div class="hm-menu-bg" data-act="pl-mpick-x"></div><div class="pl-mpop" role="menu">${PLANETS_NINE.map((q, i) => `<button class="${q.key === p.key ? 'on' : ''}" role="menuitemradio" aria-checked="${q.key === p.key}" data-act="pl-mset" data-v="${i}" aria-label="${h(planetName(q))}">${planetSvg(q, { px: 28, spin: q.key === p.key })}</button>`).join('')}</div>` : '';
-  return `<span class="pl-mtag"><button class="pl-ml" data-act="pl-mpick" aria-haspopup="menu" aria-expanded="${open}">${planetSvg(p, { px: 18 })}<span>${own ? tr('本命月', 'Your month') : tr(p.zh + '月', p.en + ' month')}</span>${own ? '<i class="pl-tw2" aria-hidden="true">✦</i>' : ''}</button>${pop}</span>`;
+  return `<span class="pl-mtag"><button class="pl-ml" data-act="pl-mpick" aria-haspopup="menu" aria-expanded="${open}">${planetSvg(p, { px: 18 })}<span>${h(plMonthName(p))}</span></button>${pop}</span>`;
 }
 
 // ---------------------------------------------------------------- 选自己的星球（"我的"头像点进来、外观页）

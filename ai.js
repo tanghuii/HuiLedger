@@ -719,7 +719,7 @@ function reviewView({ switcher = true } = {}) {
     const stories = aiStories(y, m, r, L);
     parts.push(`<div class="ai-stories"><div class="ai-pager" data-n="${stories.length}">${stories.map((s, i) => `<section class="ai-story" style="--c1:${s.c[0]};--c2:${s.c[1]};--d:${-(i * 3.7).toFixed(1)}s" aria-roledescription="${tr('卡片', 'card')}" aria-label="${i + 1} / ${stories.length}">
         <i class="ai-sh" aria-hidden="true"></i>
-        ${s.planet ? `<span class="ai-splanet">${planetSvg(s.planet, { px: 64 })}<span>${h(tr(s.planet.zh + '月', s.planet.en + ' month'))}</span></span>` : `<span class="ai-sbox">${aiIcon(s.icon)}</span>`}<span class="ai-sgap"></span>
+        ${s.planet ? `<span class="ai-splanet">${planetSvg(s.planet, { px: 64 })}<span>${h(typeof plMonthName === 'function' ? plMonthName(s.planet) : tr(`${s.planet.en} ${s.planet.zh}月`, `${s.planet.en} month`))}</span></span>` : `<span class="ai-sbox">${aiIcon(s.icon)}</span>`}<span class="ai-sgap"></span>
         <div class="ai-sk">${h(s.kicker)}</div><div class="ai-sb${/\d/.test(s.big) ? ' num' : ''}">${h(s.big)}</div>${s.line ? `<div class="ai-sl">${h(s.line)}</div>` : ''}</section>`).join('')}</div>
       <div class="ai-dots" aria-hidden="true">${stories.map((_, i) => `<i class="${i === state.reviewPage ? 'on' : ''}"></i>`).join('')}</div></div>`);
     // 重画以后翻回刚才看的那一张

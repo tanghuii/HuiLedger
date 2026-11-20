@@ -1,0 +1,36 @@
+/* 打开时的开场（modules/intro.js）：紫色的星空一层盖在最上面，品牌星在中间，这个月的主题行星从右上角飞过来。
+   时间线都在 intro.js（Web Animations，只动 transform / opacity）；这里只摆位置。--s = 星球的大小。 */
+
+.pl-intro {
+  position: fixed; inset: 0; z-index: 1200; overflow: hidden; contain: strict;
+  touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+/* 紫色星空：和品牌星同一套紫，三团柔光（和页面背景的光一样的位置感），上面一层玻璃的高光 */
+.pl-in-bg {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .10), transparent 38%),
+    radial-gradient(60% 40% at 88% 12%, rgba(99, 194, 255, .30), transparent 70%),
+    radial-gradient(60% 45% at 8% 92%, rgba(255, 156, 203, .30), transparent 70%),
+    radial-gradient(120% 75% at 50% 45%, #7a68f2 0%, #4b3bc0 40%, #251a74 74%, #130c3e 100%);
+}
+.pl-in-dots { position: absolute; inset: 0; }
+.pl-in-dots i { position: absolute; border-radius: 50%; background: #fff; }
+
+/* 舞台 = 安全区；星球都以它的正中心为原点 */
+.pl-in-st { position: absolute; top: env(safe-area-inset-top); right: env(safe-area-inset-right); bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left); }
+.pl-in-c { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.pl-in-c i, .pl-in-c div { position: absolute; }
+.pl-in-p { left: calc(var(--s) / -2); top: calc(var(--s) / -2); width: var(--s); height: var(--s); will-change: transform, opacity; }
+.pl-in-p svg.planet, .pl-in-sm svg.planet { width: 100%; height: 100%; }
+.pl-in-go, .pl-in-x, .pl-in-y { left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.pl-in-k2, .pl-in-sm { inset: 0; }
+.pl-in-sm { opacity: 0; }
+
+/* 拖尾：从星球中心伸向来的方向，越远越淡 */
+.pl-in-tr {
+  left: 0; top: calc(var(--s) * -.09); width: calc(var(--s) * 1.5); height: calc(var(--s) * .18); transform-origin: 0 50%; opacity: 0; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .55), rgba(200, 186, 255, .28) 35%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 45%, #000 55%, transparent); mask-image: linear-gradient(180deg, transparent, #000 45%, #000 55%, transparent);
+}
+/* 往外划的星线 */
+.pl-in-k { left: 0; top: -1px; width: 34px; height: 2px; transform-origin: 0 50%; opacity: 0; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff); }

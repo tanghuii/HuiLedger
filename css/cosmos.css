@@ -29,17 +29,24 @@ svg.planet { display: block; flex: none; overflow: visible; }
 .pl-ml { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 4px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 12.5px; line-height: 18px; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s, transform .2s cubic-bezier(.2, .9, .3, 1.4); }
 .pl-ml:active { transform: scale(.94); background: color-mix(in srgb, var(--primary) 10%, transparent); }
 .pl-ml[aria-expanded="true"] { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text); }
-.pl-tw2 { font-style: normal; font-size: 10px; color: var(--primary); animation: pl-blink 2.4s ease-in-out infinite; }
+/* 带环的星（土星、天王星）：环伸出星球 ~1.45 倍，左右各留 4px，环不压字（不管哪颗都留，换月份时文字不跳） */
+.pl-ml svg.planet { margin: 0 4px; }
 .pl-mpop {
   /* 摆在年月那一组的正下方（那一组本来就在屏幕中间），九颗一排放得下 */
   position: absolute; z-index: 51; top: calc(100% + 8px); left: 50%; translate: -50% 0;
-  display: flex; gap: 2px; padding: 6px; border-radius: 18px; background: color-mix(in srgb, var(--bg) 90%, transparent); border: 1px solid var(--stroke);
+  display: flex; gap: 4px; padding: 6px; border-radius: 18px; background: color-mix(in srgb, var(--bg) 90%, transparent); border: 1px solid var(--stroke);
   backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
   box-shadow: 0 18px 40px -12px rgba(30, 20, 90, .38), inset 0 1px 0 var(--shine); animation: hm-drop .18s ease-out;
 }
 .pl-mpop button, .pl-row button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
 .pl-mpop button:active, .pl-row button:active { transform: scale(.88); }
 .pl-mpop button.on, .pl-row button.on { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 0 0 0 2px var(--primary); }
+
+/* ---------------------------------------------------------------- 首页汇总卡片右上角的星：卡片（overflow:hidden）、翻页条、收放层都会裁边，
+   所以给星球本身留出环的位置——右边 12px（土星的环）、上下 7px（天王星竖着的环）；收成一行时的小星同理 */
+.hm-top1 > .pl-face { margin: 7px 12px 7px 0; }
+.hm-mrow > .pl-face { margin: 4px 6px 4px 2px; }
+.hm-sum.mini { padding-top: 8px; padding-bottom: 8px; } /* 小星上下多了 4px，卡片总高不变 */
 
 /* ---------------------------------------------------------------- 选自己的星球：3×3，选中的垫主题色、右上角打勾 */
 .pl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 420px; }
@@ -53,6 +60,7 @@ svg.planet { display: block; flex: none; overflow: visible; }
 
 /* 外观页：本月行星、一排九颗、接下来五个月 */
 .pl-now { display: flex; align-items: center; gap: 12px; }
+.pl-now svg.planet { margin: 0 6px 0 10px; } /* 环的位置 */
 .pl-now b { font-size: 16px; font-weight: 600; }
 .pl-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px; }
 /* 桌面图标：和真的图标一样的圆角方块，五个一行 */
@@ -124,10 +132,10 @@ svg.planet { display: block; flex: none; overflow: visible; }
 /* ---------------------------------------------------------------- 复盘第一张：这个月的星 + "土星月" */
 .ai-splanet { display: flex; align-items: center; gap: 10px; }
 .ai-splanet span { font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, .92); }
-.ai-story .ai-splanet svg.planet { margin: -10px 0 -10px -6px; }
+.ai-story .ai-splanet svg.planet { margin: -10px 8px -10px -4px; } /* 右边留出环，不压"Saturn 土星月" */
 
 @media (prefers-reduced-motion: reduce) {
-  .pl-dc, .pl-dc i, .pl-tw2, .top h1 .pl-tw, .pl-sat, .pl-mpop, .bud-moon.grow { animation: none !important; }
+  .pl-dc, .pl-dc i, .top h1 .pl-tw, .pl-sat, .pl-mpop, .bud-moon.grow { animation: none !important; }
   .pl-spk { opacity: .55; }
   .pl-sat:nth-child(2) { transform: rotate(150deg) translateX(74px) rotate(-150deg); z-index: 2; }
   .pl-sat:nth-child(3) { transform: rotate(270deg) translateX(74px) rotate(-270deg); }
