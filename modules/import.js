@@ -933,14 +933,35 @@ function impReviewView() {
     ${impDetailView()}`;
 }
 
+/**
+ * AI 识别账单时的进度（和手机端 AiProgress 一样）：一个会动的圆环，中间百分比，下面"已分析 n 条记录"。
+ * 分段识别时按段数走；每段里面（以及只有一段时）按时间慢慢往前挪，越来越慢、停在九成，识别完一段就跳上去。
+ * 圆环由 impRingTick 每一帧更新（整页重画时接着画，不会从 0 开始）。
+ */
 function impLoadingView() {
-  // 长账单分段识别：实时显示识别到第几段、已经读出多少笔
-  if (IMP.total > 1) {
-    return `<div class="imp-load"><b>${tr(`正在识别 ${IMP.done} / ${IMP.total} 段`, `Reading part ${IMP.done} of ${IMP.total}`)}</b>
-      <div class="bar imp-bar"><i style="width:${(IMP.done * 100 / IMP.total).toFixed(1)}%"></i></div>
-      <div class="muted small">${tr(`已读出 ${IMP.found} 笔`, `${IMP.found} found so far`)}</div></div>`;
-  }
-  return `<div class="imp-load"><span class="imp-spin" aria-hidden="true"></span><div class="muted">${tr('正在读取账单…', 'Reading…')}</div></div>`;
+  const p = IMP.ringP ?? 0, seg = IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
+  setTimeout(impRingTick, 0);
+  return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg><b class="num">${Math.floor(p * 100)}%</b></div>
+    <b class="imp-found">${tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
+}
+let impRingRaf = 0;
+function impRingTick() {
+  if (impRingRaf) return;
+  const step = () => {
+    const ring = document.querySelector('.imp-ring');
+    if (!ring || IMP.phase !== 'loading') { impRingRaf = 0; if (IMP.phase !== 'loading') { IMP.ringP = 0; IMP.ringDone = null; } return; }
+    const now = performance.now();
+    if (IMP.ringDone !== IMP.done) { IMP.ringDone = IMP.done; IMP.segAt = now; }
+    const segs = Math.max(1, IMP.total), creep = 0.9 * (1 - Math.exp(-(now - (IMP.segAt ?? now)) / 1000 / 18));
+    const target = Math.min(0.99, (Math.min(IMP.done, segs) + creep) / segs);
+    const p = IMP.ringP = (IMP.ringP ?? 0) + (target - (IMP.ringP ?? 0)) * 0.08;
+    ring.querySelector('.arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
+    const a = (-90 + 360 * p) * Math.PI / 180, tip = ring.querySelector('.tip');
+    tip.setAttribute('cx', (60 + 52 * Math.cos(a)).toFixed(2)); tip.setAttribute('cy', (60 + 52 * Math.sin(a)).toFixed(2));
+    ring.querySelector('b').textContent = `${Math.floor(p * 100)}%`;
+    impRingRaf = requestAnimationFrame(step);
+  };
+  impRingRaf = requestAnimationFrame(step);
 }
 
 function impPickView() {
@@ -960,7 +981,7 @@ function impPickView() {
 }
 
 function importView() {
-  const bar = `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="${tr('返回', 'Back')}">‹</button><b>${tr('导入账单', 'Import')}</b></div>`;
+  const bar = `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="${tr('返回', 'Back')}">‹</button><b>${IMP.phase === 'loading' ? tr('AI 识别', 'AI import') : tr('导入账单', 'Import')}</b></div>`;
   const body = IMP.phase === 'loading' ? impLoadingView() : IMP.phase === 'review' || IMP.phase === 'saving' ? impReviewView() : impPickView();
   return `${bar}<div class="imp-page">${body}</div>`;
 }
