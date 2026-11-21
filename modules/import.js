@@ -5,8 +5,10 @@
 'use strict';
 
 const IMP = {
-  /** idle：选文件；loading：识别中；review：核对；saving：正在写入 */
+  /** idle：选文件；loading：识别中；paused：断网停下了（已识别的留着，等点"继续"）；review：核对；saving：正在写入 */
   phase: 'idle', error: '', done: 0, total: 0, found: 0,
+  /** 正在识别的这一批（impPrepare 准备的）：断网暂停（phase 'paused'）后点"继续识别"接着跑剩下的段 */
+  run: null,
   drafts: [], skipped: 0, missed: 0,
   /** 正在看原文、改详情的那一条（下标），-1 表示没打开 */
   detail: -1, detailErr: '', detailForm: null,
@@ -706,8 +708,11 @@ function impParseJson(json, job) {
   return out;
 }
 
-/** 把选好的文件读出来：表格本机直接读，其余一段一段交给 AI（最多三段同时）。 */
-async function impParse(files, onProgress) {
+/**
+ * 把选好的文件准备成一次"识别"：表格本机直接读完，其余切成一段一段等着交给 AI。
+ * 返回的 run 记着还没识别的段和已经识别出来的记录，断网暂停后可以接着跑（impRunJobs）。
+ */
+async function impPrepare(files) {
   const local = [], jobs = [];
   let skipped = 0;
   for (const f of files) {
@@ -723,48 +728,82 @@ async function impParse(files, onProgress) {
       }
     } else jobs.push(...await impJobsFor(f, name));
   }
-  if (!jobs.length) return { transactions: local, skipped, holder: '', statementIban: '', missed: 0 };
+  const run = { jobs, found: [...local], skipped, holder: '', statementIban: '', done: 0, missed: 0, system: '' };
+  if (!jobs.length) return run;
   if (!aiKey()) throw new AiError(tr('识别截图和银行账单需要 API 密钥，请先到「我的」页面设置。', 'Reading screenshots and statements needs an API key. Set one on the Me tab first.'));
-
   const cats = impCats(), tops = cats.filter((c) => !c.parentId);
-  const system = impSystemPrompt(tops.filter((c) => !c.isIncome).map((c) => impWithSubs(c, cats)), tops.filter((c) => c.isIncome).map((c) => impWithSubs(c, cats)),
+  run.system = impSystemPrompt(tops.filter((c) => !c.isIncome).map((c) => impWithSubs(c, cats)), tops.filter((c) => c.isIncome).map((c) => impWithSubs(c, cats)),
     impAccounts().map((a) => a.name), store.get('hl.ownerName', '') ?? '', impHabits());
-  const found = [];
-  let holder = '', statementIban = '', done = 0, missed = 0;
-  onProgress(0, jobs.length, 0);
-  while (jobs.length) {
-    const wave = jobs.splice(0, 3), results = new Array(wave.length).fill(null), again = [];
-    let counted = 0, k = 0;
-    // 谁先识别完就先报进度；结果仍按原来的顺序拼起来
-    await Promise.all(wave.map((job, i) => impCall(system, job).then((json) => {
-      const left = wave.length - 1 - k++;
-      if (json == null) {
-        if (job.lines.length < 2) throw new AiError(tr('这份账单的交易太多，请分几次导入。', 'Too many transactions. Import in several batches.'));
-        const half = Math.floor(job.lines.length / 2);
-        again.push(impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half)));
-      } else {
-        let list = impParseJson(json, job);
-        // 核对行数：这一段有几行数据，识别出来的却更少，就再识别一次，取多的那次；还是少就记下来提醒
-        if (job.lines.length && list.length < job.lines.length) {
-          if (!job.fallback) {
-            again.push({ ...job, fallback: list });
-            onProgress(done, done + jobs.length + again.length + left, found.length + counted);
-            return;
-          }
-          if (job.fallback.length > list.length) list = job.fallback;
-          missed += job.lines.length - list.length;
-        }
-        results[i] = list; counted += list.length;
-        if (!holder) holder = String(json.account_holder ?? '').trim();
-        if (!statementIban) statementIban = String(json.statement_iban ?? '').trim();
-        done++;
-      }
-      onProgress(done, done + jobs.length + again.length + left, found.length + counted);
-    })));
-    results.forEach((r) => { if (r) found.push(...r); });
-    jobs.unshift(...again);
+  return run;
+}
+
+/** 等到页面回到前台（切走、锁屏时 iPhone 会掐断请求，回来再发）。 */
+const impWhenVisible = () => (document.hidden ? new Promise((ok) => {
+  const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); ok(); } };
+  document.addEventListener('visibilitychange', f);
+}) : Promise.resolve());
+/** 一段失败后最多再试几次、每次等多久（毫秒）。 */
+const IMP_RETRY_WAIT = [2000, 5000, 12000];
+
+/** 发一段；连接断了、服务繁忙就等一会儿再发（切走了就等回到前台再发，不算次数）。 */
+async function impCallRetry(system, job) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await impCall(system, job); } catch (e) {
+      if (!aiRetryable(e)) throw e;
+      if (document.hidden) { await impWhenVisible(); attempt--; continue; }
+      if (attempt >= IMP_RETRY_WAIT.length) throw e;
+      await new Promise((ok) => setTimeout(ok, IMP_RETRY_WAIT[attempt]));
+      await impWhenVisible();
+    }
   }
-  return { transactions: [...local, ...found], skipped, holder, statementIban, missed };
+}
+
+/**
+ * 把 run 里剩下的段交给 AI（最多三段同时）。识别好的段马上记进 run.found；
+ * 某段重试几次还是连不上，就把它（和没轮到的段）留在 run.jobs 里，抛出带 net 的错误——调用方显示"继续识别"。
+ */
+async function impRunJobs(run, onProgress) {
+  const jobs = run.jobs;
+  onProgress(run.done, run.done + jobs.length, run.found.length);
+  while (jobs.length) {
+    const wave = jobs.splice(0, 3), again = [], failed = [];
+    let netErr = null, otherErr = null, inflight = wave.length;
+    const prog = () => onProgress(run.done, run.done + jobs.length + again.length + failed.length + inflight, run.found.length);
+    // 谁先识别完就先报进度、先记下来
+    await Promise.all(wave.map(async (job) => {
+      let json;
+      try { json = await impCallRetry(run.system, job); } catch (e) {
+        inflight--; failed.push(job);
+        if (aiRetryable(e)) netErr ??= e; else otherErr ??= e;
+        return;
+      }
+      inflight--;
+      try {
+        if (json == null) {
+          if (job.lines.length < 2) throw new AiError(tr('这份账单的交易太多，请分几次导入。', 'Too many transactions. Import in several batches.'));
+          const half = Math.floor(job.lines.length / 2);
+          again.push(impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half)));
+        } else {
+          let list = impParseJson(json, job);
+          // 核对行数：这一段有几行数据，识别出来的却更少，就再识别一次，取多的那次；还是少就记下来提醒
+          if (job.lines.length && list.length < job.lines.length) {
+            if (!job.fallback) { again.push({ ...job, fallback: list }); prog(); return; }
+            if (job.fallback.length > list.length) list = job.fallback;
+            run.missed += job.lines.length - list.length;
+          }
+          run.found.push(...list);
+          if (!run.holder) run.holder = String(json.account_holder ?? '').trim();
+          if (!run.statementIban) run.statementIban = String(json.statement_iban ?? '').trim();
+          run.done++;
+        }
+        prog();
+      } catch (e) { otherErr ??= e; }
+    }));
+    jobs.unshift(...again, ...failed);
+    if (otherErr) throw otherErr;
+    if (netErr) throw netErr;
+  }
+  return { transactions: run.found, skipped: run.skipped, holder: run.holder, statementIban: run.statementIban, missed: run.missed };
 }
 
 /** 识别结果 → 核对页的草稿：补准账户和转账、只认已有的分类和账户、和已有账单查重（LedgerViewModel.parseBills）。 */
@@ -838,24 +877,58 @@ async function impStart(files) {
     try { files = await impExpandZips(files); } catch (e) { IMP.phase = 'idle'; IMP.error = e instanceof AiError ? e.message : tr('无法解开压缩包。', "Couldn't open the zip file."); render(); return; }
     if (!files) return;
   }
-  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1, finished: false });
+  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1, finished: false, run: null });
   impRender();
   try {
     if (files.length === 1 && await impTryPatch(files[0])) { IMP.phase = 'idle'; render(); return; }
-    const result = await impParse(files, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); });
+    IMP.run = await impPrepare(files);
+  } catch (e) {
+    IMP.phase = 'idle';
+    IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
+    render(); return;
+  }
+  await impGo();
+}
+
+/**
+ * 跑 IMP.run 里剩下的段（第一次和点"继续识别"都走这里）。
+ * 连接断了、重试几次还不行：停在"已识别 n 条 · 继续识别"（phase 'paused'），识别好的不丢。
+ */
+async function impGo() {
+  const run = IMP.run;
+  if (!run || IMP.phase === 'saving') return;
+  Object.assign(IMP, { phase: 'loading', error: '', finished: false, done: run.done, found: run.found.length });
+  impRender();
+  impWakeOn();
+  try {
+    const result = await impRunJobs(run, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); });
     if (!result.transactions.length) throw new AiError(tr('没有识别到任何交易记录。', 'No transactions were found.'));
     // 识别完了：进度圈先走满、报告读出几笔，停一下再进列表（和手机端一样）
     Object.assign(IMP, { finished: true, found: result.transactions.length });
     impRender();
     await new Promise((r) => setTimeout(r, 1100));
-    IMP.finished = false;
+    IMP.finished = false; IMP.run = null;
     Object.assign(IMP, { phase: 'review', drafts: impToDrafts(result), skipped: result.skipped, missed: result.missed, rates: {}, account: 0, detail: -1 });
   } catch (e) {
-    IMP.phase = 'idle';
-    IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
-  }
+    if (aiRetryable(e) && IMP.run) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络断了', 'Connection lost') : e.message; } else {
+      IMP.phase = 'idle'; IMP.run = null;
+      IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
+    }
+  } finally { impWakeOff(); }
   render();
 }
+
+// 识别时屏幕常亮：iPhone 自动锁屏会掐断正在等的请求。切走再回来要重新申请（浏览器切走时会自动放掉）。
+let impWake = null;
+async function impWakeOn() {
+  try {
+    if (impWake || !navigator.wakeLock || document.hidden) return;
+    impWake = await navigator.wakeLock.request('screen');
+    impWake.addEventListener('release', () => { impWake = null; });
+  } catch { /* 不支持或不让：算了 */ }
+}
+function impWakeOff() { try { impWake?.release(); } catch { /* 已经放掉了 */ } impWake = null; }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && IMP.phase === 'loading') impWakeOn(); });
 
 /** 点"粘贴截图"：读剪贴板里的图片。 */
 async function impPaste() {
@@ -1034,7 +1107,7 @@ async function impLinkSubsidies() {
 }
 
 function impReset() {
-  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, drafts: [], skipped: 0, missed: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
+  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
 }
 
 // ---------------------------------------------------------------- 页面
@@ -1127,6 +1200,15 @@ function impLoadingView() {
   return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
     <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr(`识别完成，共 ${IMP.found} 条记录`, `Done: ${IMP.found} records`) : tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
 }
+/** 断网停下了：已经识别出几条、完成几段，点"继续识别"接着跑剩下的。 */
+function impPausedView() {
+  const run = IMP.run, n = run?.found.length ?? 0, done = run?.done ?? 0, total = done + (run?.jobs.length ?? 0);
+  return `<div class="imp-load imp-pause"><div class="imp-pause-pl">${impRingPlanet()}</div>
+    <b class="imp-found">${tr(`已识别 ${n} 条记录`, `${n} records read`)}</b>
+    <div class="muted small">${tr(`完成 ${done} / ${total} 段`, `${done} of ${total} parts done`)} · ${h(IMP.error)}</div>
+    <button class="btn primary imp-cont" data-act="imp-continue">${tr('继续识别', 'Continue')}</button>
+    <button class="btn link" data-act="imp-discard">${tr('放弃', 'Discard')}</button></div>`;
+}
 /** 圆环中间：这个月的主题行星（和手机端一样）。 */
 function impRingPlanet() {
   const d = new Date();
@@ -1190,7 +1272,7 @@ function impGuideView() {
 
 function importView() {
   const bar = `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="${tr('返回', 'Back')}">‹</button><b>${IMP.phase === 'loading' ? tr('AI 识别', 'AI import') : tr('导入账单', 'Import')}</b></div>`;
-  const body = IMP.phase === 'loading' ? impLoadingView() : IMP.phase === 'review' || IMP.phase === 'saving' ? impReviewView() : impPickView();
+  const body = IMP.phase === 'loading' ? impLoadingView() : IMP.phase === 'paused' ? impPausedView() : IMP.phase === 'review' || IMP.phase === 'saving' ? impReviewView() : impPickView();
   return `${bar}<div class="imp-page">${body}</div>`;
 }
 
@@ -1252,6 +1334,7 @@ MOD.actions.push(async (act, v, el) => {
       break;
     }
     case 'imp-discard': impReset(); break;
+    case 'imp-continue': await impGo(); return true;
     case 'imp-go': await impImport(); return true;
     case 'imp-paste': await impPaste(); return true;
     case 'imp-guide': IMP.guide = true; break;

@@ -45,9 +45,18 @@ function aiCheckFiles(kind = 'pdf') {
   throw new AiError(aiNoFilesMsg());
 }
 
-const aiNetErr = () => new AiError(tr('网络连接失败，请检查网络后重试。', 'Connection failed. Check your network and try again.'));
+/** 连接断了（没网、切走后台被掐断、一直没回音）：带 net，调用方可以等一会儿再发。 */
+const aiNetErr = () => Object.assign(new AiError(tr('网络连接失败，请检查网络后重试。', 'Connection failed. Check your network and try again.')), { net: true });
+/** 一次请求最长等多久：DeepSeek 要先"思考"，一段账单可能要好几分钟；超过就当连接断了（免得一直转圈）。 */
+const AI_TIMEOUT = 10 * 60_000;
+const aiFetch = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout ? AbortSignal.timeout(AI_TIMEOUT) : undefined });
+/** 这个错误等一会儿再发一次可能就好了：连接断了、服务繁忙、太频繁。 */
+const aiRetryable = (e) => e instanceof AiError && (e.net || e.status >= 500 || e.status === 429);
 /** 两家共用的错误说法。 */
 function aiHttpErr(status, msg, model) {
+  return Object.assign(aiHttpErr0(status, msg, model), { status });
+}
+function aiHttpErr0(status, msg, model) {
   if (status === 401 || status === 403) return new AiError(tr('API 密钥无效或没有权限，请检查设置。', 'The API key is invalid or lacks permission. Check the settings.'));
   if (status === 402) return new AiError(tr('账户余额不足，请先充值。', 'Out of balance. Top up your account first.'));
   if (status === 404 || /model.*(not ?exist|not found)/i.test(msg)) return new AiError(tr(`找不到模型「${model}」，请在 AI 设置里换一个。`, `Model "${model}" not found. Pick another in AI settings.`));
@@ -74,7 +83,7 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
     output_config: { format: { type: 'json_schema', schema } },
     fallbacks: 'default',
   };
-  const send = (b, beta) => fetch('https://api.anthropic.com/v1/messages', {
+  const send = (b, beta) => aiFetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01',
@@ -91,8 +100,11 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
       if (/fallback/i.test(text)) { const { fallbacks, ...plain } = body; res = await send(plain, false); }
     }
   } catch { throw aiNetErr(); }
-  const json = await res.json().catch(() => null);
+  let json = null, cut = false;
+  try { json = await res.json(); } catch (e) { cut = e?.name !== 'SyntaxError'; }
   if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
+  if (cut) throw aiNetErr(); // 回答收到一半连接断了
+  if (!json) throw aiBadJson();
   if (json.stop_reason === 'refusal') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
   if (json.stop_reason === 'max_tokens') throw aiTooLong();
   const text = (json.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
@@ -125,7 +137,7 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
     max_tokens: Math.min(maxTokens + 32000, 393216),
     stream: false,
   };
-  const send = (b) => fetch('https://api.deepseek.com/chat/completions', {
+  const send = (b) => aiFetch('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(b),
   });
   let res;
@@ -136,8 +148,10 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
       if (/response_format|json_object/i.test(text)) { const { response_format, ...plain } = body; res = await send(plain); }
     }
   } catch { throw aiNetErr(); }
-  const json = await res.json().catch(() => null);
+  let json = null, cut = false;
+  try { json = await res.json(); } catch (e) { cut = e?.name !== 'SyntaxError'; }
   if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
+  if (cut) throw aiNetErr(); // 回答收到一半连接断了
   const choice = json?.choices?.[0];
   if (choice?.finish_reason === 'length') throw aiTooLong();
   if (choice?.finish_reason === 'content_filter') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
