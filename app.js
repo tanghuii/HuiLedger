@@ -473,7 +473,7 @@ function hmFace(happy) {
     <path d="${happy ? 'M59.28 53.42A12 10 0 0 1 36.72 53.42' : 'M36.72 62.58A12 10 0 0 1 59.28 62.58'}" fill="none" stroke="${ink}" stroke-width="5" stroke-linecap="round"/></svg>`;
 }
 
-/** 汇总卡片第二页：预算花了多少、还剩多少、每天还能花多少。 */
+/** 汇总卡片第二页：预算花了多少、还剩多少、每日可用多少。 */
 function hmBudgetPage(t) {
   const total = typeof BUD !== 'undefined' ? BUD.total() : 0;
   const { y, m } = state.month, now = new Date(), current = now.getFullYear() === y && now.getMonth() + 1 === m;
@@ -487,9 +487,9 @@ function hmBudgetPage(t) {
   for (const x of monthTxs()) if (x.kind === KIND.EXPENSE && L.counts(x)) { const k = L.top(x.categoryId)?.id ?? -1; byTop.set(k, (byTop.get(k) ?? 0) + L.net(x)); }
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
   return `<section class="hm-page" data-act="tab" data-v="budget">${label}
-    <div class="hm-big num${over ? ' out' : ''}" style="font-size:30px">${over ? tr('超支 ' + money(-left), 'Over by ' + money(-left)) : tr('还剩 ' + money(left), money(left) + ' left')}</div>
+    <div class="hm-big num${over ? ' out' : ''}" style="font-size:30px">${over ? tr('超支 ' + money(-left), 'Over by ' + money(-left)) : tr('剩余 ' + money(left), money(left) + ' left')}</div>
     <div class="hm-barw"><div class="hm-bar"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div><b class="pl-bmoon" style="left:${(ratio * 100).toFixed(1)}%" aria-hidden="true"></b></div>
-    <div class="hm-bl muted"><span>${tr(`已花 ${money(spent)} / ${money(total)}`, `${money(spent)} of ${money(total)}`)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每天还能花 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))} / day`)}</span>` : ''}</div>
+    <div class="hm-bl muted"><span>${tr(`花费 ${money(spent)} / ${money(total)}`, `${money(spent)} of ${money(total)}`)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每日可用 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))} / day`)}</span>` : ''}</div>
     ${overCats.length ? `<div class="hm-oc out">${tr('超支分类：', 'Over budget: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</section>`;
 }
 

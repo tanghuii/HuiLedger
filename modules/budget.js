@@ -1,4 +1,4 @@
-// 预算：和手机端 BudgetScreen 一样——月度总预算的大圆环、每天可用、累计花费走势和月底预测、分类预算。
+// 预算：和手机端 BudgetScreen 一样——月度总预算的大圆环、每日可用、累计花费走势和月底预测、分类预算。
 // 数据是和手机共享的设置：budget = 每月总预算（分，主货币，0 = 不设）；catBudgets = { "一级分类 id": 分 }。
 // 统计口径和首页一致：总数用 L.totals(...).expense（扣掉退款），分类和走势只看计入收支的支出（L.counts）。
 'use strict';
@@ -75,10 +75,10 @@ function budgetView() {
     const color = left < 0 ? 'var(--expense)' : ratio > 0.8 ? 'var(--amber)' : 'var(--primary)';
     const daysLeft = n.current ? n.days - n.todayDay + 1 : 0;
     head = `<div class="card grid">${monthBar()}
-      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? tr('还剩', 'Left') : tr('超支', 'Over')}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">${tr('已用', 'Used')} ${Math.round(ratio * 100)}%</div>`, grow)}
+      ${budgetRing(ratio, color, `<div class="muted small">${left >= 0 ? tr('剩余', 'Left') : tr('超支', 'Over')}</div><div class="num bud-left ${left < 0 ? 'out' : ''}">${money(Math.abs(left))}</div><div class="small" style="color:${color}">${tr('已用', 'Used')} ${Math.round(ratio * 100)}%</div>`, grow)}
       <div class="bud-stats"><div><div class="muted small">${tr('预算', 'Budget')}</div><div class="num">${money(total)}</div></div>
-        <div><div class="muted small">${tr('已花', 'Spent')}</div><div class="num out">${money(spent)}</div></div>
-        <div><div class="muted small">${tr('每天可用', 'Per day')}</div><div class="num">${daysLeft > 0 && left > 0 ? money(Math.floor(left / daysLeft)) : '—'}</div></div></div>
+        <div><div class="muted small">${tr('花费', 'Spent')}</div><div class="num out">${money(spent)}</div></div>
+        <div><div class="muted small">${tr('每日可用', 'Per day')}</div><div class="num">${daysLeft > 0 && left > 0 ? money(Math.floor(left / daysLeft)) : '—'}</div></div></div>
       <div class="bud-wide"><button class="btn" data-act="bud-edit" data-v="total">${tr('改预算', 'Edit budget')}</button></div></div>`;
   }
   // 右边：走势，分类预算
@@ -94,7 +94,7 @@ function budgetView() {
     return `<div class="row click" data-act="bud-edit" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}
       <div class="main"><div class="between"><span class="title">${h(c.name)}</span><span class="num muted small" style="font-weight:500">${money(used)} / ${money(b)}</span></div>
         <div class="bar bud-bar" style="background:color-mix(in srgb, ${color} 15%, transparent)"><i${pgGx(grow)} style="width:${Math.min(100, ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${color} 65%, transparent), ${color})"></i></div>
-        <div class="small ${used > b ? 'out' : ratio > 0.8 ? 'amber' : 'muted'}" style="${used > b ? 'font-weight:600' : ''}">${used <= b ? tr('还剩 ' + money(b - used), money(b - used) + ' left') : tr('超支 ' + money(used - b), money(used - b) + ' over')}</div></div></div>`;
+        <div class="small ${used > b ? 'out' : ratio > 0.8 ? 'amber' : 'muted'}" style="${used > b ? 'font-weight:600' : ''}">${used <= b ? tr('剩余 ' + money(b - used), money(b - used) + ' left') : tr('超支 ' + money(used - b), money(used - b) + ' over')}</div></div></div>`;
   }).join('');
   const otherRows = others.map((g) => `<div class="row ${g.top ? 'click' : ''}" ${g.top ? `data-act="bud-edit" data-v="${g.top.id}"` : ''}>${iconTile(g.top?.icon ?? 'tag')}
       <div class="main"><div class="between"><span class="title">${h(g.top?.name ?? tr('未分类', 'Uncategorized'))}</span><span class="num">${money(g.cents)}</span></div>
@@ -102,7 +102,7 @@ function budgetView() {
   const picker = free.length ? `<select class="mini" data-change="bud-pick" aria-label="${tr('设分类预算', 'Set category budget')}"><option value="">${tr('＋ 分类预算', '＋ Category budget')}</option>${free.map((c) => `<option value="${c.id}">${h(c.name)}</option>`).join('')}</select>` : '';
   const catCard = `<div class="card"><div class="between"><b class="muted small">${tr('分类预算', 'Category budgets')}</b>${picker}</div>
     ${!budgetedRows && !otherRows ? `<p class="muted" style="margin:8px 0 0">${tr('暂无支出', 'No spending yet')}</p>` : ''}${budgetedRows}
-    ${budgetedRows && otherRows ? `<div class="muted small" style="margin-top:8px">${tr('没设预算的', 'No budget')}</div>` : ''}${otherRows}</div>`;
+    ${budgetedRows && otherRows ? `<div class="muted small" style="margin-top:8px">${tr('未设预算支出类别', 'No budget')}</div>` : ''}${otherRows}</div>`;
   return `<div class="cols"><div class="grid sticky">${head}</div><div class="grid">${total > 0 ? budgetPace(n, total, grow) : ''}${catCard}</div></div>${budgetDialog()}`;
 }
 
@@ -146,9 +146,9 @@ function budgetHomeCard() {
   for (const t of txs) if (t.kind === KIND.EXPENSE && L.counts(t)) { const k = L.top(t.categoryId)?.id ?? -1; byTop.set(k, (byTop.get(k) ?? 0) + L.net(t)); }
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
   return `<div class="card click bud-home" data-act="tab" data-v="budget">
-    <div class="between"><span class="muted small">${current ? tr('本月预算', 'Budget this month') : tr(m + '月预算', MONTH_EN[m - 1] + ' budget')}</span><span class="num ${over ? 'out' : ''}" style="font-size:18px">${over ? tr('超支 ' + money(-left), money(-left) + ' over') : tr('还剩 ' + money(left), money(left) + ' left')}</span></div>
+    <div class="between"><span class="muted small">${current ? tr('本月预算', 'Budget this month') : tr(m + '月预算', MONTH_EN[m - 1] + ' budget')}</span><span class="num ${over ? 'out' : ''}" style="font-size:18px">${over ? tr('超支 ' + money(-left), money(-left) + ' over') : tr('剩余 ' + money(left), money(left) + ' left')}</span></div>
     <div class="bar" style="margin:8px 0 6px;background:color-mix(in srgb, ${bar} 15%, transparent)"><i${pgGx(pgGrow(`home:${state.ledgerId}:${y}-${m}`))} style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div>
-    <div class="between small muted"><span>${tr('已花', 'Spent')} ${money(spent)} / ${money(total)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每天 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))}/day`)}</span>` : ''}</div>
+    <div class="between small muted"><span>${tr('花费', 'Spent')} ${money(spent)} / ${money(total)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每日可用 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))}/day`)}</span>` : ''}</div>
     ${overCats.length ? `<div class="small out" style="font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tr('超支：', 'Over: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</div>`;
 }
 

@@ -50,7 +50,7 @@ function rmItems() {
         key: 'loan:' + person, icon: 'people', go: 'loan:' + person,
         title: tr(`借款到期：${person}`, `Loan due: ${person}`),
         text: (left > 0 ? tr(`还有 ${left} 天`, `In ${left} days`) : left === 0 ? tr('今天到期', 'Due today') : tr(`已逾期 ${-left} 天`, `${-left} days overdue`))
-          + tr(`，还剩 ${money(Math.abs(net))}`, `, ${money(Math.abs(net))} left`),
+          + tr(`，剩余 ${money(Math.abs(net))}`, `, ${money(Math.abs(net))} left`),
       });
     }
   }

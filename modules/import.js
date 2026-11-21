@@ -941,8 +941,13 @@ function impReviewView() {
 function impLoadingView() {
   const p = IMP.ringP ?? 0, seg = IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
   setTimeout(impRingTick, 0);
-  return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg><b class="num">${Math.floor(p * 100)}%</b></div>
-    <b class="imp-found">${tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
+  return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
+    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
+}
+/** 圆环中间：这个月的主题行星（和手机端一样）。 */
+function impRingPlanet() {
+  const d = new Date();
+  return typeof plOfMonth === 'function' && typeof planetSvg === 'function' ? planetSvg(plOfMonth(d.getFullYear(), d.getMonth() + 1), { px: 96, cls: 'imp-planet' }) : '';
 }
 let impRingRaf = 0;
 function impRingTick() {
@@ -958,7 +963,7 @@ function impRingTick() {
     ring.querySelector('.arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
     const a = (-90 + 360 * p) * Math.PI / 180, tip = ring.querySelector('.tip');
     tip.setAttribute('cx', (60 + 52 * Math.cos(a)).toFixed(2)); tip.setAttribute('cy', (60 + 52 * Math.sin(a)).toFixed(2));
-    ring.querySelector('b').textContent = `${Math.floor(p * 100)}%`;
+    const pct = document.querySelector('.imp-pct'); if (pct) pct.textContent = `${Math.floor(p * 100)}%`;
     impRingRaf = requestAnimationFrame(step);
   };
   impRingRaf = requestAnimationFrame(step);

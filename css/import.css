@@ -64,11 +64,12 @@ input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0;
 
 /* AI 识别的进度圆环（import.js impLoadingView） */
 .imp-load { display: grid; justify-items: center; gap: 6px; padding: 48px 0 32px; }
-.imp-ring { position: relative; width: 170px; height: 170px; display: grid; place-items: center; margin-bottom: 12px; }
-.imp-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.imp-ring { position: relative; width: 170px; height: 170px; display: grid; place-items: center; margin-bottom: 6px; }
+.imp-ring > svg:not(.imp-planet) { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .imp-ring .trk { fill: none; stroke: color-mix(in srgb, var(--text) 8%, transparent); stroke-width: 10; }
 .imp-ring .arc { fill: none; stroke: var(--primary); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 60px 60px; }
 .imp-ring .tip { fill: #fff; filter: drop-shadow(0 0 6px var(--primary)); animation: imp-pulse 1.4s ease-in-out infinite; }
-.imp-ring b { font-size: 30px; font-weight: 700; color: var(--primary); }
+.imp-ring svg.imp-planet { position: relative; width: 96px; height: 96px; }
+.imp-pct { font-size: 26px; font-weight: 700; color: var(--primary); }
 .imp-found { font-size: 17px; }
 @keyframes imp-pulse { 50% { opacity: .45; } }
