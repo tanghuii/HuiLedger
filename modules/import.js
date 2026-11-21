@@ -86,6 +86,11 @@ async function impUnzip(buf, want) {
 // 密码只在这台设备上用来解压，不保存、不上传。支持传统 ZipCrypto 和 AES（WinZip AE-1 / AE-2）两种加密。
 
 const IMP_ZIP_ACCEPT = '.zip,application/zip,application/x-zip-compressed';
+/**
+ * "文件"按钮能选的类型：只列文档，不带 image/*。
+ * 安卓 Chrome 只要 accept 里有 image/*，就只给"拍照 / 照片和视频"，打不开文件管理器；截图另有按钮。
+ */
+const IMP_FILE_ACCEPT = `.pdf,.csv,.xlsx,.xls,.txt,.zip,application/pdf,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel,${IMP_XLSX_MIME},application/zip,application/x-zip-compressed`;
 const impIsZip = (f) => /\.zip$/i.test(f.name ?? '') || /zip/.test(f.type ?? '');
 const IMP_INNER = /\.(csv|xlsx|xls|pdf|txt|png|jpe?g|webp|heic)$/i;
 const IMP_CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -1118,7 +1123,7 @@ function impPickView() {
     </div>
     <div class="card">
       <div class="imp-head">${iconTile('document', 'imp-tile38')}<span>${tr('账单文件', 'Statement files')}</span></div>
-      <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV / ZIP）', 'Choose file (Excel / PDF / CSV / ZIP)')}<input type="file" data-imp="files" accept="image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf,${IMP_XLSX_MIME},${IMP_ZIP_ACCEPT}" multiple hidden></label>
+      <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV / ZIP）', 'Choose file (Excel / PDF / CSV / ZIP)')}<input type="file" data-imp="files" accept="${IMP_FILE_ACCEPT}" multiple hidden></label>
       <div class="muted small imp-note">${tr('微信、支付宝加密账单 zip 可直接选（iPhone：先「存储到"文件"」）', 'WeChat / Alipay zips work (iPhone: save to Files first)')}</div>
     </div>`;
 }
