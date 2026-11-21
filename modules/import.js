@@ -15,7 +15,33 @@ const IMP = {
   /** 缺账户的记到哪个账户；不预选（以前默认第一个，没留意就把银行流水记进了现金） */
   account: 0,
   saveDone: 0, saveTotal: 0,
+  /** "iPhone 导入微信账单"说明开着 */
+  guide: false,
+  /** 快捷指令传进来的账单文件（还没开始识别） */
+  incoming: null,
 };
+
+// ---------------------------------------------------------------- 快捷指令直传
+// iPhone 的快捷指令"行星记账导入"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
+// # 后面的内容不会发到服务器；这里读出来就把地址栏抹掉（要在 app.js 处理登录回跳之前，所以放在这个文件的顶层）。
+/** 快捷指令安装文件（签好名的 .shortcut）；还没发布时为空，说明里就不显示"添加快捷指令"。 */
+const IMP_SHORTCUT_URL = '';
+(() => {
+  const m = location.hash.match(/^#imp=([^&]+)(?:&n=([^&]*))?/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    let name = ''; try { name = decodeURIComponent(m[2] ?? ''); } catch { /* 名字坏了就不要 */ }
+    // 没给名字：按内容猜（PK 开头是 zip）
+    if (!/\.[a-z0-9]{2,5}$/i.test(name)) name = (name || tr('账单', 'statement')) + (bytes[0] === 0x50 && bytes[1] === 0x4b ? '.zip' : '.csv');
+    const ext = name.split('.').pop().toLowerCase();
+    IMP.incoming = new File([bytes], name, { type: { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }[ext] ?? '' });
+  } catch { /* 数据不完整：当没收到 */ }
+})();
+// 读完云端数据（登录后的第一次也算）再切到导入页，免得被启动流程切回首页
+MOD.onLoad.push(async () => { if (IMP.incoming && state.tab !== 'import' && IMP.phase === 'idle') { state.tab = 'import'; setTimeout(render, 0); } });
 
 const IMP_MAX_TEXT = 400000, IMP_MAX_PDF = 20 * 1024 * 1024;
 const IMP_SLICE_W = 1200, IMP_SLICE_H = 1600, IMP_OVERLAP = 160;
@@ -1113,7 +1139,10 @@ function impRingTick() {
 
 function impPickView() {
   const canPaste = !!navigator.clipboard?.read;
+  const inc = IMP.incoming;
   return `${IMP.error ? `<div class="card"><div class="err" style="font-size:15px">${h(IMP.error)}</div></div>` : ''}
+    ${inc ? `<div class="card imp-inc">${iconTile('document', 'imp-tile38')}<div class="imp-inc-t"><b>${tr('收到账单文件', 'Received a statement')}</b><span class="muted small">${h(inc.name)}</span></div>
+      <button class="btn primary" data-act="imp-inc-go">${tr('开始识别', 'Read it')}</button><button class="ed-x" data-act="imp-inc-x" aria-label="${tr('不要了', 'Discard')}">✕</button></div>` : ''}
     <div class="card">
       <div class="imp-head">${iconTile('sparkle', 'imp-tile38')}<span>${tr('截图和银行账单', 'Screenshots and bank statements')}</span></div>
       ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，目前还没有填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('去设置密钥', 'Set the key')}</button></div>`}
@@ -1124,8 +1153,24 @@ function impPickView() {
     <div class="card">
       <div class="imp-head">${iconTile('document', 'imp-tile38')}<span>${tr('账单文件', 'Statement files')}</span></div>
       <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV / ZIP）', 'Choose file (Excel / PDF / CSV / ZIP)')}<input type="file" data-imp="files" accept="${IMP_FILE_ACCEPT}" multiple hidden></label>
-      <div class="muted small imp-note">${tr('微信、支付宝加密账单 zip 可直接选（iPhone：先「存储到"文件"」）', 'WeChat / Alipay zips work (iPhone: save to Files first)')}</div>
-    </div>`;
+      <button class="btn link imp-gd-open" data-act="imp-guide">${tr('iPhone 怎么导入微信账单？', 'Importing WeChat bills on iPhone')}</button>
+    </div>${IMP.guide ? impGuideView() : ''}`;
+}
+
+/** iPhone 导入微信账单：四步说明 +（发布了的话）添加快捷指令。 */
+function impGuideView() {
+  const step = (n, title, path) => `<li><i>${n}</i><div><b>${title}</b><span>${path.map(h).join('<em>›</em>')}</span></div></li>`;
+  return `<div class="modal imp-gd-bg" data-act="imp-guide-x"><div class="card imp-gd" data-act="imp-noop">
+    <div class="between"><b class="imp-gd-h">${tr('iPhone 导入微信账单', 'WeChat bills on iPhone')}</b><button class="ed-x" data-act="imp-guide-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>
+    <ol class="imp-steps">
+      ${step(1, tr('微信导出账单', 'Export in WeChat'), [tr('我', 'Me'), tr('服务', 'Services'), tr('钱包', 'Wallet'), tr('账单', 'Bills'), tr('常见问题', 'FAQ'), tr('下载账单', 'Download')])}
+      ${step(2, tr('存到「文件」', 'Save to Files'), [tr('打开收到的 zip', 'Open the zip'), tr('分享', 'Share'), tr('存储到"文件"', 'Save to Files')])}
+      ${step(3, tr('回这里选文件', 'Pick it here'), [tr('记一笔', 'Add'), tr('文件', 'File'), tr('最近使用', 'Recents')])}
+      ${step(4, tr('输入解压密码', 'Enter the password'), [tr('微信支付消息里的 6 位数', 'From the WeChat Pay message')])}
+    </ol>
+    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('装一次，以后在 zip 上点 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
+      <a class="btn primary" href="${IMP_SHORTCUT_URL}">${tr('添加快捷指令', 'Add Shortcut')}</a></div>` : ''}
+  </div></div>`;
 }
 
 function importView() {
@@ -1166,6 +1211,11 @@ MOD.actions.push(async (act, v, el) => {
     case 'imp-discard': impReset(); break;
     case 'imp-go': await impImport(); return true;
     case 'imp-paste': await impPaste(); return true;
+    case 'imp-guide': IMP.guide = true; break;
+    case 'imp-guide-x': IMP.guide = false; break;
+    case 'imp-noop': return true;
+    case 'imp-inc-x': IMP.incoming = null; break;
+    case 'imp-inc-go': { const f = IMP.incoming; IMP.incoming = null; if (f) await impStart([f]); return true; }
     default: return true;
   }
   render();
