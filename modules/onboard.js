@@ -26,10 +26,18 @@ const OB_GROUPS = [
   ['inv', () => tr('投资', 'Investing'), [['trading212', 'Trading 212', 'Trading 212'], ['traderepublic', 'Trade Republic', 'Trade Republic'], ['scalable', 'Scalable Capital', 'Scalable Capital'],
     ['bitvavo', 'Bitvavo', 'Bitvavo'], ['coinbase', 'Coinbase', 'Coinbase'], ['kraken', 'Kraken', 'Kraken'], ['finst', 'Finst', 'Finst'], ['robinhood', 'Robinhood', 'Robinhood'], ['zhongtai', '中泰证券', 'Zhongtai 中泰'], ["degiro", "DEGIRO", "DEGIRO"], ["binance", "币安 Binance", "Binance"], ["ibkr", "盈透 IBKR", "Interactive Brokers"]]],
 ];
+/** 默认只显示的热门几家（其余的用搜索找；已有的、选上的也会显示）。和手机端 GUIDE_HOT 一样。 */
+const OB_HOT = new Set(['alipay', 'wechat', 'icbc', 'ccb', 'abc', 'boc', 'cmb', 'bocom', 'psbc', 'ing', 'abn', 'rabobank', 'bunq', 'revolut', 'n26', 'wise', 'paypal',
+  'trading212', 'traderepublic', 'degiro', 'ibkr', 'binance', 'coinbase']);
+/** 搜索：中文名、英文名、品牌关键词里有就算。 */
+function obMatch([key, zh, en], q) {
+  const words = [zh, en, ...((typeof BRANDS !== 'undefined' && BRANDS.find(([, l]) => l === 'logo_' + key)?.[0]) || [])];
+  return words.some((w) => String(w).toLowerCase().includes(q));
+}
 /** 账户类型的小标签（类型号和 manage.js 的 mgTypes 一样：0 储蓄、1 投资、2 信用、3 现金）。 */
 const obTypes = () => [[0, tr('储蓄', 'Savings')], [2, tr('信用卡', 'Credit card')], [1, tr('投资', 'Investing')], [3, tr('现金', 'Cash')]];
 
-const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1, nick: '', ios: null };
+const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1, nick: '', ios: null, q: '', icon: '' };
 
 const obDone = () => { try { return JSON.parse(localStorage.getItem('hl.onboarded')) === true; } catch { return false; } };
 const obMark = () => { try { localStorage.setItem('hl.onboarded', 'true'); } catch { /* 存不了就算了 */ } };
@@ -47,7 +55,7 @@ const obBrand = (key) => OB_GROUPS.flatMap((g) => g[2]).find((b) => b[0] === key
 
 function obOpen() {
   if (!state.session) return;
-  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, busy: false, err: '', note: '', dir: 1, nick: String(shared.get('nickname', '') || '').trim(), ios: IS_IOS ? true : null });
+  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, q: '', icon: '', busy: false, err: '', note: '', dir: 1, nick: String(shared.get('nickname', '') || '').trim(), ios: IS_IOS ? true : null });
   ob.drop.clear(); ob.created.clear();
   if (!ob.el) {
     ob.el = document.createElement('div');
@@ -59,6 +67,7 @@ function obOpen() {
     ob.el.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || e.isComposing) return;
       if (e.target.id === 'ob-name') { e.preventDefault(); obAddCustom(); }
+      if (e.target.id === 'ob-q') { e.preventDefault(); e.target.blur(); }
       if (e.target.id === 'ob-nick') { e.preventDefault(); ob.el.querySelector('[data-ob="next"]')?.click(); }
     });
   }
@@ -124,24 +133,48 @@ function obCurrency() {
 }
 
 function obAccounts() {
+  const sym = (SYMBOL[HOME] ?? '').trim() || HOME;
+  const rows = ob.picks.map((p) => `<div class="ob-nrow">
+      <div class="ob-ntop">${accountTile({ name: p.name, type: p.type, icon: p.icon }, 'sm')}<span class="ob-nname">${h(p.name)}</span>
+        <label class="ob-bal"><span>${h(sym)}</span><input data-k="${h(p.k)}" inputmode="decimal" autocomplete="off" placeholder="${tr('初始余额', 'Opening balance')}" value="${h(p.init)}" aria-label="${tr('初始余额', 'Opening balance')}"></label>
+        <button class="ob-x" data-ob="unpick" data-v="${h(p.k)}" aria-label="${tr('移除', 'Remove')}">✕</button></div>
+      <div class="ob-types">${obTypes().map(([t, n]) => `<button class="chip${p.type === t ? ' on' : ''}" data-ob="type" data-v="${h(p.k)}" data-t="${t}">${n}</button>`).join('')}</div></div>`).join('');
+  return `<h2 class="ob-h">${tr('选择您使用的银行或支付钱包', 'Which wallets and banks do you use?')}</h2>
+    ${ob.note ? `<div class="ob-note">${h(ob.note)}</div>` : ''}
+    <label class="ob-search">${SEARCH_SVG}<input id="ob-q" type="search" value="${h(ob.q)}" placeholder="${tr('搜索更多银行、钱包或券商', 'Search more banks, wallets or brokers')}" autocomplete="off" enterkeyhint="search"></label>
+    <div id="ob-list">${obList()}</div>
+    ${rows ? `<div class="card ob-new">${rows}</div>` : ''}`;
+}
+
+/** 格子：没搜索时按组显示热门的几家（加上已有的、选上的）；搜索时显示全部匹配的，最后一格"添加「…」"。 */
+function obList() {
   const tile = ([key, zh, en]) => {
     const ex = obExisting(key), picked = ob.picks.some((p) => p.k === key), on = ex ? !ob.drop.has(ex.id) : picked;
     const name = ex && !ob.drop.has(ex.id) ? ex.name : tr(zh, en);
     const logo = key === 'cash' ? iconTile('coins') : accountTile({ name: tr(zh, en), type: 0 });
     return `<button class="ob-tile${on ? ' on' : ''}" data-ob="tile" data-v="${key}" aria-pressed="${on}">${logo}<span>${h(name)}</span></button>`;
   };
-  const groups = OB_GROUPS.map(([k, name, list]) => `<div class="ob-gh">${name()}</div><div class="ob-tiles">${list.map(tile).join('')}${k === 'inv' ? `<button class="ob-tile ob-other" data-ob="other" aria-expanded="${ob.adding}"><span class="tile ob-plus">＋</span><span>${tr('其他', 'Other')}</span></button>` : ''}</div>`).join('');
-  const add = ob.adding ? `<div class="ob-add"><input id="ob-name" placeholder="${tr('账户名称', 'Account name')}" autocomplete="off" enterkeyhint="done" maxlength="40"><button class="btn primary" data-ob="add">${tr('添加', 'Add')}</button></div>` : '';
-  const sym = (SYMBOL[HOME] ?? '').trim() || HOME;
-  const rows = ob.picks.map((p) => `<div class="ob-nrow">
-      <div class="ob-ntop">${accountTile({ name: p.name, type: p.type }, 'sm')}<span class="ob-nname">${h(p.name)}</span>
-        <label class="ob-bal"><span>${h(sym)}</span><input data-k="${h(p.k)}" inputmode="decimal" autocomplete="off" placeholder="${tr('初始余额', 'Opening balance')}" value="${h(p.init)}" aria-label="${tr('初始余额', 'Opening balance')}"></label>
-        <button class="ob-x" data-ob="unpick" data-v="${h(p.k)}" aria-label="${tr('移除', 'Remove')}">✕</button></div>
-      <div class="ob-types">${obTypes().map(([t, n]) => `<button class="chip${p.type === t ? ' on' : ''}" data-ob="type" data-v="${h(p.k)}" data-t="${t}">${n}</button>`).join('')}</div></div>`).join('');
-  return `<h2 class="ob-h">${tr('选择您使用的银行或支付钱包', 'Which wallets and banks do you use?')}</h2>
-    ${ob.note ? `<div class="ob-note">${h(ob.note)}</div>` : ''}
-    ${groups}${add}
-    ${rows ? `<div class="card ob-new">${rows}</div>` : ''}`;
+  const other = (label) => `<button class="ob-tile ob-other" data-ob="other" aria-expanded="${ob.adding}"><span class="tile ob-plus">＋</span><span>${h(label)}</span></button>`;
+  const q = ob.q.trim().toLowerCase();
+  let body;
+  if (q) {
+    const hits = OB_GROUPS.flatMap((g) => g[2]).filter((b) => b[0] !== 'cash' && obMatch(b, q));
+    body = `${hits.length ? '' : `<p class="muted ob-miss">${tr(`未找到「${h(ob.q.trim())}」，可手动添加`, `No match for “${h(ob.q.trim())}”. Add it yourself:`)}</p>`}
+      <div class="ob-tiles">${hits.map(tile).join('')}${other(tr(`添加「${ob.q.trim()}」`, `Add “${ob.q.trim()}”`))}</div>`;
+  } else {
+    const shown = (b) => b[0] === 'cash' || OB_HOT.has(b[0]) || ob.picks.some((p) => p.k === b[0]) || obExisting(b[0]);
+    body = OB_GROUPS.map(([k, name, list]) => `<div class="ob-gh">${name()}</div><div class="ob-tiles">${list.filter(shown).map(tile).join('')}${k === 'inv' ? other(tr('其他', 'Other')) : ''}</div>`).join('');
+  }
+  return body + (ob.adding ? obAddForm() : '');
+}
+
+/** 手动添加：名称，加上可选的彩色银行图标（不选就按名字自动配）。 */
+function obAddForm() {
+  const icons = BANK_ICONS.map(([k]) => `<button class="ob-icon${ob.icon === k ? ' on' : ''}" data-ob="icon" data-v="${k}" aria-pressed="${ob.icon === k}" aria-label="${k}">${iconTile(k, 'sm')}</button>`).join('');
+  return `<div class="ob-add">
+    <div class="ob-addrow"><input id="ob-name" value="${h(ob.q.trim())}" placeholder="${tr('账户名称', 'Account name')}" autocomplete="off" enterkeyhint="done" maxlength="40"><button class="btn primary" data-ob="add">${tr('添加', 'Add')}</button></div>
+    <div class="ob-iconh muted">${tr('选择图标（可选）', 'Pick an icon (optional)')}</div>
+    <div class="ob-icons">${icons}</div></div>`;
 }
 
 function obStyle() {
@@ -175,6 +208,8 @@ function obFinish() {
 
 function obInput(e) {
   if (e.target.id === 'ob-nick') { ob.nick = e.target.value; return; }
+  // 搜索：只重画格子，输入框不动（不丢焦点）
+  if (e.target.id === 'ob-q') { ob.q = e.target.value; const list = document.getElementById('ob-list'); if (list) list.innerHTML = obList(); return; }
   const k = e.target.dataset?.k;
   if (k == null) return;
   const p = ob.picks.find((x) => x.k === k);
@@ -203,8 +238,8 @@ function obAddCustom() {
   if (!name) { input?.focus(); return; }
   const low = name.toLowerCase(), taken = [...state.data.account.values()].some((a) => !a.archived && !ob.drop.has(a.id) && a.name.trim().toLowerCase() === low) || ob.picks.some((p) => p.name.trim().toLowerCase() === low);
   if (taken) { ob.note = tr(`已经有「${name}」`, `“${name}” already exists`); obRender(); return; }
-  ob.picks.push({ k: 'c' + (++ob.seq), name, type: /cash|现金/i.test(name) ? 3 : 0, init: '', custom: true });
-  ob.adding = false; ob.note = '';
+  ob.picks.push({ k: 'c' + (++ob.seq), name, type: /cash|现金/i.test(name) ? 3 : 0, init: '', custom: true, icon: ob.icon });
+  ob.adding = false; ob.note = ''; ob.icon = ''; ob.q = '';
   obRender();
 }
 
@@ -219,7 +254,7 @@ async function obCommit() {
   const all = [...state.data.account.values()];
   let order = all.length ? Math.max(...all.map((a) => a.sortOrder ?? 0)) + 1 : 0, id = newId();
   for (const [p, cents] of parsed) {
-    const a = HL_JSON.account({ id: id++, name: p.name.trim(), type: p.type, initialCents: cents, sortOrder: order++, currency: '', archived: false, checkedAt: 0 });
+    const a = HL_JSON.account({ id: id++, name: p.name.trim(), type: p.type, initialCents: cents, sortOrder: order++, currency: '', archived: false, checkedAt: 0, icon: p.icon || '' });
     await saveRecord('account', a);
     ob.created.add(a.id);
     ob.picks.splice(ob.picks.indexOf(p), 1); // 写好一个去掉一个：中途出错再点一次不会重复
@@ -294,6 +329,13 @@ async function obClick(e) {
       if (ob.adding) document.getElementById('ob-name')?.focus();
       return;
     case 'add': obAddCustom(); return;
+    case 'icon': {
+      // 只换选中的那一圈，名称输入框里填的字不动
+      const name = document.getElementById('ob-name')?.value;
+      ob.icon = ob.icon === v ? '' : v; obRender();
+      const input = document.getElementById('ob-name'); if (input && name != null) input.value = name;
+      return;
+    }
     default: return;
   }
   obRender();

@@ -60,8 +60,19 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 .ob-tile.on::after { content: "✓"; position: absolute; top: 4px; right: 5px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font-size: 10px; font-weight: 700; line-height: 1; }
 .ob-tile .ob-plus { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); font-size: 22px; font-weight: 400; }
 .ob-other[aria-expanded="true"] { border-color: var(--primary); }
-.ob-add { display: flex; gap: 8px; }
-.ob-add input { flex: 1; min-width: 0; font-size: 16px; }
+.ob-add { display: grid; gap: 8px; margin-top: 10px; }
+.ob-addrow { display: flex; gap: 8px; }
+.ob-addrow input { flex: 1; min-width: 0; font-size: 16px; }
+.ob-iconh { font-size: 13px; margin: 2px 2px 0; }
+.ob-icons { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-icon { padding: 3px; border-radius: 14px; border: 2px solid transparent; background: none; cursor: pointer; line-height: 0; }
+.ob-icon.on { border-color: var(--primary); }
+/* 搜索框：放大镜在左边 */
+.ob-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--field); }
+.ob-search svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.ob-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 16px; height: 100%; padding: 0; }
+.ob-miss { margin: 0 2px 8px; font-size: 13px; }
+#ob-list { display: grid; gap: 12px; }
 .ob-new { display: grid; gap: 12px; padding: 12px 14px; }
 .ob-nrow { display: grid; gap: 8px; }
 .ob-nrow + .ob-nrow { border-top: 1px solid var(--line); padding-top: 12px; }
@@ -124,3 +135,6 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 .ob-yn { height: 52px; border-radius: 16px; border: var(--bw, 1px) solid var(--stroke); background: var(--card); color: var(--text); font-size: 16px; font-weight: 600; }
 .ob-yn.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--card)); color: var(--primary); }
 .ob-sc { display: grid; gap: 12px; }
+/* 账户设置里的图标：自动 + 八个彩色银行图标 */
+.mg-accicon { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mg-accicon > span { margin-right: 4px; font-size: 14px; }

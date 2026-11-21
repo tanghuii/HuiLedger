@@ -301,6 +301,9 @@ function mgAccountDialog(e) {
   return `<div class="between"><b style="font-size:18px">${e.isNew ? tr('添加账户', 'Add account') : tr('账户设置', 'Account settings')}</b>${e.isNew ? '' : `<button class="btn link danger" data-act="mg-acc-delete">${tr('删除', 'Delete')}</button>`}</div>
     <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(a.name)}" placeholder="${tr('如 ING、支付宝', 'e.g. ING, PayPal')}"></label>
     ${seg('mg-type', mgTypes(), a.type ?? 0)}
+    <div class="mg-accicon"><span class="muted">${tr('图标', 'Icon')}</span>
+      <button class="chip${a.icon ? '' : ' on'}" data-act="mg-acc-icon" data-v="" aria-pressed="${!a.icon}">${tr('自动', 'Auto')}</button>
+      ${BANK_ICONS.map(([k]) => `<button class="ob-icon${a.icon === k ? ' on' : ''}" data-act="mg-acc-icon" data-v="${k}" aria-pressed="${a.icon === k}" aria-label="${k}">${iconTile(k, 'sm')}</button>`).join('')}</div>
     <div class="two"><label class="f">${tr('币种', 'Currency')}<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
       <label class="f">${tr('初始余额', 'Opening balance')}<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="${tr('0.00，欠款请填负数', '0.00, negative if owed')}"></label></div>
     ${a.type === 2 ? `<label class="f">${tr('还款日（每月几号）', 'Due day (of month)')}<input id="mg-due" inputmode="numeric" value="${h(a._due)}" placeholder="1–31"></label>` : ''}
@@ -443,6 +446,7 @@ MOD.actions.push(async (act, v) => {
         break;
       }
       case 'mg-type': mgCollect(); m.edit.obj.type = Number(v); break;
+      case 'mg-acc-icon': mgCollect(); m.edit.obj.icon = v || ''; break;
       case 'mg-acc-delete': {
         const a = m.edit.obj;
         if (mgAccountUsed(a.id)) { m.error = tr('仍有账单，无法删除', "Has entries, can't delete"); break; }

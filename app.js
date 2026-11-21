@@ -146,8 +146,13 @@ function genericIcon(account) {
   if (!account) return 'wallet';
   return n.includes('押金') ? 'key' : n.includes('借') ? 'people' : (n.includes('现金') || n.includes('cash')) ? 'coins' : ['bank', 'chart', 'card', 'wallet'][account.type] ?? 'wallet';
 }
-/** 账户的标志：认得出银行就用它的 logo，否则用通用图标。 */
+/** 账户可选的彩色银行图标（同手机端 AppIcons.bankIcons）：同一个银行图形，八种颜色。 */
+const BANK_ICONS = [['red', '#F2545B'], ['orange', '#FF8A3D'], ['amber', '#F2B01E'], ['green', '#3DBA6F'], ['teal', '#1FB5A8'], ['blue', '#3AA0F0'], ['purple', '#9B6CF0'], ['gray', '#6B7488']]
+  .map(([k, c]) => ['bank_' + k, c]);
+for (const [k, c] of BANK_ICONS) ICONS[k] = { c, d: ICONS.bank.d };
+/** 账户的标志：自己选了彩色银行图标的用它；认得出银行就用它的 logo；否则用通用图标。 */
 function accountTile(account, cls = '') {
+  if (account?.icon && ICONS[account.icon]) return iconTile(account.icon, cls);
   const brand = brandOf(account);
   if (brand?.logo) return `<span class="tile ${cls}"><img src="logos/${brand.logo}.png" alt=""></span>`;
   if (brand) return `<span class="tile ${cls}" style="background:${brand.bg};color:${brand.fg}">${h(brand.text)}</span>`;
@@ -163,7 +168,10 @@ function cardColor(base, fg) {
   return l > 0.62 ? mixHex(base, '#000000', 0.3) : base;
 }
 /** 账户卡面的颜色：有品牌的用品牌色，没有的用它图标的颜色。 */
-function accountFace(account) { const b = brandOf(account); return cardColor(b?.bg ?? (ICONS[genericIcon(account)] ?? ICONS.wallet).c, b?.fg); }
+function accountFace(account) {
+  if (account?.icon && ICONS[account.icon]) return cardColor(ICONS[account.icon].c);
+  const b = brandOf(account); return cardColor(b?.bg ?? (ICONS[genericIcon(account)] ?? ICONS.wallet).c, b?.fg);
+}
 /** 币种的国旗（表情字符）。只给认得的法币，其余不显示。 */
 function flagOf(cur) {
   if (cur !== 'EUR' && !(cur in SYMBOL) && !(cur in fx.rates)) return '';

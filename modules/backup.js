@@ -16,6 +16,8 @@ const HL_JSON = {
   account: (o) => ({
     id: Number(o.id), name: String(o.name ?? ''), type: Number(o.type) || 0, initialCents: Number(o.initialCents) || 0, sortOrder: Number(o.sortOrder) || 0,
     currency: String(o.currency ?? ''), archived: !!o.archived, checkedAt: Number(o.checkedAt) || 0,
+    // 自己选的图标（bank_red 这样）：只在选过时写，和手机端一样
+    ...(o.icon ? { icon: String(o.icon) } : {}),
   }),
   ledger: (o) => ({ id: Number(o.id), name: String(o.name ?? '') }),
 };
