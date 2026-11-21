@@ -26,6 +26,18 @@ const IMP = {
 // # 后面的内容不会发到服务器；这里读出来就把地址栏抹掉（要在 app.js 处理登录回跳之前，所以放在这个文件的顶层）。
 /** 快捷指令安装文件（tools/make_shortcut.py 生成，shortcuts sign --mode anyone 签名）；为空时说明里不显示"添加快捷指令"。 */
 const IMP_SHORTCUT_URL = encodeURI('shortcuts/行星记账导入.shortcut');
+/** 看文件开头猜类型：pdf / xls / xlsx / zip / csv。 */
+function impSniff(b) {
+  const at = (s, o = 0) => [...s].every((c, i) => b[o + i] === c.charCodeAt(0));
+  if (at('%PDF')) return 'pdf';
+  if (b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0) return 'xls';
+  if (at('PK')) {
+    // 第一个文件名（明文，加密的 zip 也是）：xlsx 打开是 [Content_Types].xml / _rels/ / docProps/ / xl/
+    const first = new TextDecoder('latin1').decode(b.subarray(30, 30 + (b[26] | (b[27] << 8))));
+    return /^(\[Content_Types\]\.xml|_rels\/|docProps\/|xl\/)/.test(first) ? 'xlsx' : 'zip';
+  }
+  return 'csv';
+}
 (() => {
   const m = location.hash.match(/^#imp=([^&]+)(?:&n=([^&]*))?/);
   if (!m) return;
@@ -34,10 +46,10 @@ const IMP_SHORTCUT_URL = encodeURI('shortcuts/行星记账导入.shortcut');
     const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     let name = ''; try { name = decodeURIComponent(m[2] ?? ''); } catch { /* 名字坏了就不要 */ }
-    // 没给名字：按内容猜（PK 开头是 zip）
-    if (!/\.[a-z0-9]{2,5}$/i.test(name)) name = (name || tr('账单', 'statement')) + (bytes[0] === 0x50 && bytes[1] === 0x4b ? '.zip' : '.csv');
+    // 快捷指令给的名字常常不带扩展名：按内容猜。xlsx 也是 PK 开头，要看里面有没有 xl/ 目录
+    if (!/\.[a-z0-9]{2,5}$/i.test(name)) name = (name || tr('账单', 'statement')) + '.' + impSniff(bytes);
     const ext = name.split('.').pop().toLowerCase();
-    IMP.incoming = new File([bytes], name, { type: { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }[ext] ?? '' });
+    IMP.incoming = new File([bytes], name, { type: { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' }[ext] ?? '' });
   } catch { /* 数据不完整：当没收到 */ }
 })();
 // 读完云端数据（登录后的第一次也算）再切到导入页，免得被启动流程切回首页
