@@ -72,10 +72,20 @@ body.lk-locked .ui-confirm { z-index: 1050; }
 /* 支出心情（modules/mood.js） */
 svg.planet.mood-pl { display: inline-block; vertical-align: middle; }
 svg.planet.mood-pl.in-row { margin-left: 5px; vertical-align: -3px; }
-.mood-pick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 2px 0 6px; }
-.mood-pick button { display: grid; justify-items: center; gap: 2px; padding: 6px 0; border: 0; border-radius: 14px; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
-.mood-pick button.on { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); font-weight: 600; }
-.mood-list .mood-pick { padding-left: 40px; }
+.mood-badge { display: inline-flex; align-items: center; gap: 2px; margin-left: 5px; font-size: 10px; font-weight: 600; vertical-align: -2px; }
+.mood-rate { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.mood-rate-pl { flex: none; display: grid; place-items: center; width: 32px; height: 32px; }
+.mood-rate-lb { flex: none; font-size: 12px; white-space: nowrap; min-width: 52px; text-align: right; }
+.mood-stars { flex: 1; display: flex; gap: 4px; }
+.mood-stars button { border: 0; background: none; padding: 3px; border-radius: 50%; cursor: pointer; line-height: 0; }
+.mood-stars button svg { width: 28px; height: 28px; fill: none !important; stroke: #F2B01E !important; stroke-opacity: .5; stroke-width: 1.6; stroke-linejoin: round; }
+.mood-stars button.on svg { fill: #F2B01E !important; stroke-opacity: 1; }
+.mood-range { flex: 1; min-width: 0; accent-color: var(--primary); }
+.mood-under { padding: 0 4px 8px 40px; }
+.mood-under .mood-stars button svg { width: 22px; height: 22px; }
+.mood-ed { padding: 4px 6px 8px; }
+.mood-ok { width: 100%; margin-bottom: 6px; }
+.mood-legend span.muted { font-size: 10px; }
 .mood-sum { display: flex; align-items: center; gap: 12px; } .mood-sum b { font-size: 16px; }
 .mood-figs { margin-top: 10px; } .mood-figs b { font-size: 17px; }
 .mood-bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; margin-top: 10px; }

@@ -28,7 +28,7 @@ addEventListener('languagechange', () => { if (LANG_MODE === 'auto' && sysLang()
 /** 语言切换的小开关（登录页右上角、"我的"页都用它）。 */
 const langSwitch = () => `<div class="lang-sw" role="group" aria-label="Language"><button class="${LANG === 'zh' ? 'on' : ''}" data-act="lang" data-v="zh">中</button><button class="${LANG === 'en' ? 'on' : ''}" data-act="lang" data-v="en">EN</button></div>`;
 
-const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11, planet: 12, monthPlanet: 13, nickname: 14, accountProfile: 15, accountPins: 16, projectBudgets: 17 };
+const SHARED_IDS = { budget: 1, catBudgets: 2, schedules: 3, loanDue: 4, ledgerColors: 5, projects: 6, funds: 7, tagColors: 8, recurring: 9, cardDue: 10, home: 11, planet: 12, monthPlanet: 13, nickname: 14, accountProfile: 15, accountPins: 16, projectBudgets: 17, moodScale: 18 };
 
 const shared = {
   /** 读一项共享设置；云端还没有就用 def。 */

@@ -9,8 +9,8 @@ const HL_JSON = {
     toAccountId: Number(o.toAccountId) || 0, ledgerId: o.ledgerId == null ? 1 : Number(o.ledgerId) || 0, date: Number(o.date) || 0, note: String(o.note ?? ''), tags: String(o.tags ?? ''),
     reimburse: Number(o.reimburse) || 0, createdAt: Number(o.createdAt) || 0, currency: String(o.currency ?? ''), origCents: Number(o.origCents) || 0, excluded: !!o.excluded,
     offsetOf: Number(o.offsetOf) || 0, offsetParts: String(o.offsetParts ?? ''), project: String(o.project ?? ''), fund: String(o.fund ?? ''), loanPerson: String(o.loanPerson ?? ''), loanSide: Number(o.loanSide) || 0,
-    // 支出心情只在打了分时写（和手机端一样）
-    ...(Number(o.mood) > 0 ? { mood: Math.min(5, Number(o.mood)) } : {}),
+    // 支出心情只在打了分时写（和手机端一样）：score 1–100 分，mood 是对应的 1–5 档（以前只有 mood 的按 ×20）
+    ...((s) => (s > 0 ? { score: s, mood: Math.min(5, Math.floor((s + 19) / 20)) } : {}))(Number(o.score) > 0 ? Math.min(100, Math.round(Number(o.score))) : Number(o.mood) > 0 ? Math.min(5, Number(o.mood)) * 20 : 0),
   }),
   category: (o) => ({ id: Number(o.id), name: String(o.name ?? ''), icon: o.icon || 'tag', isIncome: !!o.isIncome, sortOrder: Number(o.sortOrder) || 0, parentId: Number(o.parentId) || 0 }),
   account: (o) => ({

@@ -736,7 +736,7 @@ MOD.actions.push(async (act, v) => {
       let found = false;
       try { const reg = await navigator.serviceWorker.getRegistration(); await reg?.update(); found = !!(reg?.installing || reg?.waiting); } catch { /* 查不了就当没有 */ }
       state.hmSwBusy = false;
-      if (found) hmShowUpdate(); else state.hmSwMsg = { msg: navigator.onLine ? tr('已经是最新版本', 'You\'re up to date') : tr('离线中，联网后再查', 'Offline. Try again online.') };
+      if (found) hmShowUpdate(true); else state.hmSwMsg = { msg: navigator.onLine ? tr('已经是最新版本', 'You\'re up to date') : tr('离线中，联网后再查', 'Offline. Try again online.') };
       break;
     }
     // 列表 ⇄ 日历（同一个"明细"页的两种看法）
@@ -1303,7 +1303,18 @@ refreshRates();
 if (state.session) loadAll();
 
 // ---- 新版本提示（代替 App 的软件更新）：离线缓存（sw.js）换成新版本时，顶上弹一条"有新版本 · 点击刷新"
-function hmShowUpdate() {
+function hmShowUpdate(force = false) {
+  // 先弹窗问一声（"稍后更新"后 12 小时内不再弹，只留右下角的小按钮）
+  const snoozed = Date.now() - (Number(store.get('hl.updSnooze')) || 0) < 12 * 3600e3;
+  if ((force || (!snoozed && !hm.updAsked)) && typeof uiConfirm === 'function') {
+    hm.updAsked = true;
+    uiConfirm(tr('检测到您当前应用版本号低，请您更新', 'A newer version is available. Please update.'), { ok: tr('确认更新', 'Update'), cancel: tr('稍后更新', 'Later') })
+      .then((yes) => { if (yes) location.reload(); else { store.set('hl.updSnooze', Date.now()); hmUpdButton(); } });
+    return;
+  }
+  hmUpdButton();
+}
+function hmUpdButton() {
   if (document.querySelector('.hm-upd')) return;
   const b = document.createElement('button');
   b.className = 'hm-upd'; b.type = 'button';
@@ -1325,6 +1336,8 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
   // 装在主屏幕上的 App 很少重新打开：每次切回前台顺手查一次
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') hm.swReg?.update().catch(() => {}); });
+  // 断网后重新联网：查一次新版本
+  addEventListener('online', () => hm.swReg?.update().catch(() => {}));
 }
 // 从后台切回来时顺手刷新一次（手机上改的账这边也能看到）
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.session && !state.editing && Date.now() - (loadAll.at ?? 0) > 60000) { loadAll.at = Date.now(); loadAll(); } });
