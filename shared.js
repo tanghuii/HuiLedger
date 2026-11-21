@@ -193,7 +193,9 @@ function uiConfirm(title, { ok = tr('确定', 'OK'), cancel = tr('取消', 'Canc
   return new Promise((done) => {
     const box = document.createElement('div');
     box.className = 'modal ui-confirm';
-    box.innerHTML = `<div class="card grid" role="alertdialog" aria-modal="true">
+    // 顶上一颗本月行星：要删东西这类危险操作撇嘴，一般的确认是笑脸
+    const pl = typeof plNowPlanet === 'function' ? `<div class="ui-pl">${plNowPlanet(46, danger ? -1 : 1)}</div>` : '';
+    box.innerHTML = `<div class="card grid" role="alertdialog" aria-modal="true">${pl}
       <b style="font-size:17px">${h(title)}</b>${detail ? `<div class="muted small">${detail}</div>` : ''}
       <div class="between"><button class="btn" data-v="0">${h(cancel)}</button><button class="btn ${danger ? 'danger-fill' : 'primary'}" data-v="1">${h(ok)}</button></div></div>`;
     const close = (v) => { box.remove(); done(v); };

@@ -426,7 +426,7 @@ function askView() {
   }).join('');
   const start = `<div class="ai-hints"><div class="muted ai-hl">${tr('说一句话，记账或提问', 'Say it: record or ask')}</div>${hints.map((x) => `<button class="card ai-hint" data-act="ask-hint" data-v="${h(x)}">${h(x)}</button>`).join('')}</div>`;
   return `<div class="ai-ask">
-    <div class="ai-msgs">${state.chat.length ? msgs : start}${busy ? `<div class="muted ai-think">${tr('正在想', 'Thinking')}<i></i><i></i><i></i></div>` : ''}</div>
+    <div class="ai-msgs">${state.chat.length ? msgs : start}${busy ? `<div class="muted ai-think">${typeof plSpinner === 'function' ? plSpinner(22) : ''}${tr('正在想', 'Thinking')}<i></i><i></i><i></i></div>` : ''}</div>
     <form class="quick ai-in" data-form="ask"><span class="spark">${hmSvg(ICONS.sparkle.d)}</span><input id="quick" placeholder="${tr('记一笔，或者问一句', 'Record or ask')}" autocomplete="off" enterkeyhint="send" aria-label="${tr('记一笔，或者问一句', 'Record or ask')}"><button class="send" aria-label="${tr('发送', 'Send')}" disabled>${hmSvg(ICONS.forward.d)}</button></form>
     <i class="ai-end" aria-hidden="true"></i></div>`;
 }

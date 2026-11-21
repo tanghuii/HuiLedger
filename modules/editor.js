@@ -395,6 +395,8 @@ function editorView() {
     transfer ? '' : accChip(from, 'acc'),
     `<label class="chip ed-datechip">${edSvg('calendar')}<span>${edDayName(e.date)}</span><input type="date" id="e-date" value="${dayISO(e.date)}" aria-label="${tr('日期', 'Date')}"></label>`,
     `<button class="chip ${tags.length ? 'on' : ''}" data-act="ed-pick" data-v="tags">${edSvg('tag')}<span>${tagLabel}</span></button>`,
+    // 支出心情：五颗带表情的行星（modules/mood.js）
+    e.kind === KIND.EXPENSE && typeof moodPlanet === 'function' ? `<button class="chip ${e.mood ? 'on' : ''}" data-act="ed-pick" data-v="mood">${e.mood ? moodPlanet(e.mood, 20) : edSvg('heart')}<span>${e.mood ? tr('心情 · ', 'Mood · ') + moodLabel(e.mood) : tr('心情', 'Mood')}</span></button>` : '',
     e.kind === KIND.EXPENSE ? `<button class="chip ${e.reimburse ? 'on' : ''}" data-act="ed-pick" data-v="reimburse">${edSvg('receipt')}<span>${edReimburse()[e.reimburse ?? 0]}</span></button>` : '',
     pf ? `<button class="chip ${e.project ? 'on' : ''}" data-act="ed-pick" data-v="project">${edSvg('target')}<span>${e.project ? tr('项目 · ', 'Project · ') + h(e.project) : tr('项目', 'Project')}</span></button>` : '',
     pf ? `<button class="chip ${e.fund ? 'on' : ''}" data-act="ed-pick" data-v="fund">${edSvg('coins')}<span>${e.fund ? tr('资金 · ', 'Funding · ') + h(e.fund) : tr('资金来源', 'Funding')}</span></button>` : '',
@@ -471,6 +473,8 @@ function edPop(e) {
     body = `<label class="ed-eqfield"><span>${h(edSym(HOME))}</span><input id="ed-equiv" value="${h(now)}" data-was="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${auto != null ? edInput(auto) : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
       <div class="muted small">${r ? `1 ${h(cur)} = ${r.toFixed(4)} ${HOME} · ${dayISO(e.date)}` : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}</div>
       <div class="ed-eqbtns"><button class="btn" data-act="ed-eq-reset">${tr('按汇率算', 'Use the rate')}</button><button class="btn primary" data-act="ed-eq-ok">${tr('好', 'OK')}</button></div>`;
+  } else if (p === 'mood') {
+    title = tr('这笔花得值吗？', 'Worth it?'); body = opt('mood', 0, tr('不打分', 'No rating'), !e.mood) + MOODS.map((m) => opt('mood', m.score, h(tr(m.zh, m.en)), e.mood === m.score, moodPlanet(m.score, 26))).join('');
   } else if (p === 'reimburse') {
     title = tr('报销', 'Reimburse'); body = edReimburse().map((n, i) => opt('reimburse', i, n, (e.reimburse ?? 0) === i)).join('');
   } else if (p === 'excluded') {
@@ -681,7 +685,7 @@ function txRow(t, L, showDate = false, viewAccount = null) {
   return `<div class="row click ed-tx${state.sel?.has(t.id) ? ' sel-on' : ''}" data-act="view" data-v="${t.id}">
     <span class="ed-check" aria-hidden="true"></span>
     ${transfer ? accountTile(incoming ? from : to) : iconTile(leaf?.icon ?? 'tag')}
-    <div class="main"><div class="title">${title}${t.excluded ? `<span class="badge gray">${tr('不计', 'Not counted')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To claim')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
+    <div class="main"><div class="title">${title}${t.kind === KIND.EXPENSE && t.mood > 0 && typeof moodPlanet === 'function' ? moodPlanet(t.mood, 16, 'in-row') : ''}${t.excluded ? `<span class="badge gray">${tr('不计', 'Not counted')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To claim')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
       ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
     <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra}</div>
   </div>`;
@@ -724,7 +728,7 @@ function edPaintToast() {
   // 和手机端一样：深色条，"撤销"是浅蓝字；有底栏时浮在底栏上面，没有底栏的页面贴着底边
   const nav = !!document.querySelector('#app .bottom-nav');
   edLayerEl().querySelector('.ed-toastbox').innerHTML = t
-    ? `<div class="ed-toast ${state.editing ? 'top' : nav ? '' : 'nonav'}" role="status"><span>${h(t.text)}</span>${t.undo ? `<button data-ed="undo">${tr('撤销', 'Undo')}</button>` : ''}</div>` : '';
+    ? `<div class="ed-toast ${state.editing ? 'top' : nav ? '' : 'nonav'}" role="status">${typeof plNowPlanet === 'function' ? plNowPlanet(22, 0, 'ed-toast-pl') : ''}<span>${h(t.text)}</span>${t.undo ? `<button data-ed="undo">${tr('撤销', 'Undo')}</button>` : ''}</div>` : '';
 }
 /** 底部提示；带 undo 的 4 秒后消失（和手机端一样），只是告知的 2 秒。 */
 function edToast(text, undo = null) {

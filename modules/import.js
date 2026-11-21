@@ -660,12 +660,17 @@ async function impTryPatch(file) {
 
 async function impStart(files) {
   if (!files.length || IMP.phase === 'loading' || IMP.phase === 'saving') return;
-  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1 });
+  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1, finished: false });
   impRender();
   try {
     if (files.length === 1 && await impTryPatch(files[0])) { IMP.phase = 'idle'; render(); return; }
     const result = await impParse(files, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); });
     if (!result.transactions.length) throw new AiError(tr('没有识别到任何交易记录。', 'No transactions were found.'));
+    // 识别完了：进度圈先走满、报告读出几笔，停一下再进列表（和手机端一样）
+    Object.assign(IMP, { finished: true, found: result.transactions.length });
+    impRender();
+    await new Promise((r) => setTimeout(r, 1100));
+    IMP.finished = false;
     Object.assign(IMP, { phase: 'review', drafts: impToDrafts(result), skipped: result.skipped, missed: result.missed, rates: {}, account: 0, detail: -1 });
   } catch (e) {
     IMP.phase = 'idle';
@@ -939,10 +944,10 @@ function impReviewView() {
  * 圆环由 impRingTick 每一帧更新（整页重画时接着画，不会从 0 开始）。
  */
 function impLoadingView() {
-  const p = IMP.ringP ?? 0, seg = IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
+  const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('马上为你列出来', 'Opening the list…') : IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
   setTimeout(impRingTick, 0);
   return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
-    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
+    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr(`识别完成，共 ${IMP.found} 条记录`, `Done: ${IMP.found} records`) : tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
 }
 /** 圆环中间：这个月的主题行星（和手机端一样）。 */
 function impRingPlanet() {
@@ -958,8 +963,8 @@ function impRingTick() {
     const now = performance.now();
     if (IMP.ringDone !== IMP.done) { IMP.ringDone = IMP.done; IMP.segAt = now; }
     const segs = Math.max(1, IMP.total), creep = 0.9 * (1 - Math.exp(-(now - (IMP.segAt ?? now)) / 1000 / 18));
-    const target = Math.min(0.99, (Math.min(IMP.done, segs) + creep) / segs);
-    const p = IMP.ringP = (IMP.ringP ?? 0) + (target - (IMP.ringP ?? 0)) * 0.08;
+    const target = IMP.finished ? 1 : Math.min(0.99, (Math.min(IMP.done, segs) + creep) / segs);
+    const p = IMP.ringP = (IMP.ringP ?? 0) + (target - (IMP.ringP ?? 0)) * (IMP.finished ? 0.16 : 0.08);
     ring.querySelector('.arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
     const a = (-90 + 360 * p) * Math.PI / 180, tip = ring.querySelector('.tip');
     tip.setAttribute('cx', (60 + 52 * Math.cos(a)).toFixed(2)); tip.setAttribute('cy', (60 + 52 * Math.sin(a)).toFixed(2));

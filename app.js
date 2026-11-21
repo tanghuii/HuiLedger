@@ -522,6 +522,7 @@ function meView() {
     MOD.pages['tidy-transfers'] && { icon: 'transfer', name: tr('整理转账', 'Tidy up'), v: 'tidy-transfers', badge: tidy.transfers },
     MOD.pages['tidy-cats'] && { icon: 'blocks', name: tr('整理分类', 'Categories+'), v: 'tidy-cats', badge: tidy.cats },
     MOD.pages.import ? { icon: 'camera', name: tr('导入', 'Import'), v: 'import' } : { icon: 'camera', name: tr('导入', 'Import'), file: true },
+    MOD.pages.mood && { icon: 'heart', name: tr('支出心情', 'Spending mood'), v: 'mood' },
     MOD.pages.monthly && { icon: 'receipt', name: tr('月度账单', 'Monthly bill'), v: 'monthly' },
     { icon: 'upload', name: tr('导出', 'Export'), act: 'export' },
     { icon: 'wrench', name: tr('设置', 'Settings'), v: 'settings' },
@@ -557,7 +558,7 @@ const hmCurLabel = (c) => { const sym = (SYMBOL[c] ?? '').trim(); return sym && 
 function settingsView() {
   const row = (icon, name, attrs, value = '') => `<button class="hm-li" ${attrs}>${iconTile(icon)}<span class="hm-li-t">${h(name)}</span>${value ? `<span class="hm-li-v">${h(value)}</span>` : ''}${hmSvg(ICONS.forward.d, 'hm-chev')}</button>`;
   const mod = (key) => MOD.me.find((m) => m.key === key);
-  const covered = ['budget', 'manage', 'settings', 'appearance', 'loans', 'schedules', 'backup', 'monthly'];
+  const covered = ['budget', 'manage', 'settings', 'appearance', 'loans', 'schedules', 'backup', 'monthly', 'mood'];
   const modRow = (m) => (m ? row(m.icon ?? 'tag', m.name, `data-act="tab" data-v="${h(m.key)}"`) : '');
   const extra = (f) => { try { return typeof f === 'function' ? f() ?? '' : ''; } catch (e) { console.warn(e); return ''; } };
   const head = (t) => `<div class="hm-sh">${t}</div>`;

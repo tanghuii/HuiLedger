@@ -68,3 +68,18 @@ body.lk-locked .ui-confirm { z-index: 1050; }
 .vc-btns { display: flex; gap: 12px; margin-top: 14px; }
 .vc-btns .btn { min-width: 96px; }
 @media (prefers-reduced-motion: reduce) { .vc-pulse { transition: none; } .xs-sw i, .xs-sw { transition: none; } }
+
+/* 支出心情（modules/mood.js） */
+svg.planet.mood-pl { display: inline-block; vertical-align: middle; }
+svg.planet.mood-pl.in-row { margin-left: 5px; vertical-align: -3px; }
+.mood-pick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 2px 0 6px; }
+.mood-pick button { display: grid; justify-items: center; gap: 2px; padding: 6px 0; border: 0; border-radius: 14px; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.mood-pick button.on { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); font-weight: 600; }
+.mood-list .mood-pick { padding-left: 40px; }
+.mood-sum { display: flex; align-items: center; gap: 12px; } .mood-sum b { font-size: 16px; }
+.mood-figs { margin-top: 10px; } .mood-figs b { font-size: 17px; }
+.mood-bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+.mood-legend { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--muted); }
+.mood-legend > div { display: grid; justify-items: center; }
+.mood-h { display: flex; align-items: center; gap: 6px; padding: 0 4px 2px; font-size: 13px; } .mood-h b { color: var(--muted); font-weight: 600; }
+.mood-cell .v, .mood-cell .mood-pick { margin-top: 4px; }

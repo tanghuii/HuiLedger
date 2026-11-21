@@ -174,6 +174,7 @@ function detailView() {
     </div>
     <div class="cell"><div class="muted">${tr('备注', 'Note')}</div><div class="note ${t.note ? '' : 'muted'}">${h(t.note) || tr('无', 'None')}</div></div>
     <div class="cells">${cells}</div>
+    ${t.kind === KIND.EXPENSE && typeof moodPicker === 'function' ? `<div class="cell mood-cell"><div class="muted">${tr('这笔花得值吗？', 'Worth it?')}</div>${moodPicker(Number(t.mood) || 0, 'mood-set', t.id, 34)}</div>` : ''}
     ${typeof lkExpenseBox === 'function' ? (t.kind === KIND.EXPENSE ? lkExpenseBox(t, L, false) : t.kind === KIND.INCOME ? lkIncomeBox(t, L) : '') : `
     ${linked.length ? `<div><div class="muted small">${tr('它抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
     ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}`}

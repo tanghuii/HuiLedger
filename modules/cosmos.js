@@ -265,3 +265,14 @@ new MutationObserver((records) => {
     for (const s of svgs) { try { s.setCurrentTime(s.classList.contains('pl-orbit') ? t + plNav.extra : t); } catch { /* 老浏览器 */ } }
   }
 }).observe(document.body, { childList: true, subtree: true });
+
+// ---------------------------------------------------------------- 弹窗和等待里的小行星（和手机端 PlanetDialogIcon / PlanetSpinner 一样）
+/** 本月主题行星的 SVG；mood：1 笑、0 平、-1 撇嘴。 */
+function plNowPlanet(px, mood = 1, cls = '') {
+  const d = new Date();
+  return planetSvg(plOfMonth(d.getFullYear(), d.getMonth() + 1), { px, mood, cls });
+}
+/** 等待时转的小行星：本月行星在中间，一颗小月亮绕着它跑。 */
+function plSpinner(px = 22) {
+  return `<span class="pl-spinner" style="width:${px}px;height:${px}px" aria-hidden="true">${plNowPlanet(Math.round(px * 0.62), 1)}<i></i></span>`;
+}
