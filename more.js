@@ -576,6 +576,29 @@ async function reimburseInSave() {
   state.rIn = null;
 }
 
+/**
+ * "全部"按报销单排（和手机端 ClaimCard 一样）：一笔报销到账一张卡片，下面缩进列出它关联的支出，中间一条进度；
+ * 没对上到账的支出分成"待报销"、"已报销 · 没关联到账"两组。数据不动，只是摆法。
+ */
+function claimCards(shown, L) {
+  const incomes = shown.filter((t) => t.kind === KIND.INCOME), linked = new Set();
+  const cards = incomes.map((inc) => {
+    const parts = L.parts(inc), list = parts.map(([id]) => state.data.tx.get(id)).filter(Boolean);
+    list.forEach((e) => linked.add(e.id));
+    const matched = parts.reduce((a, p) => a + p[1], 0), gap = inc.amountCents - matched, done = list.length > 0 && gap <= 0;
+    const pct = Math.max(0, Math.min(100, matched * 100 / Math.max(1, inc.amountCents)));
+    const note = !list.length ? tr('还没关联支出 · 点这里关联', 'No expenses linked · tap to link')
+      : gap > 0 ? tr(`关联 ${list.length} 笔支出 · 还有 ${money(gap)} 没对上`, `${list.length} linked · ${money(gap)} unmatched`) : tr(`关联 ${list.length} 笔支出 · 已对上`, `${list.length} linked · all matched`);
+    return `<div class="card rb-claim${done ? ' done' : ''}">${rowsOf([inc], L)}<div class="rb-prog"><i style="width:${pct.toFixed(1)}%"></i></div>
+      ${done ? `<div class="rb-note">${note}</div>` : `<button class="rb-note amber" data-act="edit" data-v="${inc.id}">${note}</button>`}
+      ${list.length ? `<div class="rb-linked">${rowsOf(list, L)}</div>` : ''}</div>`;
+  }).join('');
+  const group = (title, list) => (list.length ? `<div class="card rb-group"><div class="between rb-ghead"><b>${title}</b><span class="num amber">${money(sum(list, (t) => t.amountCents))}</span></div>${rowsOf(list, L)}</div>` : '');
+  const loose = shown.filter((t) => t.kind === KIND.EXPENSE && !linked.has(t.id));
+  return cards + group(tr('待报销 · 还没报回来', 'To claim · not paid back yet'), loose.filter((t) => t.reimburse === 1))
+    + group(tr('已报销 · 没关联到账', 'Reimbursed · no payment linked'), loose.filter((t) => t.reimburse !== 1));
+}
+
 function reimburseView() {
   const L = computeLookup();
   if (state.project != null) {
@@ -586,7 +609,7 @@ function reimburseView() {
     return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ ${tr('全部项目', 'All projects')}</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || tr('未归项目', 'No project'))}</b>${projectNumbers(p)}</div>
       ${funds.size ? `<div class="card"><div class="muted small">${tr('资金来源', 'Funding')}</div>${[...funds.entries()].map(([fd, l]) => `<div class="between small"><span>${h(fd)}</span><span class="muted">${tr('支', 'Out')} ${money(sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents))} · ${tr('回', 'Back')} ${money(sum(l.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents))}</span></div>`).join('')}</div>` : ''}</div>
       <div class="grid">${seg('r-filter', [[0, tr('全部', 'All')], [1, tr('待报销', 'To claim')], [2, tr('已报销', 'Done')], [3, tr('报销收入', 'Paid back')]], f)}
-        ${shown.length ? `<div class="card">${rowsOf(shown, L)}</div>` : pgEmpty('receipt', tr('还没有账单', 'No entries yet'))}</div></div>`;
+        ${!shown.length ? pgEmpty('receipt', tr('还没有账单', 'No entries yet')) : f === 0 ? claimCards(shown, L) : `<div class="card">${rowsOf(shown, L)}</div>`}</div></div>`;
   }
   const matched = findReimbursed(L);
   const head = seg('rmode', [['projects', tr('项目', 'Projects')], ['pending', tr('待报销', 'To claim')], ['done', tr('已报销', 'Done')], ['likely', tr(`疑似 ${matched.length}`, `Likely ${matched.length}`)]], state.rmode);
