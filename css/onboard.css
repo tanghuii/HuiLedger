@@ -51,7 +51,8 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 .ob-cur button:active, .ob-tile:active { transform: scale(.94); }
 
 /* 第三步：品牌方块，选中的垫主题色、右上角打勾；下面是新加的账户（初始余额、类型） */
-.ob-gh { margin: 4px 2px -4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.ob-gh { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 2px -4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.ob-swipe { font-size: 11px; font-weight: 400; opacity: .8; }
 .ob-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .ob-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 10px 3px 8px; border-radius: 16px; border: var(--bw, 1px) solid var(--line); background: var(--card); color: var(--text); font-size: 12px; line-height: 15px; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
 .ob-tile > span:last-child { max-width: 100%; overflow: hidden; text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -68,8 +69,10 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 .ob-icon { padding: 3px; border-radius: 14px; border: 2px solid transparent; background: none; cursor: pointer; line-height: 0; }
 .ob-icon.on { border-color: var(--primary); }
 /* 搜索框：放大镜在左边 */
-.ob-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--field); }
-.ob-search svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.ob-findrow { display: flex; align-items: center; gap: 6px; }
+.ob-manual { flex: none; font-size: 14px; padding: 6px 4px; }
+.ob-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 36px; border-radius: 12px; border: 1px solid var(--line); background: var(--field); }
+.ob-search svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
 .ob-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 16px; height: 100%; padding: 0; }
 .ob-miss { margin: 0 2px 8px; font-size: 13px; }
 #ob-list { display: grid; gap: 12px; }
@@ -115,6 +118,17 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 /* ---------------------------------------------------------------- 底下：大按钮 */
 .ob-foot { flex: none; display: grid; gap: 6px; width: 100%; max-width: 552px; margin: 0 auto; padding: 8px 16px calc(env(safe-area-inset-bottom) + 14px); }
 .ob-next { width: 100%; height: 52px; font-size: 17px; }
+a.ob-next, a.ob-warnadd { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+/* 只用小字跳过 */
+.ob-later { justify-self: center; background: none; border: 0; padding: 4px 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.ob-scok { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 0 2px; }
+.ob-scok svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--primary); stroke-width: 2; }
+/* 没装快捷指令时的提醒：盖在向导上的一张卡片 */
+.ob-warn { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 20px; background: rgba(10, 12, 30, .45); }
+.ob-warncard { display: grid; gap: 10px; width: 100%; max-width: 360px; padding: 18px; text-align: center; }
+.ob-warncard b { font-size: 17px; }
+.ob-warncard p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.ob-warnadd { height: 46px; }
 .ob-err { margin: 0; text-align: center; font-size: 13px; }
 
 @keyframes ob-in { from { opacity: 0; } }
@@ -138,3 +152,11 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 /* 账户设置里的图标：自动 + 八个彩色银行图标 */
 .mg-accicon { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .mg-accicon > span { margin-right: 4px; font-size: 14px; }
+
+/* 每组一排可以左右滑的页：每页 4 列，第一页是常用的 */
+.ob-pages { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -2px; padding: 2px; gap: 0; }
+.ob-pages::-webkit-scrollbar { display: none; }
+.ob-page { flex: 0 0 100%; scroll-snap-align: start; padding-right: 2px; align-content: start; }
+.ob-pdots { display: flex; justify-content: center; gap: 5px; margin-top: -4px; }
+.ob-pdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--line); transition: width .2s, background .2s; }
+.ob-pdots i.on { width: 14px; border-radius: 3px; background: var(--primary); }

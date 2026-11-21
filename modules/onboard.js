@@ -19,16 +19,32 @@ const OB_DEFAULT_IDS = [1, 2, 3];
  * 现金不是品牌，排在第一个。
  */
 const OB_GROUPS = [
-  ['cn', () => tr('中国', 'China'), [['cash', '现金', 'Cash'], ['alipay', '支付宝', 'Alipay'], ['wechat', '微信', 'WeChat Pay'], ['icbc', '工商银行', 'ICBC'], ['boc', '中国银行', 'BOC'],
+  ['cn', () => tr('中国', 'China'), [['cash_cny', '人民币现金', 'Cash (CNY)'], ['alipay', '支付宝', 'Alipay'], ['wechat', '微信', 'WeChat Pay'], ['icbc', '工商银行', 'ICBC'], ['boc', '中国银行', 'BOC'],
     ['abc', '农业银行', 'ABC'], ['cmbc', '民生银行', 'CMBC'], ['citic', '中信银行', 'CITIC 中信'], ['pingan', '平安银行', 'PingAn Bank'], ['guilin', '桂林银行', 'Guilin Bank 桂林银行'], ["ccb", "建设银行", "CCB"], ["bocom", "交通银行", "BOCOM"], ["psbc", "邮储银行", "PSBC"], ["cmb", "招商银行", "CMB"], ["spdb", "浦发银行", "SPDB"], ["cib", "兴业银行", "CIB"], ["ceb", "光大银行", "CEB"], ["hxb", "华夏银行", "Hua Xia Bank"], ["cgb", "广发银行", "CGB"], ["czb", "浙商银行", "CZB"], ["bob", "北京银行", "Bank of Beijing"], ["bosc", "上海银行", "Bank of Shanghai"], ["jsb", "江苏银行", "Bank of Jiangsu"], ["nbcb", "宁波银行", "Bank of Ningbo"], ["njcb", "南京银行", "Bank of Nanjing"], ["hzb", "杭州银行", "Bank of Hangzhou"], ["webank", "微众银行", "WeBank"], ["mybank", "网商银行", "MYbank"], ["unionpay", "云闪付", "UnionPay"], ["jdpay", "京东金融", "JD Finance"]]],
-  ['eu', () => tr('欧洲', 'Europe'), [['ing', 'ING', 'ING'], ['abn', 'ABN AMRO', 'ABN AMRO'], ['rabobank', 'Rabobank', 'Rabobank'], ['asn', 'ASN Bank', 'ASN Bank'], ['bunq', 'bunq', 'bunq'],
+  ['eu', () => tr('欧洲', 'Europe'), [['cash_eur', '欧元现金', 'Cash (EUR)'], ['ing', 'ING', 'ING'], ['abn', 'ABN AMRO', 'ABN AMRO'], ['rabobank', 'Rabobank', 'Rabobank'], ['asn', 'ASN Bank', 'ASN Bank'], ['bunq', 'bunq', 'bunq'],
     ['revolut', 'Revolut', 'Revolut'], ['n26', 'N26', 'N26'], ['wise', 'Wise', 'Wise'], ['paypal', 'PayPal', 'PayPal'], ['lemfi', 'LemFi', 'LemFi'], ["sns", "SNS", "SNS"], ["regiobank", "RegioBank", "RegioBank"], ["triodos", "Triodos", "Triodos"], ["knab", "Knab", "Knab"], ["deutschebank", "Deutsche Bank", "Deutsche Bank"], ["commerzbank", "Commerzbank", "Commerzbank"], ["sparkasse", "Sparkasse", "Sparkasse"], ["volksbank", "Volksbank", "Volksbank"], ["dkb", "DKB", "DKB"], ["comdirect", "comdirect", "comdirect"], ["postbank", "Postbank", "Postbank"], ["bnp", "BNP Paribas", "BNP Paribas"], ["creditagricole", "Crédit Agricole", "Crédit Agricole"], ["socgen", "Société Générale", "Société Générale"], ["labanquepostale", "La Banque Postale", "La Banque Postale"], ["boursobank", "BoursoBank", "BoursoBank"], ["santander", "Santander", "Santander"], ["bbva", "BBVA", "BBVA"], ["caixabank", "CaixaBank", "CaixaBank"], ["intesa", "Intesa Sanpaolo", "Intesa Sanpaolo"], ["unicredit", "UniCredit", "UniCredit"], ["hsbc", "汇丰 HSBC", "HSBC"], ["barclays", "Barclays", "Barclays"], ["lloyds", "Lloyds", "Lloyds"], ["natwest", "NatWest", "NatWest"], ["monzo", "Monzo", "Monzo"], ["kbc", "KBC", "KBC"], ["belfius", "Belfius", "Belfius"], ["nordea", "Nordea", "Nordea"], ["ubs", "UBS", "UBS"], ["klarna", "Klarna", "Klarna"]]],
   ['inv', () => tr('投资', 'Investing'), [['trading212', 'Trading 212', 'Trading 212'], ['traderepublic', 'Trade Republic', 'Trade Republic'], ['scalable', 'Scalable Capital', 'Scalable Capital'],
     ['bitvavo', 'Bitvavo', 'Bitvavo'], ['coinbase', 'Coinbase', 'Coinbase'], ['kraken', 'Kraken', 'Kraken'], ['finst', 'Finst', 'Finst'], ['robinhood', 'Robinhood', 'Robinhood'], ['zhongtai', '中泰证券', 'Zhongtai 中泰'], ["degiro", "DEGIRO", "DEGIRO"], ["binance", "币安 Binance", "Binance"], ["ibkr", "盈透 IBKR", "Interactive Brokers"]]],
 ];
-/** 默认只显示的热门几家（其余的用搜索找；已有的、选上的也会显示）。和手机端 GUIDE_HOT 一样。 */
-const OB_HOT = new Set(['alipay', 'wechat', 'icbc', 'ccb', 'abc', 'boc', 'cmb', 'bocom', 'psbc', 'ing', 'abn', 'rabobank', 'bunq', 'revolut', 'n26', 'wise', 'paypal',
-  'trading212', 'traderepublic', 'degiro', 'ibkr', 'binance', 'coinbase']);
+/**
+ * 每组第一页（4 列 × 行数）先放的几家，其余的往左滑看到。和手机端 GUIDE_FIRST 一样。
+ * 中国、欧洲三行，投资两行。
+ */
+const OB_FIRST = {
+  cn: ['cash_cny', 'alipay', 'wechat', 'icbc', 'ccb', 'abc', 'boc', 'cmb', 'bocom', 'psbc', 'citic', 'pingan'],
+  eu: ['cash_eur', 'ing', 'abn', 'rabobank', 'bunq', 'revolut', 'n26', 'wise', 'paypal', 'sparkasse', 'deutschebank', 'hsbc'],
+  inv: ['trading212', 'traderepublic', 'degiro', 'ibkr', 'binance', 'coinbase', 'bitvavo', 'scalable'],
+};
+const OB_ROWS = { cn: 3, eu: 3, inv: 2 };
+/** 一组的格子按"第一页那几家在前，其余照原顺序"排好。 */
+const obOrdered = (gid, list) => [...list].sort((a, b) => {
+  const f = OB_FIRST[gid] ?? [], ia = f.indexOf(a[0]), ib = f.indexOf(b[0]);
+  return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+});
+/** 现金按币种分：人民币现金、欧元现金……（只有一个现金账户时也这样叫，分得清）。 */
+const OB_CASH_ZH = { CNY: '人民币', EUR: '欧元', USD: '美元', GBP: '英镑', HKD: '港币', JPY: '日元', CHF: '瑞士法郎', CAD: '加元' };
+const obCashName = (code) => tr(`${OB_CASH_ZH[code] ?? code + ' '}现金`, `Cash (${code})`);
+const obCashCode = (key) => (key.startsWith('cash_') ? key.slice(5).toUpperCase() : '');
 /** 搜索：中文名、英文名、品牌关键词里有就算。 */
 function obMatch([key, zh, en], q) {
   const words = [zh, en, ...((typeof BRANDS !== 'undefined' && BRANDS.find(([, l]) => l === 'logo_' + key)?.[0]) || [])];
@@ -37,15 +53,18 @@ function obMatch([key, zh, en], q) {
 /** 账户类型的小标签（类型号和 manage.js 的 mgTypes 一样：0 储蓄、1 投资、2 信用、3 现金）。 */
 const obTypes = () => [[0, tr('储蓄', 'Savings')], [2, tr('信用卡', 'Credit card')], [1, tr('投资', 'Investing')], [3, tr('现金', 'Cash')]];
 
-const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1, nick: '', ios: null, q: '', icon: '' };
+const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1, nick: '', ios: null, q: '', icon: '', scAdded: false, scWarn: false };
 
+/** 这台设备上点过"添加快捷指令"。 */
+const obScAdded = () => { try { return JSON.parse(localStorage.getItem('hl.scAdded')) === true; } catch { return false; } };
 const obDone = () => { try { return JSON.parse(localStorage.getItem('hl.onboarded')) === true; } catch { return false; } };
 const obMark = () => { try { localStorage.setItem('hl.onboarded', 'true'); } catch { /* 存不了就算了 */ } };
 
 /** 方块对应的已有账户（没归档的）：现金看类型，品牌看 logo。 */
 function obExisting(key) {
   const list = [...state.data.account.values()].filter((a) => !a.archived).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-  return key === 'cash' ? list.find((a) => a.type === 3) : list.find((a) => brandOf(a)?.logo === 'logo_' + key);
+  const code = obCashCode(key);
+  return code ? list.find((a) => a.type === 3 && (a.currency || HOME) === code) : list.find((a) => brandOf(a)?.logo === 'logo_' + key);
 }
 /** 这个账户有没有账单（转出、转入都算）。 */
 const obUsed = (id) => [...state.data.tx.values()].some((t) => t.accountId === id || t.toAccountId === id);
@@ -55,7 +74,7 @@ const obBrand = (key) => OB_GROUPS.flatMap((g) => g[2]).find((b) => b[0] === key
 
 function obOpen() {
   if (!state.session) return;
-  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, q: '', icon: '', busy: false, err: '', note: '', dir: 1, nick: String(shared.get('nickname', '') || '').trim(), ios: IS_IOS ? true : null });
+  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, q: '', icon: '', scAdded: obScAdded(), scWarn: false, busy: false, err: '', note: '', dir: 1, nick: String(shared.get('nickname', '') || '').trim(), ios: IS_IOS ? true : null });
   ob.drop.clear(); ob.created.clear();
   if (!ob.el) {
     ob.el = document.createElement('div');
@@ -64,6 +83,7 @@ function obOpen() {
     ob.el.setAttribute('aria-modal', 'true');
     ob.el.addEventListener('click', obClick);
     ob.el.addEventListener('input', obInput);
+    ob.el.addEventListener('scroll', (e) => { if (e.target.classList?.contains('ob-pages')) obPageDots(e.target); }, true);
     ob.el.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || e.isComposing) return;
       if (e.target.id === 'ob-name') { e.preventDefault(); obAddCustom(); }
@@ -96,13 +116,25 @@ function obRender() {
   const steps = [obWelcome, obIphone, obCurrency, obAccounts, obStyle, obFinish];
   const dots = OB_DOTS.map((k, i) => `<span class="ob-dot${i === s ? ' on' : ''}${i < s ? ' done' : ''}">${planetSvg(k, { px: i === s ? 26 : 14, spin: i === s, face: i === s })}</span>`).join('');
   ob.el.setAttribute('aria-label', tr('使用向导', 'Setup guide'));
-  ob.el.innerHTML = `<div class="ob-head">
+  // iPhone 上装快捷指令那一步：大按钮就是"添加快捷指令"，只能用小字"暂不添加"跳过（会先提醒一次）
+  const scStepNow = s === 1 && IS_IOS && typeof IMP_SHORTCUT_URL !== 'undefined';
+  const addBtn = (cls) => `<a class="btn primary ${cls}" href="${IMP_SHORTCUT_URL}" target="_blank" rel="noopener" data-ob="sc-add">＋ ${tr('添加快捷指令', 'Add the Shortcut')}</a>`;
+  const foot = scStepNow
+    ? (ob.scAdded ? `<button class="btn primary ob-next" data-ob="next">${tr('已添加，下一步', 'Added, next')}</button>`
+      : `${addBtn('ob-next')}<button class="ob-later" data-ob="sc-skip">${tr('暂不添加', 'Not now')}</button>`)
+    : `<button class="btn primary ob-next" data-ob="next" ${ob.busy ? 'disabled' : ''}>${ob.busy ? tr('请稍候…', 'Please wait…') : last ? tr('开始记账', 'Start') : tr('下一步', 'Next')}</button>`;
+  const warn = scStepNow && ob.scWarn ? `<div class="ob-warn" role="alertdialog" aria-modal="true" aria-label="${tr('未添加快捷指令', 'Shortcut not added')}"><div class="card ob-warncard">
+      <b>${tr('未添加快捷指令', 'Shortcut not added')}</b>
+      <p>${tr('不添加快捷指令，导入账单时需手动下载并选择文件，使用难度将明显增加。添加只需一次，建议现在完成。', 'Without the Shortcut, importing a statement means downloading and picking the file by hand every time. It takes one tap to add.')}</p>
+      ${addBtn('ob-warnadd')}<button class="ob-later" data-ob="sc-force">${tr('仍然跳过', 'Skip anyway')}</button></div></div>` : '';
+  obKeepPages(() => {
+    ob.el.innerHTML = `<div class="ob-head">
       <button class="ob-back" data-ob="back" aria-label="${tr('返回', 'Back')}"${s ? '' : ' hidden'}>${hmSvg(ICONS.back.d)}</button>
       <div class="ob-dots" role="progressbar" aria-valuemin="1" aria-valuemax="${OB_DOTS.length}" aria-valuenow="${s + 1}">${dots}</div>
-      <button class="ob-skip" data-ob="skip">${tr('跳过', 'Skip')}</button></div>
+      <button class="ob-skip" data-ob="skip"${scStepNow ? ' hidden' : ''}>${tr('跳过', 'Skip')}</button></div>
     <div class="ob-body" data-step="${s}"><div class="ob-step${prev && prev.dataset.step !== String(s) ? (ob.dir > 0 ? ' in-r' : ' in-l') : ''}">${steps[s]()}</div></div>
-    <div class="ob-foot">${ob.err ? `<p class="err ob-err">${h(ob.err)}</p>` : ''}
-      <button class="btn primary ob-next" data-ob="next" ${ob.busy ? 'disabled' : ''}>${ob.busy ? tr('请稍候…', 'Please wait…') : last ? tr('开始记账', 'Start') : tr('下一步', 'Next')}</button></div>`;
+    <div class="ob-foot">${ob.err ? `<p class="err ob-err">${h(ob.err)}</p>` : ''}${foot}</div>${warn}`;
+  });
   const body = ob.el.querySelector('.ob-body');
   if (keep) body.scrollTop = keep;
 }
@@ -118,6 +150,13 @@ function obWelcome() {
 /** 是不是 iPhone：是的话就地装快捷指令（以后账单在分享菜单里一键导入）。 */
 function obIphone() {
   const has = typeof scSteps === 'function' && typeof IMP_SHORTCUT_URL !== 'undefined' && IMP_SHORTCUT_URL;
+  // iPhone 上：直接引导装快捷指令（按钮在底部）
+  if (IS_IOS && has) {
+    return `<h2 class="ob-h">${tr('添加快捷指令', 'Add the Shortcut')}</h2>
+      <p class="muted ob-lead">${tr('添加后，在账单上点击「分享」即可一键导入。', 'Once added, tap Share on any statement to import it.')}</p>
+      <div class="card ob-card ob-sc">${scSteps()}</div>
+      ${ob.scAdded ? `<p class="ob-scok">${hmSvg(ICONS.check.d)}<span>${tr('已打开添加页面。如已添加，点击下一步。', 'The Shortcut page was opened. If it\'s added, tap Next.')}</span></p>` : ''}`;
+  }
   const pick = (v, label) => `<button class="ob-yn${ob.ios === v ? ' on' : ''}" data-ob="ios" data-v="${v ? 1 : 0}" aria-pressed="${ob.ios === v}">${label}</button>`;
   const body = ob.ios === true && has ? `<div class="card ob-card ob-sc"><b>${tr('装上快捷指令，账单一键导入', 'Add the Shortcut for one-tap imports')}</b>${scSteps()}${scButton()}</div>`
     : ob.ios === false ? `<p class="muted ob-lead">${tr('以后用 iPhone 时：设置 › iPhone 快捷导入', 'Using an iPhone later? Settings › iPhone quick import')}</p>` : '';
@@ -136,45 +175,68 @@ function obAccounts() {
   const sym = (SYMBOL[HOME] ?? '').trim() || HOME;
   const rows = ob.picks.map((p) => `<div class="ob-nrow">
       <div class="ob-ntop">${accountTile({ name: p.name, type: p.type, icon: p.icon }, 'sm')}<span class="ob-nname">${h(p.name)}</span>
-        <label class="ob-bal"><span>${h(sym)}</span><input data-k="${h(p.k)}" inputmode="decimal" autocomplete="off" placeholder="${tr('初始余额', 'Opening balance')}" value="${h(p.init)}" aria-label="${tr('初始余额', 'Opening balance')}"></label>
+        <label class="ob-bal"><span>${h(p.currency ? ((SYMBOL[p.currency] ?? '').trim() || p.currency) : sym)}</span><input data-k="${h(p.k)}" inputmode="decimal" autocomplete="off" placeholder="${tr('初始余额', 'Opening balance')}" value="${h(p.init)}" aria-label="${tr('初始余额', 'Opening balance')}"></label>
         <button class="ob-x" data-ob="unpick" data-v="${h(p.k)}" aria-label="${tr('移除', 'Remove')}">✕</button></div>
       <div class="ob-types">${obTypes().map(([t, n]) => `<button class="chip${p.type === t ? ' on' : ''}" data-ob="type" data-v="${h(p.k)}" data-t="${t}">${n}</button>`).join('')}</div></div>`).join('');
   return `<h2 class="ob-h">${tr('选择您使用的银行或支付钱包', 'Which wallets and banks do you use?')}</h2>
     ${ob.note ? `<div class="ob-note">${h(ob.note)}</div>` : ''}
-    <label class="ob-search">${SEARCH_SVG}<input id="ob-q" type="search" value="${h(ob.q)}" placeholder="${tr('搜索更多银行、钱包或券商', 'Search more banks, wallets or brokers')}" autocomplete="off" enterkeyhint="search"></label>
+    <div class="ob-findrow"><label class="ob-search">${SEARCH_SVG}<input id="ob-q" type="search" value="${h(ob.q)}" placeholder="${tr('搜索银行', 'Search banks')}" autocomplete="off" enterkeyhint="search"></label>
+      <button class="btn link ob-manual" data-ob="other" aria-expanded="${ob.adding}">${tr('手动添加', 'Add manually')}</button></div>
     <div id="ob-list">${obList()}</div>
     ${rows ? `<div class="card ob-new">${rows}</div>` : ''}`;
 }
 
-/** 格子：没搜索时按组显示热门的几家（加上已有的、选上的）；搜索时显示全部匹配的，最后一格"添加「…」"。 */
-function obList() {
-  const tile = ([key, zh, en]) => {
-    const ex = obExisting(key), picked = ob.picks.some((p) => p.k === key), on = ex ? !ob.drop.has(ex.id) : picked;
-    const name = ex && !ob.drop.has(ex.id) ? ex.name : tr(zh, en);
-    const logo = key === 'cash' ? iconTile('coins') : accountTile({ name: tr(zh, en), type: 0 });
-    return `<button class="ob-tile${on ? ' on' : ''}" data-ob="tile" data-v="${key}" aria-pressed="${on}">${logo}<span>${h(name)}</span></button>`;
-  };
-  const other = (label) => `<button class="ob-tile ob-other" data-ob="other" aria-expanded="${ob.adding}"><span class="tile ob-plus">＋</span><span>${h(label)}</span></button>`;
-  const q = ob.q.trim().toLowerCase();
-  let body;
-  if (q) {
-    const hits = OB_GROUPS.flatMap((g) => g[2]).filter((b) => b[0] !== 'cash' && obMatch(b, q));
-    body = `${hits.length ? '' : `<p class="muted ob-miss">${tr(`未找到「${h(ob.q.trim())}」，可手动添加`, `No match for “${h(ob.q.trim())}”. Add it yourself:`)}</p>`}
-      <div class="ob-tiles">${hits.map(tile).join('')}${other(tr(`添加「${ob.q.trim()}」`, `Add “${ob.q.trim()}”`))}</div>`;
-  } else {
-    const shown = (b) => b[0] === 'cash' || OB_HOT.has(b[0]) || ob.picks.some((p) => p.k === b[0]) || obExisting(b[0]);
-    body = OB_GROUPS.map(([k, name, list]) => `<div class="ob-gh">${name()}</div><div class="ob-tiles">${list.filter(shown).map(tile).join('')}${k === 'inv' ? other(tr('其他', 'Other')) : ''}</div>`).join('');
-  }
-  return body + (ob.adding ? obAddForm() : '');
+/** 一个格子：品牌标志（现金是硬币图标）+ 名字；选上的描边打勾。 */
+function obTile([key, zh, en]) {
+  const ex = obExisting(key), picked = ob.picks.some((p) => p.k === key), on = ex ? !ob.drop.has(ex.id) : picked;
+  const name = ex && !ob.drop.has(ex.id) ? ex.name : tr(zh, en);
+  const logo = obCashCode(key) ? iconTile('coins') : accountTile({ name: tr(zh, en), type: 0 });
+  return `<button class="ob-tile${on ? ' on' : ''}" data-ob="tile" data-v="${key}" aria-pressed="${on}">${logo}<span>${h(name)}</span></button>`;
 }
 
-/** 手动添加：名称，加上可选的彩色银行图标（不选就按名字自动配）。 */
-function obAddForm() {
+/**
+ * 格子：没搜索时每组一排可以左右滑的"页"（4 列 × 3 行，投资 2 行），第一页是常用的，往左滑看全部；
+ * 搜索时显示全部匹配的；一个都没有就直接给出"手动添加"的表单（名称填好搜索的字，可选图标）。
+ */
+function obList() {
+  const q = ob.q.trim().toLowerCase();
+  if (q) {
+    const hits = OB_GROUPS.flatMap((g) => g[2]).filter((b) => !obCashCode(b[0]) && obMatch(b, q));
+    if (!hits.length) return `<p class="muted ob-miss">${tr(`未找到「${h(ob.q.trim())}」，请输入银行名称添加，并选择图标`, `No match for “${h(ob.q.trim())}”. Enter the bank name and pick an icon:`)}</p>${obAddForm(true)}`;
+    return `<div class="ob-tiles">${hits.map(obTile).join('')}</div>${ob.adding ? obAddForm(true) : ''}`;
+  }
+  const groups = OB_GROUPS.map(([gid, name, list]) => {
+    const per = 4 * (OB_ROWS[gid] ?? 3), items = obOrdered(gid, list), pages = [];
+    for (let i = 0; i < items.length; i += per) pages.push(items.slice(i, i + per));
+    const dots = pages.length > 1 ? `<div class="ob-pdots" data-g="${gid}">${pages.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>` : '';
+    return `<div class="ob-gh"><span>${name()}</span>${pages.length > 1 ? `<span class="ob-swipe">${tr('左右滑动查看全部', 'Swipe for more')}</span>` : ''}</div>
+      <div class="ob-pages" data-g="${gid}">${pages.map((pg) => `<div class="ob-tiles ob-page">${pg.map(obTile).join('')}</div>`).join('')}</div>${dots}`;
+  }).join('');
+  return groups + (ob.adding ? obAddForm() : '');
+}
+
+/** 手动添加：名称，加上可选的彩色银行图标（不选就按名字自动配）。fromSearch：名称先填上搜索的字。 */
+function obAddForm(fromSearch = false) {
   const icons = BANK_ICONS.map(([k]) => `<button class="ob-icon${ob.icon === k ? ' on' : ''}" data-ob="icon" data-v="${k}" aria-pressed="${ob.icon === k}" aria-label="${k}">${iconTile(k, 'sm')}</button>`).join('');
   return `<div class="ob-add">
-    <div class="ob-addrow"><input id="ob-name" value="${h(ob.q.trim())}" placeholder="${tr('账户名称', 'Account name')}" autocomplete="off" enterkeyhint="done" maxlength="40"><button class="btn primary" data-ob="add">${tr('添加', 'Add')}</button></div>
+    <div class="ob-addrow"><input id="ob-name" value="${h(fromSearch ? ob.q.trim() : ob.name ?? '')}" placeholder="${tr('银行或账户名称', 'Bank or account name')}" autocomplete="off" enterkeyhint="done" maxlength="40"><button class="btn primary" data-ob="add">${tr('添加', 'Add')}</button></div>
     <div class="ob-iconh muted">${tr('选择图标（可选）', 'Pick an icon (optional)')}</div>
     <div class="ob-icons">${icons}</div></div>`;
+}
+
+/** 重画前后保住每组左右滑到的位置（点一个格子会整页重画）。 */
+function obKeepPages(fn) {
+  const pos = {};
+  ob.el?.querySelectorAll('.ob-pages').forEach((el) => { pos[el.dataset.g] = el.scrollLeft; });
+  fn();
+  ob.el?.querySelectorAll('.ob-pages').forEach((el) => { if (pos[el.dataset.g]) { el.scrollLeft = pos[el.dataset.g]; obPageDots(el); } });
+}
+/** 页码小点跟着滑动走。 */
+function obPageDots(el) {
+  const dots = ob.el?.querySelector(`.ob-pdots[data-g="${el.dataset.g}"]`);
+  if (!dots) return;
+  const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
 }
 
 function obStyle() {
@@ -230,7 +292,9 @@ function obToggle(key) {
   if (i >= 0) { ob.picks.splice(i, 1); return; }
   const b = obBrand(key);
   if (!b) return;
-  ob.picks.push({ k: key, name: tr(b[1], b[2]), type: key === 'cash' ? 3 : OB_GROUPS.find((g) => g[2].includes(b))[0] === 'inv' ? 1 : 0, init: '' });
+  const code = obCashCode(key);
+  if (code) { ob.picks.push({ k: key, name: obCashName(code), type: 3, currency: code === HOME ? '' : code, init: '' }); return; }
+  ob.picks.push({ k: key, name: tr(b[1], b[2]), type: OB_GROUPS.find((g) => g[2].includes(b))[0] === 'inv' ? 1 : 0, init: '' });
 }
 
 function obAddCustom() {
@@ -254,12 +318,15 @@ async function obCommit() {
   const all = [...state.data.account.values()];
   let order = all.length ? Math.max(...all.map((a) => a.sortOrder ?? 0)) + 1 : 0, id = newId();
   for (const [p, cents] of parsed) {
-    const a = HL_JSON.account({ id: id++, name: p.name.trim(), type: p.type, initialCents: cents, sortOrder: order++, currency: '', archived: false, checkedAt: 0, icon: p.icon || '' });
+    const a = HL_JSON.account({ id: id++, name: p.name.trim(), type: p.type, initialCents: cents, sortOrder: order++, currency: p.currency || '', archived: false, checkedAt: 0, icon: p.icon || '' });
     await saveRecord('account', a);
     ob.created.add(a.id);
     ob.picks.splice(ob.picks.indexOf(p), 1); // 写好一个去掉一个：中途出错再点一次不会重复
   }
   for (const aid of [...ob.drop]) { if (!obUsed(aid)) await deleteRecord('account', aid); ob.drop.delete(aid); }
+  // 有两个以上现金账户时，叫"现金"的那个按币种改名（人民币现金、欧元现金），分得清
+  const cash = [...state.data.account.values()].filter((a) => !a.archived && a.type === 3);
+  if (cash.length > 1) for (const a of cash) if (['现金', 'cash'].includes(a.name.trim().toLowerCase())) await saveRecord('account', HL_JSON.account({ ...a, name: obCashName(a.currency || HOME) }));
   return true;
 }
 
@@ -321,6 +388,14 @@ async function obClick(e) {
     }
     case 'cur': await obSetCurrency(v); return;
     case 'ios': ob.ios = v === '1'; break;
+    case 'sc-add':
+      // 链接照常打开（快捷指令 App）；记下点过，稍后再重画（立刻重画会把正在点的链接换掉）
+      ob.scAdded = true; ob.scWarn = false;
+      try { localStorage.setItem('hl.scAdded', 'true'); } catch { /* 存不了就算了 */ }
+      setTimeout(obRender, 400);
+      return;
+    case 'sc-skip': if (ob.scAdded) { ob.step++; ob.dir = 1; } else ob.scWarn = true; break;
+    case 'sc-force': ob.scWarn = false; ob.step++; ob.dir = 1; break;
     case 'tile': obToggle(v); break;
     case 'unpick': ob.picks = ob.picks.filter((p) => p.k !== v); break;
     case 'type': { const p = ob.picks.find((x) => x.k === v); if (p) p.type = Number(el.dataset.t); break; }
