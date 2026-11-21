@@ -24,8 +24,8 @@ const IMP = {
 // ---------------------------------------------------------------- 快捷指令直传
 // iPhone 的快捷指令"行星记账导入"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
 // # 后面的内容不会发到服务器；这里读出来就把地址栏抹掉（要在 app.js 处理登录回跳之前，所以放在这个文件的顶层）。
-/** 快捷指令安装文件（签好名的 .shortcut）；还没发布时为空，说明里就不显示"添加快捷指令"。 */
-const IMP_SHORTCUT_URL = '';
+/** 快捷指令安装文件（tools/make_shortcut.py 生成，shortcuts sign --mode anyone 签名）；为空时说明里不显示"添加快捷指令"。 */
+const IMP_SHORTCUT_URL = encodeURI('shortcuts/行星记账导入.shortcut');
 (() => {
   const m = location.hash.match(/^#imp=([^&]+)(?:&n=([^&]*))?/);
   if (!m) return;
