@@ -209,7 +209,7 @@ function obList() {
     const per = 4 * (OB_ROWS[gid] ?? 3), items = obOrdered(gid, list), pages = [];
     for (let i = 0; i < items.length; i += per) pages.push(items.slice(i, i + per));
     const dots = pages.length > 1 ? `<div class="ob-pdots" data-g="${gid}">${pages.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>` : '';
-    return `<div class="ob-gh"><span>${name()}</span>${pages.length > 1 ? `<span class="ob-swipe">${tr('左右滑动查看全部', 'Swipe for more')}</span>` : ''}</div>
+    return `<div class="ob-gh"><span>${name()}</span></div>
       <div class="ob-pages" data-g="${gid}">${pages.map((pg) => `<div class="ob-tiles ob-page">${pg.map(obTile).join('')}</div>`).join('')}</div>${dots}`;
   }).join('');
   return groups + (ob.adding ? obAddForm() : '');

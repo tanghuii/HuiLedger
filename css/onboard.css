@@ -52,7 +52,6 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
 
 /* 第三步：品牌方块，选中的垫主题色、右上角打勾；下面是新加的账户（初始余额、类型） */
 .ob-gh { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 2px -4px; font-size: 13px; font-weight: 600; color: var(--muted); }
-.ob-swipe { font-size: 11px; font-weight: 400; opacity: .8; }
 .ob-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .ob-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 10px 3px 8px; border-radius: 16px; border: var(--bw, 1px) solid var(--line); background: var(--card); color: var(--text); font-size: 12px; line-height: 15px; transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
 .ob-tile > span:last-child { max-width: 100%; overflow: hidden; text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
