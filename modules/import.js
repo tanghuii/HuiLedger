@@ -81,6 +81,133 @@ async function impUnzip(buf, want) {
   return out;
 }
 
+// ---------------------------------------------------------------- 加密压缩包（微信、支付宝导出的账单）
+// 微信、支付宝导出的账单是带密码的 .zip：在本机输入密码解开，取出里面的 Excel / CSV，再按普通账单文件识别。
+// 密码只在这台设备上用来解压，不保存、不上传。支持传统 ZipCrypto 和 AES（WinZip AE-1 / AE-2）两种加密。
+
+const IMP_ZIP_ACCEPT = '.zip,application/zip,application/x-zip-compressed';
+const impIsZip = (f) => /\.zip$/i.test(f.name ?? '') || /zip/.test(f.type ?? '');
+const IMP_INNER = /\.(csv|xlsx|xls|pdf|txt|png|jpe?g|webp|heic)$/i;
+const IMP_CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const impCrcByte = (crc, b) => (IMP_CRC[(crc ^ b) & 0xff] ^ (crc >>> 8)) >>> 0;
+const impCrc32 = (u8) => { let c = 0xffffffff; for (let i = 0; i < u8.length; i++) c = impCrcByte(c, u8[i]); return (c ^ 0xffffffff) >>> 0; };
+
+/** 压缩包的目录：每个文件的名字、压缩方式、在包里的位置。 */
+function impZipEntries(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('not a zip');
+  const count = dv.getUint16(eocd + 10, true), out = [];
+  let p = dv.getUint32(eocd + 16, true);
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true), time = dv.getUint16(p + 12, true), crc = dv.getUint32(p + 16, true);
+    const csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const rawName = u8.subarray(p + 46, p + 46 + nlen);
+    // 国内软件打的包，文件名常常是 GBK（没有 UTF-8 标记）
+    let name = new TextDecoder().decode(rawName);
+    if (!(flags & 0x800) && name.includes('�')) try { name = new TextDecoder('gbk').decode(rawName); } catch { /* 保留 */ }
+    let aes = null;
+    for (let q = p + 46 + nlen; q + 4 <= p + 46 + nlen + elen;) {
+      const id = dv.getUint16(q, true), len = dv.getUint16(q + 2, true);
+      if (id === 0x9901 && len >= 7) aes = { version: dv.getUint16(q + 4, true), strength: u8[q + 8], method: dv.getUint16(q + 9, true) };
+      q += 4 + len;
+    }
+    out.push({ name, flags, method, time, crc, csize, off, aes, encrypted: !!(flags & 1) });
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+/** 传统 ZipCrypto 解密；密码不对返回 null。 */
+function impZipCrypto(data, pw, checks) {
+  let k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890;
+  const upd = (c) => { k0 = impCrcByte(k0, c); k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0; k2 = impCrcByte(k2, k1 >>> 24); };
+  for (const c of pw) upd(c);
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i++) { const t = (k2 | 2) & 0xffff; const d = data[i] ^ ((Math.imul(t, t ^ 1) >>> 8) & 0xff); out[i] = d; upd(d); }
+  return checks.includes(out[11]) ? out.subarray(12) : null;
+}
+
+/** AES 加密（WinZip AE-1 / AE-2）：PBKDF2-SHA1 派生密钥，AES-CTR（小端计数器）解密；密码不对返回 null。 */
+async function impZipAes(data, pw, strength) {
+  const keyLen = [0, 16, 24, 32][strength];
+  if (!keyLen) throw new Error('aes strength');
+  const saltLen = keyLen / 2, salt = data.subarray(0, saltLen), verify = data.subarray(saltLen, saltLen + 2);
+  const base = await crypto.subtle.importKey('raw', pw, 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 1000, hash: 'SHA-1' }, base, (keyLen * 2 + 2) * 8));
+  if (bits[keyLen * 2] !== verify[0] || bits[keyLen * 2 + 1] !== verify[1]) return null;
+  const enc = data.subarray(saltLen + 2, data.length - 10);
+  // 计数器是小端的，浏览器的 AES-CTR 是大端：每 16 字节单独算一块密钥流（AES-CBC、零 IV 的第一块就是 AES(计数器)）
+  const key = await crypto.subtle.importKey('raw', bits.subarray(0, keyLen), 'AES-CBC', false, ['encrypt']);
+  const blocks = Math.ceil(enc.length / 16), out = new Uint8Array(enc.length), iv = new Uint8Array(16);
+  for (let start = 0; start < blocks; start += 512) {
+    const n = Math.min(512, blocks - start);
+    const streams = await Promise.all(Array.from({ length: n }, (_, j) => {
+      const ctr = new Uint8Array(16); let v = start + j + 1;
+      for (let b = 0; b < 8 && v > 0; b++) { ctr[b] = v & 0xff; v = Math.floor(v / 256); }
+      return crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, ctr);
+    }));
+    streams.forEach((ks, j) => {
+      const k = new Uint8Array(ks, 0, 16), o = (start + j) * 16;
+      for (let i = 0; i < 16 && o + i < enc.length; i++) out[o + i] = enc[o + i] ^ k[i];
+    });
+  }
+  return out;
+}
+
+/** 解开压缩包里的一个文件；加密的要给密码（Uint8Array）。密码不对返回 null。 */
+async function impZipRead(buf, e, pw) {
+  const dv = new DataView(buf), start = e.off + 30 + dv.getUint16(e.off + 26, true) + dv.getUint16(e.off + 28, true);
+  let data = new Uint8Array(buf, start, e.csize), method = e.method;
+  if (e.encrypted) {
+    if (method === 99 && e.aes) { data = await impZipAes(data, pw, e.aes.strength); method = e.aes.method; }
+    else data = impZipCrypto(data, pw, e.flags & 8 ? [(e.time >>> 8) & 0xff, e.crc >>> 24] : [e.crc >>> 24, (e.time >>> 8) & 0xff]);
+    if (!data) return null;
+  }
+  let bytes;
+  if (method === 0) bytes = data;
+  else if (method === 8) {
+    try { bytes = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()); } catch { if (e.encrypted) return null; throw new Error('inflate'); }
+  } else throw new AiError(tr(`压缩包「${e.name}」用了不支持的压缩方式。`, `“${e.name}” uses an unsupported compression method.`));
+  // 校验 CRC（AE-2 不带 CRC）：对不上多半是密码错了
+  if (e.encrypted && !(e.aes?.version === 2) && impCrc32(bytes) !== e.crc) return null;
+  return bytes;
+}
+
+const IMP_MIME_BY_EXT = { csv: 'text/csv', txt: 'text/plain', pdf: 'application/pdf', xlsx: IMP_XLSX_MIME, xls: 'application/vnd.ms-excel', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', heic: 'image/heic' };
+
+/** 把选中的压缩包换成里面的账单文件；要密码时弹窗问。用户取消返回 null。 */
+async function impExpandZips(files) {
+  const out = [];
+  for (const f of files) {
+    if (!impIsZip(f)) { out.push(f); continue; }
+    const buf = await f.arrayBuffer();
+    let entries;
+    try { entries = impZipEntries(buf); } catch { throw new AiError(tr(`「${f.name}」不是有效的压缩包。`, `“${f.name}” isn't a valid zip file.`)); }
+    entries = entries.filter((e) => !e.name.endsWith('/') && !e.name.startsWith('__MACOSX/') && IMP_INNER.test(e.name));
+    if (!entries.length) throw new AiError(tr(`压缩包「${f.name}」里没有账单文件。`, `No statement files in “${f.name}”.`));
+    let pw = null, title = tr('输入解压密码', 'Enter the zip password');
+    for (const e of entries) {
+      let bytes = null;
+      for (;;) {
+        if (e.encrypted && !pw) {
+          const typed = await uiPrompt(title, '', { ok: tr('解压', 'Unzip'), placeholder: tr('导出账单时收到的密码', 'Sent with the export'), max: 64, secret: true });
+          if (typed == null) return null;
+          pw = new TextEncoder().encode(typed.trim());
+        }
+        bytes = await impZipRead(buf, e, pw);
+        if (bytes) break;
+        pw = null; title = tr('密码不对，请重新输入', 'Wrong password. Try again.');
+      }
+      const base = e.name.split('/').pop(), ext = base.split('.').pop().toLowerCase();
+      out.push(new File([bytes], base, { type: IMP_MIME_BY_EXT[ext] ?? '' }));
+    }
+  }
+  return out;
+}
+
 const impXml = (s) => new DOMParser().parseFromString(s, 'application/xml');
 const impTags = (node, name) => [...node.getElementsByTagNameNS('*', name)];
 const impKids = (node, name) => [...node.children].filter((c) => c.localName === name);
@@ -660,6 +787,11 @@ async function impTryPatch(file) {
 
 async function impStart(files) {
   if (!files.length || IMP.phase === 'loading' || IMP.phase === 'saving') return;
+  // 加密压缩包（微信、支付宝账单）：先问密码、解开，换成里面的文件
+  if (files.some(impIsZip)) {
+    try { files = await impExpandZips(files); } catch (e) { IMP.phase = 'idle'; IMP.error = e instanceof AiError ? e.message : tr('无法解开压缩包。', "Couldn't open the zip file."); render(); return; }
+    if (!files) return;
+  }
   Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1, finished: false });
   impRender();
   try {
@@ -986,7 +1118,8 @@ function impPickView() {
     </div>
     <div class="card">
       <div class="imp-head">${iconTile('document', 'imp-tile38')}<span>${tr('账单文件', 'Statement files')}</span></div>
-      <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV）', 'Choose file (Excel / PDF / CSV)')}<input type="file" data-imp="files" accept="image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf,${IMP_XLSX_MIME}" multiple hidden></label>
+      <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV / ZIP）', 'Choose file (Excel / PDF / CSV / ZIP)')}<input type="file" data-imp="files" accept="image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf,${IMP_XLSX_MIME},${IMP_ZIP_ACCEPT}" multiple hidden></label>
+      <div class="muted small imp-note">${tr('微信、支付宝加密账单 zip 可直接选（iPhone：先「存储到"文件"」）', 'WeChat / Alipay zips work (iPhone: save to Files first)')}</div>
     </div>`;
 }
 

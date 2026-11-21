@@ -173,12 +173,12 @@ async function seedDefaults() {
  * 画在 #app 外面的一层，不受 render() 影响。
  */
 /** 输入框弹窗（和 uiConfirm 一个样子）：返回输入的文字，取消返回 null。 */
-function uiPrompt(title, value = '', { ok = tr('保存', 'Save'), cancel = tr('取消', 'Cancel'), placeholder = '', max = 40 } = {}) {
+function uiPrompt(title, value = '', { ok = tr('保存', 'Save'), cancel = tr('取消', 'Cancel'), placeholder = '', max = 40, secret = false } = {}) {
   return new Promise((done) => {
     const box = document.createElement('div');
     box.className = 'modal ui-confirm';
     box.innerHTML = `<form class="card grid" role="dialog" aria-modal="true">
-      <b style="font-size:17px">${h(title)}</b><input class="ui-in" maxlength="${max}" value="${h(value)}" placeholder="${h(placeholder)}" enterkeyhint="done">
+      <b style="font-size:17px">${h(title)}</b><input class="ui-in" maxlength="${max}" value="${h(value)}" placeholder="${h(placeholder)}" enterkeyhint="done"${secret ? ' type="password" autocomplete="off" autocapitalize="off"' : ''}>
       <div class="between"><button type="button" class="btn" data-v="0">${h(cancel)}</button><button class="btn primary" data-v="1">${h(ok)}</button></div></form>`;
     const input = box.querySelector('input');
     const close = (v) => { box.remove(); done(v); };

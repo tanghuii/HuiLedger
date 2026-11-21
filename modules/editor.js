@@ -518,7 +518,7 @@ function edImportStrip(e) {
   if (!e._isNew || e._preset) return '';
   // 点了直接打开选图 / 选文件 / 相机；选好进 AI 识别的进度页（没填密钥时那里会提示）
   const btn = (kind, icon, label, accept, extra = '') => `<label class="ed-imp-b">${hmSvg(ICONS[icon].d)}<span>${label}</span><input type="file" data-edimp="${kind}" accept="${accept}" ${extra} hidden></label>`;
-  const files = `image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf${typeof IMP_XLSX_MIME === 'string' ? ',' + IMP_XLSX_MIME : ''}`;
+  const files = `image/*,.pdf,.csv,.xlsx,.xls,.txt,text/csv,text/plain,application/pdf${typeof IMP_XLSX_MIME === 'string' ? ',' + IMP_XLSX_MIME : ''}${typeof IMP_ZIP_ACCEPT === 'string' ? ',' + IMP_ZIP_ACCEPT : ''}`;
   return `<div class="ed-imp${e._amount ? ' gone' : ''}"><div><span class="ed-imp-h">${hmSvg(ICONS.sparkle.d)}${tr('AI 识别', 'AI import')}</span>
     ${btn('pick', 'phone', tr('截图', 'Screenshot'), 'image/*', 'multiple')}${btn('files', 'document', tr('文件', 'File'), files, 'multiple')}${btn('camera', 'camera', tr('拍照', 'Photo'), 'image/*', 'capture="environment"')}</div></div>`;
 }
