@@ -522,7 +522,20 @@ function projectCard(name, p, grow = false) {
   return `<div class="card click" data-act="project" data-v="${h(name)}"><div class="row" style="padding:0;gap:14px">${progressRing(p, grow)}
     <div class="main"><div class="between"><b style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(name || tr('未归项目', 'No project'))}</b><span class="muted small">${nTx(p.list.length)}</span></div>
       <div class="small muted">${tr('已报', 'Reimbursed')} <span class="num" style="font-weight:500">${money(p.back)} / ${money(p.claim)}</span></div>
-      <div class="num ${gap > 0 ? 'amber' : 'in'}" style="font-size:14px">${gap > 0 ? tr('还差 ', 'Outstanding ') + money(gap) : gap < 0 ? tr('多报回 ', 'Overpaid ') + money(-gap) : tr('已结清', 'Settled')}</div></div></div></div>`;
+      <div class="num ${gap > 0 ? 'amber' : 'in'}" style="font-size:14px">${gap > 0 ? tr('还差 ', 'Outstanding ') + money(gap) : gap < 0 ? tr('多报回 ', 'Overpaid ') + money(-gap) : tr('已结清', 'Settled')}</div>
+      ${projectBudget(name) ? `<div class="small muted">${tr(`经费执行 ${Math.round(p.claim * 100 / projectBudget(name))}% · ${money(p.claim)} / ${money(projectBudget(name))}`, `Budget used ${Math.round(p.claim * 100 / projectBudget(name))}% · ${money(p.claim)} / ${money(projectBudget(name))}`)}</div>` : ''}</div></div></div>`;
+}
+/** 项目经费（和手机端共享，projectBudgets：项目名 → 分）；没设返回 0。 */
+const projectBudget = (name) => { const o = shared.get('projectBudgets', {}); return name && o && Number(o[name]) > 0 ? Number(o[name]) : 0; };
+/** 项目页上的经费：没设只有"＋ 项目经费"；设了显示经费、执行比例和进度，点它改（和手机端 ProjectBudgetLine 一样）。 */
+function projectBudgetLine(name, spent) {
+  if (!name) return '';
+  const b = projectBudget(name);
+  if (!b) return `<button class="btn link small pj-badd" data-act="proj-budget">${tr('＋ 项目经费', '＋ Project budget')}</button>`;
+  const r = spent / b, over = r > 1;
+  return `<button class="pj-budget" data-act="proj-budget"><div class="between"><span class="muted small">${tr('项目经费 ', 'Budget ')}${money(b)}</span><b class="num ${over ? 'out' : ''}">${tr(`执行 ${Math.round(r * 100)}%`, `${Math.round(r * 100)}% used`)}</b></div>
+    <div class="pj-bar"><i class="${over ? 'over' : ''}" style="width:${Math.min(100, r * 100).toFixed(1)}%"></i></div>
+    <div class="muted small">${spent <= b ? tr(`剩余 ${money(b - spent)}`, `${money(b - spent)} left`) : tr(`超出 ${money(spent - b)}`, `${money(spent - b)} over`)}</div></button>`;
 }
 /**
  * 疑似已报销（同手机端 findReimbursed）：没标报销的支出，和之后 180 天内一笔金额相同的"报销"收入对上了；
@@ -587,10 +600,9 @@ function claimCards(shown, L) {
     list.forEach((e) => linked.add(e.id));
     const matched = parts.reduce((a, p) => a + p[1], 0), gap = inc.amountCents - matched, done = list.length > 0 && gap <= 0;
     const pct = Math.max(0, Math.min(100, matched * 100 / Math.max(1, inc.amountCents)));
-    const note = !list.length ? tr('还没关联支出 · 点这里关联', 'No expenses linked · tap to link')
-      : gap > 0 ? tr(`关联 ${list.length} 笔支出 · 还有 ${money(gap)} 没对上`, `${list.length} linked · ${money(gap)} unmatched`) : tr(`关联 ${list.length} 笔支出 · 已对上`, `${list.length} linked · all matched`);
+    const note = !list.length ? tr('暂未关联支出 · 点击关联', 'No expenses linked · tap to link') : tr(`关联 ${list.length} 笔支出`, `${list.length} expenses linked`);
     return `<div class="card rb-claim${done ? ' done' : ''}">${rowsOf([inc], L)}<div class="rb-prog"><i style="width:${pct.toFixed(1)}%"></i></div>
-      ${done ? `<div class="rb-note">${note}</div>` : `<button class="rb-note amber" data-act="edit" data-v="${inc.id}">${note}</button>`}
+      ${list.length ? `<div class="rb-note">${note}</div>` : `<button class="rb-note amber" data-act="edit" data-v="${inc.id}">${note}</button>`}
       ${list.length ? `<div class="rb-linked">${rowsOf(list, L)}</div>` : ''}</div>`;
   }).join('');
   const group = (title, list) => (list.length ? `<div class="card rb-group"><div class="between rb-ghead"><b>${title}</b><span class="num amber">${money(sum(list, (t) => t.amountCents))}</span></div>${rowsOf(list, L)}</div>` : '');
@@ -606,7 +618,7 @@ function reimburseView() {
     for (const t of p.list) if (t.fund) { if (!funds.has(t.fund)) funds.set(t.fund, []); funds.get(t.fund).push(t); }
     // 全部 / 待报销 / 已报销 / 报销收入（同手机端）
     const shown = p.list.filter((t) => (f === 1 ? t.reimburse === 1 : f === 2 ? t.reimburse === 2 : f === 3 ? t.kind === KIND.INCOME : true));
-    return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ ${tr('全部项目', 'All projects')}</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || tr('未归项目', 'No project'))}</b>${projectNumbers(p)}</div>
+    return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ ${tr('全部项目', 'All projects')}</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || tr('未归项目', 'No project'))}</b>${projectNumbers(p)}${projectBudgetLine(state.project, p.claim)}</div>
       ${funds.size ? `<div class="card"><div class="muted small">${tr('资金来源', 'Funding')}</div>${[...funds.entries()].map(([fd, l]) => `<div class="between small"><span>${h(fd)}</span><span class="muted">${tr('支', 'Out')} ${money(sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents))} · ${tr('回', 'Back')} ${money(sum(l.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents))}</span></div>`).join('')}</div>` : ''}</div>
       <div class="grid">${seg('r-filter', [[0, tr('全部', 'All')], [1, tr('待报销', 'To claim')], [2, tr('已报销', 'Done')], [3, tr('报销收入', 'Paid back')]], f)}
         ${!shown.length ? pgEmpty('receipt', tr('还没有账单', 'No entries yet')) : f === 0 ? claimCards(shown, L) : `<div class="card">${rowsOf(shown, L)}</div>`}</div></div>`;
@@ -869,6 +881,15 @@ async function moreAction(act, v, el) {
     case 'rmode': state.rmode = v; break;
     case 'project': state.project = v; break;
     case 'project-back': state.project = null; state.rFilter = 0; break;
+    case 'proj-budget': {
+      const name = state.project, cur = projectBudget(name);
+      const v = await uiPrompt(tr('项目经费', 'Project budget'), cur ? (cur / 100).toFixed(2) : '', { placeholder: tr('不填就是不设', 'Leave empty for none'), max: 14 });
+      if (v === null) return true;
+      const cents = Math.round(Number(String(v).trim().replace(',', '.')) * 100), o = { ...(shared.get('projectBudgets', {}) ?? {}) };
+      if (!String(v).trim() || !(cents > 0)) delete o[name]; else o[name] = cents;
+      try { await shared.set('projectBudgets', o); } catch (e) { state.error = e.message; }
+      break;
+    }
     case 'r-filter': state.rFilter = Number(v); break;
     case 'r-mark': { const t = state.data.tx.get(Number(v)); if (t) try { await saveRecord('tx', { ...t, reimburse: 2 }); } catch (e) { state.error = e.message; } break; }
     case 'r-mark-all': try { for (const [e] of findReimbursed(computeLookup())) await saveRecord('tx', { ...e, reimburse: 2 }); } catch (e) { state.error = e.message; } break;

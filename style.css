@@ -575,3 +575,11 @@ button.rb-note { cursor: pointer; }
 .rb-linked { margin-left: 10px; padding-left: 8px; border-left: 2px solid color-mix(in srgb, var(--primary) 35%, transparent); }
 .rb-group { padding: 10px 12px; }
 .rb-ghead { padding: 0 4px 2px; font-size: 13px; } .rb-ghead b { color: var(--muted); font-weight: 600; }
+
+/* 项目经费（more.js projectBudgetLine） */
+.pj-badd { justify-self: start; padding: 0; }
+.pj-budget { display: grid; gap: 4px; width: 100%; padding: 4px 0 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pj-budget b { font-size: 14px; color: var(--primary); } .pj-budget b.out { color: var(--expense); }
+.pj-bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--muted) 18%, transparent); overflow: hidden; }
+.pj-bar i { display: block; height: 100%; border-radius: 99px; background: var(--primary); } .pj-bar i.over { background: var(--expense); }
+.cc .pj-budget b:not(.out), .cc .pj-badd { color: #fff; } .cc .pj-bar { background: rgba(255, 255, 255, .22); } .cc .pj-bar i:not(.over) { background: #fff; }
