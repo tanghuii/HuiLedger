@@ -176,8 +176,8 @@ function detailView() {
     <div class="cells">${cells}</div>
     ${t.kind === KIND.EXPENSE && typeof moodRater === 'function' ? `<div class="cell mood-cell"><div class="muted">${tr('这笔花得值吗？', 'Worth it?')}</div>${moodRater(txScore(t), 'tx', t.id)}</div>` : ''}
     ${typeof lkExpenseBox === 'function' ? (t.kind === KIND.EXPENSE ? lkExpenseBox(t, L, false) : t.kind === KIND.INCOME ? lkIncomeBox(t, L) : '') : `
-    ${linked.length ? `<div><div class="muted small">${tr('它抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
-    ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣它的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}`}
+    ${linked.length ? `<div><div class="muted small">${tr('该笔抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}
+    ${offsetBy.length ? `<div><div class="muted small">${tr('抵扣该笔的补贴、退款', 'Offset by')}</div>${rowsOf(offsetBy, L)}</div>` : ''}`}
     </div>
     ${typeof lkDetailSheet === 'function' ? lkDetailSheet() : ''}
     <div class="dt-foot"><div class="btns3"><button class="btn danger" data-act="view-delete">${tr('删除', 'Delete')}</button><button class="btn" data-act="view-copy">${tr('复制', 'Copy')}</button><button class="btn primary" data-act="edit" data-v="${t.id}">${tr('修改', 'Edit')}</button></div></div>
@@ -238,14 +238,14 @@ function searchView() {
     return wrap(parts.length ? `<div class="card grid">${parts.join('')}</div>` : '');
   }
   const hits = allTxs().filter((t) => { const s = text(t); return words.every((w) => s.includes(w)); }).sort(byNewest);
-  if (!hits.length) return wrap(pgEmpty('search', tr('没找到', 'No results')));
+  if (!hits.length) return wrap(pgEmpty('search', tr('未找到', 'No results')));
   const out = sum(hits.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents), inc = sum(hits.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents);
   // 结果：顶上一张合计卡片，下面按月分组
   const months = new Map();
   for (const t of hits.slice(0, 500)) { const d = dayToDate(t.date), k = ymLabel(d.getUTCFullYear(), d.getUTCMonth() + 1); if (!months.has(k)) months.set(k, []); months.get(k).push(t); }
   return wrap(`<div class="card sum3"><div><div class="muted small">${tr('笔数', 'Entries')}</div><div class="num">${hits.length}</div></div><div><div class="muted small">${tr('支出', 'Expense')}</div><div class="num out">${money(out)}</div></div><div><div class="muted small">${tr('收入', 'Income')}</div><div class="num in">${money(inc)}</div></div></div>
     ${[...months.entries()].map(([k, l]) => `<div class="card"><div class="dayhead"><span>${k}</span><span>${nTx(l.length)}</span></div>${rowsOf(l, L)}</div>`).join('')}
-    ${hits.length > 500 ? `<p class="muted small" style="margin:0">${tr('只显示前 500 笔', 'Showing first 500')}</p>` : ''}`);
+    ${hits.length > 500 ? `<p class="muted small" style="margin:0">${tr('仅显示前 500 笔', 'Showing first 500')}</p>` : ''}`);
 }
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
 /** 最近搜过的词存在这个浏览器里，最多 10 个。 */
@@ -293,7 +293,7 @@ function calendarView() {
     cells += `<button class="cal${day === selected ? ' on' : ''}${isToday ? ' today' : ''}${we ? ' we' : ''}" data-act="cal-day" data-v="${day}"${bg}><b>${d + 1}</b>${n.out > 0 ? `<span class="out">-${calCompact(n.out)}</span>` : ''}${n.inc > 0 ? `<span class="in">+${calCompact(n.inc)}</span>` : ''}${none && isToday ? '<i class="dot"></i>' : ''}${none && days.has(day) ? '<i class="tbar"></i>' : ''}</button>`;
   }
   const t = L.totals(txs), items = days.get(selected) ?? [], n = dayNums(items), dt = L.totals(items);
-  const sub = !items.length ? tr('这天没有账单', 'Nothing on this day') : `${tr('支出', 'Out')} ${money(n.out)}   ${tr('收入', 'In')} ${money(n.inc)}${dt.reimbursable > 0 ? `   ${tr('可报销', 'Claimable')} ${money(dt.reimbursable)}` : ''}${dt.reimbursed > 0 ? `   ${tr('报销回', 'Reimbursed')} ${money(dt.reimbursed)}` : ''}`;
+  const sub = !items.length ? tr('当日暂无账单', 'Nothing on this day') : `${tr('支出', 'Out')} ${money(n.out)}   ${tr('收入', 'In')} ${money(n.inc)}${dt.reimbursable > 0 ? `   ${tr('可报销', 'Claimable')} ${money(dt.reimbursable)}` : ''}${dt.reimbursed > 0 ? `   ${tr('报销回', 'Reimbursed')} ${money(dt.reimbursed)}` : ''}`;
   return `<div class="cols wide calv">
     <div class="grid"><div class="cal-month">${monthBar({ planet: true })}</div><div class="card cal-card">
       <div class="cal-sum"><span class="out">${tr('支出', 'Out')} ${money(t.expense)}</span><span class="in">${tr('收入', 'In')} ${money(t.income)}</span><span>${tr('结余', 'Net')} ${money(t.income - t.expense)}</span></div>
@@ -389,9 +389,9 @@ function statsView2() {
     ${state.period === 'a' || (review && state.period === 'm') ? '' : `<div class="st-month">${nav(-1)}<b>${state.period === 'y' ? tr(`${y}年`, `${y}`) : ymLabel(y, m)}</b>${nav(1)}</div>`}
     <nav class="st-sec" aria-label="${tr('统计内容', 'Sections')}">${seg('section', [['overview', tr('总览', 'Overview')], ['category', tr('分类', 'Categories')], ['tag', tr('标签', 'Tags')], ['review', tr('复盘', 'Review')]], state.section)}</nav>`;
   const empty = (text) => pgEmpty('receipt', text);
-  const noData = empty(state.statsIncome ? tr('这段时间没有收入记录', 'No income in this period') : tr('这段时间没有支出记录', 'No expenses in this period'));
+  const noData = empty(state.statsIncome ? tr('该时段暂无收入记录', 'No income in this period') : tr('该时段暂无支出记录', 'No expenses in this period'));
   let main;
-  if (review) main = state.period === 'm' ? reviewView() : empty(tr('复盘按月看，先切到"月"。', 'Review is monthly. Switch to Month.'));
+  if (review) main = state.period === 'm' ? reviewView() : empty(tr('复盘按月查看，请先切换至「月」。', 'Review is monthly. Switch to Month.'));
   else if (state.section === 'overview') {
     const leftOut = inRange.filter((t) => L.isReimburse(t) || L.isRefund(t) || t.excluded);
     const col = (label, cents, cls) => `<div><div class="muted">${label}</div><div class="num ${cls}">${money(cents)}</div></div>`;
@@ -451,7 +451,7 @@ function statsView2() {
     }).join('');
     const slices = list.map(([tag, , c]) => ({ label: stTagInitials(tag), name: tag, color: stTagColor(tag), cents: c, act: 'st-tag', v: tag }));
     main = list.length ? `<div class="card st-dcard">${donutChart(slices, tr('带标签的合计', 'Tagged total'), sum(list, (x) => x[2]), grow)}</div><div class="card st-rank">${rows}</div>`
-      : empty(tr('这段时间没有带标签的账单', 'No tagged entries in this period'));
+      : empty(tr('该时段暂无带标签的账单', 'No tagged entries in this period'));
   }
   return `<div class="pg st"><div class="st-side">${side}</div><div class="st-main">${main}</div></div>`;
 }
@@ -489,7 +489,7 @@ function accountDetailView() {
     return `<div class="card acc-month"><div class="acc-mh"><b>${ymLabel(y, m)}</b><span class="in">${tr('入', 'In')} ${show(flow(l, 1))}</span><span class="out">${tr('出', 'Out')} ${show(flow(l, -1))}</span></div>${rows}</div>`;
   }).join('');
   return `<div class="pg acc">${pgBar(h(a.name), { back: ['account-back'], right })}
-    <div class="cols"><div class="sticky">${card}</div><div class="grid">${monthCards || pgEmpty('receipt', tr('这个账户还没有账单', 'No entries in this account yet'))}</div></div></div>`;
+    <div class="cols"><div class="sticky">${card}</div><div class="grid">${monthCards || pgEmpty('receipt', tr('该账户暂无账单', 'No entries in this account yet'))}</div></div></div>`;
 }
 
 // 点底栏（或别处的 data-act="tab"）离开时：资产页回到最上层，弹出的东西收起来
@@ -579,7 +579,7 @@ async function reimburseInSave() {
   r.amount = text;
   if (!acc) { r.err = tr('请选择收款账户', 'Choose an account'); return; }
   const cur = acctCur(acc), cents = text ? Math.round(Number(text.replace(',', '.')) * 100) : reimburseDefault(t, cur);
-  if (!(cents > 0)) { r.err = tr('金额不对', 'Invalid amount'); return; }
+  if (!(cents > 0)) { r.err = tr('金额不正确', 'Invalid amount'); return; }
   let cat = [...state.data.category.values()].find((c) => !c.parentId && c.isIncome && c.name === '报销');
   if (!cat) { cat = { id: newId(), name: '报销', icon: 'receipt', isIncome: true, sortOrder: state.data.category.size, parentId: 0 }; await saveRecord('category', cat); }
   const foreign = cur !== HOME, what = (t.note ?? '').trim() || catOf(t)?.name || '';
@@ -608,8 +608,8 @@ function claimCards(shown, L) {
   }).join('');
   const group = (title, list) => (list.length ? `<div class="card rb-group"><div class="between rb-ghead"><b>${title}</b><span class="num amber">${money(sum(list, (t) => t.amountCents))}</span></div>${rowsOf(list, L)}</div>` : '');
   const loose = shown.filter((t) => t.kind === KIND.EXPENSE && !linked.has(t.id));
-  return cards + group(tr('待报销 · 还没报回来', 'To claim · not paid back yet'), loose.filter((t) => t.reimburse === 1))
-    + group(tr('已报销 · 没关联到账', 'Reimbursed · no payment linked'), loose.filter((t) => t.reimburse !== 1));
+  return cards + group(tr('待报销 · 尚未报销到账', 'To claim · not paid back yet'), loose.filter((t) => t.reimburse === 1))
+    + group(tr('已报销 · 未关联到账', 'Reimbursed · no payment linked'), loose.filter((t) => t.reimburse !== 1));
 }
 
 function reimburseView() {
@@ -622,7 +622,7 @@ function reimburseView() {
     return `<div class="cols"><div class="grid sticky"><div><button class="btn" data-act="project-back">‹ ${tr('全部项目', 'All projects')}</button></div><div class="card cc grid"><b style="font-size:18px">${h(state.project || tr('未归项目', 'No project'))}</b>${projectNumbers(p)}${projectBudgetLine(state.project, p.claim)}</div>
       ${funds.size ? `<div class="card"><div class="muted small">${tr('资金来源', 'Funding')}</div>${[...funds.entries()].map(([fd, l]) => `<div class="between small"><span>${h(fd)}</span><span class="muted">${tr('支', 'Out')} ${money(sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents))} · ${tr('回', 'Back')} ${money(sum(l.filter((t) => t.kind === KIND.INCOME), (t) => t.amountCents))}</span></div>`).join('')}</div>` : ''}</div>
       <div class="grid">${seg('r-filter', [[0, tr('全部', 'All')], [1, tr('待报销', 'To claim')], [2, tr('已报销', 'Done')], [3, tr('报销收入', 'Paid back')]], f)}
-        ${!shown.length ? pgEmpty('receipt', tr('还没有账单', 'No entries yet')) : f === 0 ? claimCards(shown, L) : `<div class="card">${rowsOf(shown, L)}</div>`}</div></div>`;
+        ${!shown.length ? pgEmpty('receipt', tr('暂无账单', 'No entries yet')) : f === 0 ? claimCards(shown, L) : `<div class="card">${rowsOf(shown, L)}</div>`}</div></div>`;
   }
   const matched = findReimbursed(L);
   const head = seg('rmode', [['projects', tr('项目', 'Projects')], ['pending', tr('待报销', 'To claim')], ['done', tr('已报销', 'Done')], ['likely', tr(`疑似 ${matched.length}`, `Likely ${matched.length}`)]], state.rmode);
@@ -636,15 +636,15 @@ function reimburseView() {
     return `<div class="grid">${head}<div class="between rb-likely"><span class="muted">${tr(`共 ${money(total)}`, `${money(total)} in total`)}</span>${matched.length ? `<button class="btn link" data-act="r-mark-all">${tr('全部标为已报销', 'Mark all reimbursed')}</button>` : ''}</div>
       ${matched.length ? matched.map(([e, inc]) => `<div class="card rb-pair"><div class="small muted">${dayISO(e.date)}</div>${txRow(e, L)}<div class="small muted">${dayISO(inc.date)}</div>${txRow(inc, L)}
         <div class="rb-btns"><button class="btn link muted" data-act="r-ignore" data-v="${e.id}:${inc.id}">${tr('不是', 'No')}</button><button class="btn link" data-act="r-mark" data-v="${e.id}">${tr('标为已报销', 'Mark reimbursed')}</button></div></div>`).join('')
-        : pgEmpty('piggy', tr('没有疑似已报销的支出', 'Nothing here'))}</div>`;
+        : pgEmpty('piggy', tr('暂无疑似已报销的支出', 'Nothing here'))}</div>`;
   }
   const want = state.rmode === 'done' ? 2 : 1;
   const list = allTxs().filter((t) => t.reimburse === want).sort(byNewest);
   const options = (cur) => ['', ...projectNames()].map((n) => `<option value="${h(n)}" ${n === (cur ?? '') ? 'selected' : ''}>${h(n || tr('（未归项目）', '(no project)'))}</option>`).join('');
-  return `<div class="grid">${head}<div class="card cc" style="--cc:${want === 1 ? '#E8962E' : '#21A67A'}"><div class="small muted">${want === 1 ? tr('还没报回来的钱', 'Still to be reimbursed') : tr('已报销合计', 'Reimbursed in total')}</div><div class="big">${money(sum(list, (t) => t.amountCents))}</div><div class="small muted">${nTx(list.length)}</div></div>
+  return `<div class="grid">${head}<div class="card cc" style="--cc:${want === 1 ? '#E8962E' : '#21A67A'}"><div class="small muted">${want === 1 ? tr('尚未报销的金额', 'Still to be reimbursed') : tr('已报销合计', 'Reimbursed in total')}</div><div class="big">${money(sum(list, (t) => t.amountCents))}</div><div class="small muted">${nTx(list.length)}</div></div>
     ${list.length ? list.map((t) => `<div class="card rb-item">${txRow(t, L)}<div class="rb-btns"><span class="small muted">${dayISO(t.date)}</span><select class="mini" data-change="set-project" data-v="${t.id}" aria-label="${tr('报销项目', 'Project')}">${options(t.project)}</select><span class="sp"></span>
       ${want === 1 ? `<button class="btn link" data-act="r-in" data-v="${t.id}">${tr('入账', 'Paid in')}</button>` : ''}<button class="btn link" data-act="toggle-reimburse" data-v="${t.id}">${want === 1 ? tr('已报销', 'Done') : tr('改回待报销', 'Back to claim')}</button></div></div>`).join('')
-      : pgEmpty('piggy', want === 1 ? tr('没有待报销的账单', 'Nothing to claim') : tr('没有已报销的账单', 'Nothing reimbursed yet'))}${reimburseInDialog()}</div>`;
+      : pgEmpty('piggy', want === 1 ? tr('暂无待报销账单', 'Nothing to claim') : tr('暂无已报销账单', 'Nothing reimbursed yet'))}${reimburseInDialog()}</div>`;
 }
 
 // ---------------------------------------------------------------- 补贴
@@ -676,7 +676,7 @@ function subsidyView() {
     return `<div class="card sb-grp"><div class="row click" data-act="open-key" data-v="${k}" style="padding:0">${iconTile('coins')}<div class="main"><div class="title">${tr(k, SUBSIDY_EN[k] ?? k)} <span class="tri">${o ? '▴' : '▾'}</span></div>
       <div class="sub ${missing ? 'amber' : ''}">${nTx(l.length)}${missing ? tr(` · ${missing} 笔未关联`, ` · ${missing} unlinked`) : ''}</div></div><div class="num">${money(sum(l, (t) => t.amountCents))}</div></div>${o ? rowsOf(l, L) : ''}</div>`;
   }).join('');
-  return `<div class="cols">${head}<div class="grid">${cards || pgEmpty('piggy', tr('还没有补贴记录', 'No subsidies yet'))}</div></div>`;
+  return `<div class="cols">${head}<div class="grid">${cards || pgEmpty('piggy', tr('暂无补贴记录', 'No subsidies yet'))}</div></div>`;
 }
 
 /** 月份缩写（荷兰语 / 英语），同手机端 Merge.MONTHS。 */
@@ -774,11 +774,11 @@ function recurringView() {
     const o = state.openKey === 'r' + idx, max = Math.max(1, ...it.per), color = it.r.income ? 'var(--income)' : 'var(--primary)';
     const bars = it.per.map((c, i) => { const hh = c > 0 ? Math.max(3, 34 * c / max) : 2; return `<rect x="${i * 20 + 4}" y="${36 - hh}" width="12" height="${hh}" rx="3" fill="${color}" opacity="${c > 0 ? 1 : 0.2}"><title>${ymLabel(...months[i].split('-').map(Number))} ${money(c)}</title></rect>`; }).join('');
     return `<div class="card"><div class="row click" data-act="open-key" data-v="r${idx}" style="padding:0">${iconTile(state.data.category.get([...state.data.category.values()].find((c) => (it.r.categories ?? []).includes(c.name))?.id)?.icon ?? 'calendar')}
-      <div class="main"><div class="title">${h(it.r.name)} ${o ? '▴' : '▾'}</div><div class="sub ${it.cur > 0 ? '' : 'amber'}">${it.cur > 0 ? tr('本月 ', 'This month ') + money(it.cur) : tr('本月还没有', 'None this month')}</div></div>
+      <div class="main"><div class="title">${h(it.r.name)} ${o ? '▴' : '▾'}</div><div class="sub ${it.cur > 0 ? '' : 'amber'}">${it.cur > 0 ? tr('本月 ', 'This month ') + money(it.cur) : tr('本月暂无', 'None this month')}</div></div>
       <div class="right"><div class="num ${it.r.income ? 'in' : ''}">${it.r.income ? '+' : ''}${money(it.avg)}</div><div class="muted small">${tr('月均', 'Avg/mo')}</div></div></div>
       <svg viewBox="0 0 240 36" style="width:100%;height:36px;margin-top:8px" role="img" aria-label="${tr('近 12 个月', 'Last 12 months')}">${bars}</svg>
       <div class="rc-axis"><span>${ymLabel(...months[0].split('-').map(Number))}</span><span>${tr('近 12 个月', 'Last 12 months')} ${money(sum(it.per, (x) => x))}</span><span>${ymLabel(...months[11].split('-').map(Number))}</span></div>
-      ${o ? `${rowsOf(it.list.slice(0, 200), L)}<button class="btn link danger" data-act="rule-remove" data-v="${idx}">${tr('移除这一项', 'Remove')}</button>` : ''}</div>`;
+      ${o ? `${rowsOf(it.list.slice(0, 200), L)}<button class="btn link danger" data-act="rule-remove" data-v="${idx}">${tr('移除此项', 'Remove')}</button>` : ''}</div>`;
   }).join('');
   const out = items.filter((i) => !i.r.income), inc = items.filter((i) => i.r.income);
   // 自动记账（schedules.js）：和手机端一样放在这页的汇总卡下面
@@ -786,7 +786,7 @@ function recurringView() {
   return `<div class="cols"><div class="grid sticky"><div class="card grid"><div><div class="muted small">${tr('每月固定支出约', 'Fixed spending / mo ≈')}</div><div class="big num">${money(sum(out, (i) => i.avg))}</div></div>
       <div class="between small muted"><span>${tr('固定收入约', 'Fixed income ≈')} ${money(sum(inc, (i) => i.avg))}</span><span>${tr('本月已有', 'This month')} ${items.filter((i) => i.cur > 0).length}/${items.length}</span></div>
       ${state.addingRule ? `<label class="f">${tr('名称', 'Name')}<input id="r-name"></label><label class="f">${tr('类型', 'Type')}<select id="r-income"><option value="0">${tr('支出', 'Expense')}</option><option value="1">${tr('收入', 'Income')}</option></select></label>
-        <label class="f">${tr('分类', 'Category')}<select id="r-cat"><option value="">${tr('（不按分类）', '(any)')}</option>${cats.map((c) => `<option>${h(c)}</option>`).join('')}</select></label><label class="f">${tr('或备注里含', 'Or note contains')}<input id="r-kw"></label>
+        <label class="f">${tr('分类', 'Category')}<select id="r-cat"><option value="">${tr('（不按分类）', '(any)')}</option>${cats.map((c) => `<option>${h(c)}</option>`).join('')}</select></label><label class="f">${tr('或备注中含', 'Or note contains')}<input id="r-kw"></label>
         <div class="between"><button class="btn" data-act="rule-cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="rule-save">${tr('保存', 'Save')}</button></div>` : `<button class="btn" data-act="rule-add">＋ ${tr('添加项目', 'Add item')}</button>`}
 </div>${auto}</div>
     <div class="grid">${cards}</div></div>${auto && state.schedEdit ? schedDialog() : ''}`;
@@ -858,7 +858,7 @@ async function moreAction(act, v, el) {
       state.assetTab = 'accounts'; state.project = null; state.openKey = null; render(); scrollTo(0, state.assetsY ?? 0); return true;
     case 'trend-pick': { const i = Number(v), k = trendKey(); state.trendPick = state.trendPick?.key === k && state.trendPick.i === i ? null : { key: k, i }; break; }
     case 'close-view-btn': viewBack(); break;
-    case 'view-delete': if (!await pgConfirm(tr('删除这笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true })) return true;
+    case 'view-delete': if (!await pgConfirm(tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true })) return true;
       if (typeof edRemove === 'function') { const t = state.data.tx.get(state.view); viewBack(); await edRemove(t); return true; } try { await deleteRecord('tx', state.view); viewBack(); } catch (e) { state.error = e.message; } break;
     case 'period': state.period = v; break;
     case 'section': state.section = v; state.openTop = null; state.openSub = null; state.openTag = null; break;
@@ -870,7 +870,7 @@ async function moreAction(act, v, el) {
     case 'cal-day': state.calDay = Number(v); break;
     case 'subsidy-range': state.subsidyAll = v === '1'; state.openKey = null; break;
     case 'subsidy-link': {
-      try { const n = await linkSubsidies(); if (typeof edToast === 'function') edToast(n ? tr(`关联了 ${n} 笔`, `Linked ${n}`) : tr('没有找到能关联的', 'Nothing to link')); } catch (e) { state.error = e.message; }
+      try { const n = await linkSubsidies(); if (typeof edToast === 'function') edToast(n ? tr(`已关联 ${n} 笔`, `Linked ${n}`) : tr('未找到可关联的账单', 'Nothing to link')); } catch (e) { state.error = e.message; }
       break;
     }
     // 给选中的那天记一笔
@@ -884,7 +884,7 @@ async function moreAction(act, v, el) {
     case 'project-back': state.project = null; state.rFilter = 0; break;
     case 'proj-budget': {
       const name = state.project, cur = projectBudget(name);
-      const v = await uiPrompt(tr('项目经费', 'Project budget'), cur ? (cur / 100).toFixed(2) : '', { placeholder: tr('不填就是不设', 'Leave empty for none'), max: 14 });
+      const v = await uiPrompt(tr('项目经费', 'Project budget'), cur ? (cur / 100).toFixed(2) : '', { placeholder: tr('留空即不设置', 'Leave empty for none'), max: 14 });
       if (v === null) return true;
       const cents = Math.round(Number(String(v).trim().replace(',', '.')) * 100), o = { ...(shared.get('projectBudgets', {}) ?? {}) };
       if (!String(v).trim() || !(cents > 0)) delete o[name]; else o[name] = cents;
@@ -908,7 +908,7 @@ async function moreAction(act, v, el) {
       if (name && (cat || kw)) { await shared.set('recurring', [...shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)).filter((r) => r.name !== name), { name, categories: cat ? [cat] : [], keywords: kw ? [kw] : [], income: document.getElementById('r-income').value === '1' }]); state.addingRule = false; }
       break;
     }
-    case 'rule-remove': { const rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)); if (await pgConfirm(tr(`移除「${rules[Number(v)].name}」？`, `Remove "${rules[Number(v)].name}"?`), { ok: tr('移除', 'Remove'), danger: true, detail: tr('账单不会被删除', 'Entries stay') })) { rules.splice(Number(v), 1); await shared.set('recurring', rules); state.openKey = null; } break; }
+    case 'rule-remove': { const rules = shared.get('recurring', store.get('hl.recurring', RECURRING_DEFAULT)); if (await pgConfirm(tr(`确定移除「${rules[Number(v)].name}」？`, `Remove "${rules[Number(v)].name}"?`), { ok: tr('移除', 'Remove'), danger: true, detail: tr('账单将保留', 'Entries stay') })) { rules.splice(Number(v), 1); await shared.set('recurring', rules); state.openKey = null; } break; }
     case 'export': exportCsv(); return true;
     default: return false;
   }

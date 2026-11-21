@@ -218,7 +218,7 @@ async function impZipRead(buf, e, pw) {
   if (method === 0) bytes = data;
   else if (method === 8) {
     try { bytes = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()); } catch { if (e.encrypted) return null; throw new Error('inflate'); }
-  } else throw new AiError(tr(`压缩包「${e.name}」用了不支持的压缩方式。`, `“${e.name}” uses an unsupported compression method.`));
+  } else throw new AiError(tr(`压缩包「${e.name}」使用了不支持的压缩方式。`, `“${e.name}” uses an unsupported compression method.`));
   // 校验 CRC（AE-2 不带 CRC）：对不上多半是密码错了
   if (e.encrypted && !(e.aes?.version === 2) && impCrc32(bytes) !== e.crc) return null;
   return bytes;
@@ -235,8 +235,8 @@ async function impExpandZips(files) {
     let entries;
     try { entries = impZipEntries(buf); } catch { throw new AiError(tr(`「${f.name}」不是有效的压缩包。`, `“${f.name}” isn't a valid zip file.`)); }
     entries = entries.filter((e) => !e.name.endsWith('/') && !e.name.startsWith('__MACOSX/') && IMP_INNER.test(e.name));
-    if (!entries.length) throw new AiError(tr(`压缩包「${f.name}」里没有账单文件。`, `No statement files in “${f.name}”.`));
-    let pw = null, title = tr('输入解压密码', 'Enter the zip password');
+    if (!entries.length) throw new AiError(tr(`压缩包「${f.name}」中未找到账单文件。`, `No statement files in “${f.name}”.`));
+    let pw = null, title = tr('请输入解压密码', 'Enter the zip password');
     for (const e of entries) {
       let bytes = null;
       for (;;) {
@@ -247,7 +247,7 @@ async function impExpandZips(files) {
         }
         bytes = await impZipRead(buf, e, pw);
         if (bytes) break;
-        pw = null; title = tr('密码不对，请重新输入', 'Wrong password. Try again.');
+        pw = null; title = tr('密码错误，请重新输入', 'Wrong password. Try again.');
       }
       const base = e.name.split('/').pop(), ext = base.split('.').pop().toLowerCase();
       out.push(new File([bytes], base, { type: IMP_MIME_BY_EXT[ext] ?? '' }));
@@ -266,7 +266,7 @@ async function impReadXlsx(file) {
   const entries = await impUnzip(await file.arrayBuffer(), (n) => n.startsWith('xl/') && n.endsWith('.xml'));
   const sheetName = [...entries.keys()].filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
     .sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')))[0];
-  if (!sheetName) throw new AiError(tr('这个 Excel 文件里没有工作表。', 'This Excel file has no sheets.'));
+  if (!sheetName) throw new AiError(tr('该 Excel 文件中无工作表。', 'This Excel file has no sheets.'));
   const strings = [];
   if (entries.has('xl/sharedStrings.xml')) {
     for (const si of impTags(impXml(entries.get('xl/sharedStrings.xml')), 'si')) {
@@ -663,7 +663,7 @@ async function impJobsFor(file, name) {
     throw new AiError(tr(`暂不支持旧版 Excel 文件「${name}」（.xls），请另存为 .xlsx 或导出为 PDF、CSV。`, `Old Excel files like “${name}” (.xls) aren't supported. Save as .xlsx, or export a PDF or CSV.`));
   }
   const content = await impText(file);
-  if (content.length > IMP_MAX_TEXT) throw new AiError(tr(`「${name}」内容太长，请按月份拆分后再导入。`, `“${name}” is too long. Split it by month and import again.`));
+  if (content.length > IMP_MAX_TEXT) throw new AiError(tr(`「${name}」内容过长，请按月份拆分后再导入。`, `“${name}” is too long. Split it by month and import again.`));
   return impTextJobs(name, content);
 }
 
@@ -723,14 +723,14 @@ async function impPrepare(files) {
       const ledger = impLedgerSheet(rows);
       if (ledger) { local.push(...ledger.transactions); skipped += ledger.skipped; } else {
         const csv = impToCsv(rows);
-        if (csv.length > IMP_MAX_TEXT) throw new AiError(tr(`「${name}」内容太长，请按月份拆分后再导入。`, `“${name}” is too long. Split it by month and import again.`));
+        if (csv.length > IMP_MAX_TEXT) throw new AiError(tr(`「${name}」内容过长，请按月份拆分后再导入。`, `“${name}” is too long. Split it by month and import again.`));
         jobs.push(...impTextJobs(name, csv));
       }
     } else jobs.push(...await impJobsFor(f, name));
   }
   const run = { jobs, found: [...local], skipped, holder: '', statementIban: '', done: 0, missed: 0, system: '' };
   if (!jobs.length) return run;
-  if (!aiKey()) throw new AiError(tr('识别截图和银行账单需要 API 密钥，请先到「我的」页面设置。', 'Reading screenshots and statements needs an API key. Set one on the Me tab first.'));
+  if (!aiKey()) throw new AiError(tr('识别截图与银行账单需先设置 Claude / DeepSeek API 密钥，请先至「我的」页面设置。', 'Reading screenshots and statements needs an API key. Set one on the Me tab first.'));
   const cats = impCats(), tops = cats.filter((c) => !c.parentId);
   run.system = impSystemPrompt(tops.filter((c) => !c.isIncome).map((c) => impWithSubs(c, cats)), tops.filter((c) => c.isIncome).map((c) => impWithSubs(c, cats)),
     impAccounts().map((a) => a.name), store.get('hl.ownerName', '') ?? '', impHabits());
@@ -780,7 +780,7 @@ async function impRunJobs(run, onProgress) {
       inflight--;
       try {
         if (json == null) {
-          if (job.lines.length < 2) throw new AiError(tr('这份账单的交易太多，请分几次导入。', 'Too many transactions. Import in several batches.'));
+          if (job.lines.length < 2) throw new AiError(tr('该账单交易过多，请分批导入。', 'Too many transactions. Import in several batches.'));
           const half = Math.floor(job.lines.length / 2);
           again.push(impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half)));
         } else {
@@ -902,7 +902,7 @@ async function impGo() {
   impWakeOn();
   try {
     const result = await impRunJobs(run, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); });
-    if (!result.transactions.length) throw new AiError(tr('没有识别到任何交易记录。', 'No transactions were found.'));
+    if (!result.transactions.length) throw new AiError(tr('未识别到交易记录。', 'No transactions were found.'));
     // 识别完了：进度圈先走满、报告读出几笔，停一下再进列表（和手机端一样）
     Object.assign(IMP, { finished: true, found: result.transactions.length });
     impRender();
@@ -910,7 +910,7 @@ async function impGo() {
     IMP.finished = false; IMP.run = null;
     Object.assign(IMP, { phase: 'review', drafts: impToDrafts(result), skipped: result.skipped, missed: result.missed, rates: {}, account: 0, detail: -1 });
   } catch (e) {
-    if (aiRetryable(e) && IMP.run) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络断了', 'Connection lost') : e.message; } else {
+    if (aiRetryable(e) && IMP.run) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络已断开', 'Connection lost') : e.message; } else {
       IMP.phase = 'idle'; IMP.run = null;
       IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
     }
@@ -939,7 +939,7 @@ async function impPaste() {
       if (type) files.push(new File([await item.getType(type)], `paste-${files.length + 1}.${type.split('/')[1]}`, { type }));
     }
   } catch { /* 没给权限或剪贴板里不是图片 */ }
-  if (!files.length) { IMP.error = tr('剪贴板里没有截图', 'No screenshot on the clipboard'); render(); return; }
+  if (!files.length) { IMP.error = tr('剪贴板中无截图', 'No screenshot on the clipboard'); render(); return; }
   await impStart(files.slice(0, 10));
 }
 
@@ -1047,7 +1047,7 @@ async function impImport() {
     await impLinkSubsidies();
   } catch (e) {
     // 已经写进去的那几笔取消了勾选，再点一次只写剩下的
-    IMP.phase = 'review'; IMP.error = tr('没有写完，可以再点一次：', 'Not finished, try again: ') + (e?.message ?? '');
+    IMP.phase = 'review'; IMP.error = tr('未完成，可再次点击：', 'Not finished, try again: ') + (e?.message ?? '');
     render(); return;
   }
   // 导入的账单都在别的账本里时（表格自带账本名），切到笔数最多的那个，免得首页看起来是空的
@@ -1159,8 +1159,8 @@ function impDetailView() {
   const d = IMP.drafts[IMP.detail];
   if (!d) return '';
   const p = d.tx, f = IMP.detailForm ?? { date: dayISO(p.date), amt: (p.amountCents / 100).toFixed(2), note: p.note };
-  return `<div class="modal imp-modal" data-act="imp-detail-x"><div class="card grid" role="dialog" aria-modal="true" aria-label="${tr('核对这笔账单', 'Check this entry')}">
-    <b style="font-size:17px">${tr('核对这笔账单', 'Check this entry')}</b>
+  return `<div class="modal imp-modal" data-act="imp-detail-x"><div class="card grid" role="dialog" aria-modal="true" aria-label="${tr('核对该笔账单', 'Check this entry')}">
+    <b style="font-size:17px">${tr('核对该笔账单', 'Check this entry')}</b>
     ${p.source ? `<div><div class="muted small">${tr('账单原文', 'From the statement')}</div><div class="imp-src">${h(p.source)}</div></div>` : ''}
     <div class="two"><label class="f">${tr('日期', 'Date')}<input id="imp-d-date" type="date" value="${h(f.date)}"></label>
       <label class="f">${tr('金额', 'Amount')} ${h(p.currency)}<input id="imp-d-amt" inputmode="decimal" autocomplete="off" value="${h(f.amt)}"></label></div>
@@ -1175,11 +1175,11 @@ function impReviewView() {
   const saving = IMP.phase === 'saving', all = IMP.drafts.every((d) => d.selected);
   const summary = tr(`识别到 ${IMP.drafts.length} 笔，已选 ${st.selected.length} 笔`, `${IMP.drafts.length} found, ${st.selected.length} selected`)
     + (IMP.skipped > 0 ? tr(`，另有 ${IMP.skipped} 行因信息不全跳过`, `, ${IMP.skipped} incomplete rows skipped`) : '')
-    + (IMP.missed > 0 ? tr(`，账单里还有 ${IMP.missed} 行没识别出来，请对照原文件`, `, ${IMP.missed} statement rows were not read — check the file`) : '');
+    + (IMP.missed > 0 ? tr(`，账单中还有 ${IMP.missed} 行未被识别，请您对照原文件`, `, ${IMP.missed} statement rows were not read — check the file`) : '');
   const def = state.data.account.get(IMP.account);
-  const accPick = st.missing ? `<div class="imp-acc"><span>${tr(`${st.missing} 笔缺账户信息，记入`, `${st.missing} without an account, put in`)}</span>
+  const accPick = st.missing ? `<div class="imp-acc"><span>${tr(`${st.missing} 笔缺少账户信息，记入`, `${st.missing} without an account, put in`)}</span>
     ${accounts.length ? impDropdown(`${def ? accountTile(def, 'sm') : ''}<b>${h(def?.name ?? tr('选择账户', 'Choose account'))}</b> ▾`, `data-imp="acct" aria-label="${tr('选择账户', 'Choose account')}"`,
-      accounts.map((a) => `<option value="${a.id}">${h(a.name)}</option>`).join(''), `chip${def ? ' lead' : ''}`) : `<span class="err">${tr('请先到「账户」页添加账户', 'Add an account on the Accounts tab first')}</span>`}</div>` : '';
+      accounts.map((a) => `<option value="${a.id}">${h(a.name)}</option>`).join(''), `chip${def ? ' lead' : ''}`) : `<span class="err">${tr('请先至「账户」页添加账户', 'Add an account on the Accounts tab first')}</span>`}</div>` : '';
   const rates = st.foreign.map((c) => `<label class="f">${tr(`汇率：1 ${c} = ? ${HOME}`, `Rate: 1 ${c} = ? ${HOME}`)}<input data-imp="rate" data-c="${h(c)}" inputmode="decimal" autocomplete="off" value="${h(IMP.rates[c] ?? impFxRate(c)?.toFixed(4) ?? '')}"></label>`).join('');
   return `<div class="imp-top"><span class="imp-sum">${summary}</span><button class="btn link" data-act="imp-all" ${saving ? 'disabled' : ''}>${all ? tr('全不选', 'Select none') : tr('全选', 'Select all')}</button></div>
     <div class="imp-list${saving ? ' busy' : ''}">${IMP.drafts.map((d, i) => impRow(d, i, accounts, tops)).join('')}</div>
@@ -1195,7 +1195,7 @@ function impReviewView() {
  * 圆环由 impRingTick 每一帧更新（整页重画时接着画，不会从 0 开始）。
  */
 function impLoadingView() {
-  const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('马上为你列出来', 'Opening the list…') : IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
+  const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('即将为您列出', 'Opening the list…') : IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
   setTimeout(impRingTick, 0);
   return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
     <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr(`识别完成，共 ${IMP.found} 条记录`, `Done: ${IMP.found} records`) : tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
@@ -1238,19 +1238,19 @@ function impPickView() {
   const canPaste = !!navigator.clipboard?.read;
   const inc = IMP.incoming;
   return `${IMP.error ? `<div class="card"><div class="err" style="font-size:15px">${h(IMP.error)}</div></div>` : ''}
-    ${inc ? `<div class="card imp-inc">${iconTile('document', 'imp-tile38')}<div class="imp-inc-t"><b>${tr('收到账单文件', 'Received a statement')}</b><span class="muted small">${h(inc.name)}</span></div>
-      <button class="btn primary" data-act="imp-inc-go">${tr('开始识别', 'Read it')}</button><button class="ed-x" data-act="imp-inc-x" aria-label="${tr('不要了', 'Discard')}">✕</button></div>` : ''}
+    ${inc ? `<div class="card imp-inc">${iconTile('document', 'imp-tile38')}<div class="imp-inc-t"><b>${tr('已收到账单文件', 'Received a statement')}</b><span class="muted small">${h(inc.name)}</span></div>
+      <button class="btn primary" data-act="imp-inc-go">${tr('开始识别', 'Read it')}</button><button class="ed-x" data-act="imp-inc-x" aria-label="${tr('放弃', 'Discard')}">✕</button></div>` : ''}
     <div class="card">
       <div class="imp-head">${iconTile('sparkle', 'imp-tile38')}<span>${tr('截图和银行账单', 'Screenshots and bank statements')}</span></div>
-      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，目前还没有填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('去设置密钥', 'Set the key')}</button></div>`}
+      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，当前尚未填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('前往设置密钥', 'Set the key')}</button></div>`}
       <label class="btn primary imp-pick">${tr('选择截图（可多选）', 'Choose screenshots')}<input type="file" data-imp="pick" accept="image/*" multiple hidden></label>
       ${canPaste ? `<button class="btn imp-pick" data-act="imp-paste">${tr('粘贴截图', 'Paste screenshot')}</button>` : ''}
-      <div class="muted small imp-note">${tr(`文件会发送到 ${AI_PROVIDERS[aiProvider()].name} 识别。`, `Files are sent to ${AI_PROVIDERS[aiProvider()].name}.`)}</div>
+      <div class="muted small imp-note">${tr(`文件将发送至 ${AI_PROVIDERS[aiProvider()].name} 识别。`, `Files are sent to ${AI_PROVIDERS[aiProvider()].name}.`)}</div>
     </div>
     <div class="card">
       <div class="imp-head">${iconTile('document', 'imp-tile38')}<span>${tr('账单文件', 'Statement files')}</span></div>
       <label class="btn imp-pick">${tr('选择文件（Excel / PDF / CSV / ZIP）', 'Choose file (Excel / PDF / CSV / ZIP)')}<input type="file" data-imp="files" accept="${IMP_FILE_ACCEPT}" multiple hidden></label>
-      <button class="btn link imp-gd-open" data-act="imp-guide">${tr('iPhone 怎么导入微信账单？', 'Importing WeChat bills on iPhone')}</button>
+      <button class="btn link imp-gd-open" data-act="imp-guide">${tr('iPhone 如何导入微信账单？', 'Importing WeChat bills on iPhone')}</button>
     </div>${IMP.guide ? impGuideView() : ''}`;
 }
 
@@ -1261,12 +1261,12 @@ function impGuideView() {
     <div class="between"><b class="imp-gd-h">${tr('iPhone 导入微信账单', 'WeChat bills on iPhone')}</b><button class="ed-x" data-act="imp-guide-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>
     <ol class="imp-steps">
       ${step(1, tr('微信导出账单', 'Export in WeChat'), [tr('我', 'Me'), tr('服务', 'Services'), tr('钱包', 'Wallet'), tr('账单', 'Bills'), tr('常见问题', 'FAQ'), tr('下载账单', 'Download')])}
-      ${step(2, tr('存到「文件」', 'Save to Files'), [tr('打开收到的 zip', 'Open the zip'), tr('分享', 'Share'), tr('存储到"文件"', 'Save to Files')])}
-      ${step(3, tr('回这里选文件', 'Pick it here'), [tr('记一笔', 'Add'), tr('文件', 'File'), tr('最近使用', 'Recents')])}
-      ${step(4, tr('输入解压密码', 'Enter the password'), [tr('微信支付消息里的 6 位数', 'From the WeChat Pay message')])}
+      ${step(2, tr('存到「文件」', 'Save to Files'), [tr('打开收到的 zip', 'Open the zip'), tr('分享', 'Share'), tr('存储到「文件」', 'Save to Files')])}
+      ${step(3, tr('返回此处选择文件', 'Pick it here'), [tr('记一笔', 'Add'), tr('文件', 'File'), tr('最近使用', 'Recents')])}
+      ${step(4, tr('请输入解压密码', 'Enter the password'), [tr('微信支付消息中的 6 位数字', 'From the WeChat Pay message')])}
     </ol>
-    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('装一次，以后在账单上点 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
-      <button class="btn primary" data-act="imp-sc">${tr('去设置', 'Set up')}</button></div>` : ''}
+    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('安装一次，之后在账单上点击 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
+      <button class="btn primary" data-act="imp-sc">${tr('前往设置', 'Set up')}</button></div>` : ''}
   </div></div>`;
 }
 
@@ -1285,16 +1285,16 @@ const scStep = (n, title, path) => `<li><i>${n}</i><div><b>${title}</b><span>${p
 function scSteps() {
   return `<ol class="imp-steps">
     ${scStep(1, tr('添加快捷指令', 'Add the Shortcut'), [tr('点击下方按钮', 'Tap the button below'), tr('添加快捷指令', 'Add Shortcut')])}
-    ${scStep(2, tr('在账单上点分享', 'Share a statement'), [tr('微信、邮件、「文件」里打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('行星记账导入', 'Planet Ledger import')])}
+    ${scStep(2, tr('在账单上点击「分享」', 'Share a statement'), [tr('在微信、邮件或「文件」中打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('行星记账导入', 'Planet Ledger import')])}
     ${scStep(3, tr('开始识别', 'Read it'), [tr('自动打开网页版', 'The web app opens'), tr('开始识别', 'Read it')])}
   </ol>`;
 }
 /** 添加按钮：iCloud 链接，在新窗口打开（主屏幕上的网页 App 里也不会把自己关掉）。 */
 const scButton = () => `<a class="btn primary sc-add" href="${IMP_SHORTCUT_URL}" target="_blank" rel="noopener">${hmSvg(ICONS.plus.d)}${tr('添加快捷指令', 'Add Shortcut')}</a>`;
 const scTips = () => `<ul class="sc-tips muted small">
-    <li>${tr('第一次会问能否打开网页：点「允许」', 'First time it asks to open the page: tap Allow')}</li>
-    <li>${tr('分享菜单里没有：滑到底点「编辑操作」加上', 'Not in the Share menu? Scroll down › Edit Actions')}</li>
-    <li>${tr('会用 Safari 打开：在 Safari 里也要登录', 'It opens in Safari: sign in there too')}</li></ul>`;
+    <li>${tr('首次将询问是否打开网页：请点击「允许」', 'First time it asks to open the page: tap Allow')}</li>
+    <li>${tr('分享菜单中未找到：请滑至底部，点击「编辑操作」添加', 'Not in the Share menu? Scroll down › Edit Actions')}</li>
+    <li>${tr('将以 Safari 打开：需在 Safari 中登录', 'It opens in Safari: sign in there too')}</li></ul>`;
 
 function scView() {
   return `<div class="subbar"><button class="round" data-act="tab" data-v="settings" aria-label="${tr('返回', 'Back')}">‹</button><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b></div>
@@ -1328,7 +1328,7 @@ MOD.actions.push(async (act, v, el) => {
       const form = { date: val('imp-d-date'), amt: val('imp-d-amt'), note: val('imp-d-note') };
       const date = impDay(form.date), cents = parseCents(form.amt);
       // 填错了：留着刚填的内容，只提示哪里不对
-      if (date == null || cents == null) { IMP.detailForm = form; IMP.detailErr = date == null ? tr('日期不对', 'Invalid date') : tr('金额不对', 'Invalid amount'); break; }
+      if (date == null || cents == null) { IMP.detailForm = form; IMP.detailErr = date == null ? tr('日期无效', 'Invalid date') : tr('金额不正确', 'Invalid amount'); break; }
       cur.tx = { ...cur.tx, date, amountCents: cents, note: form.note.trim() };
       IMP.detail = -1; IMP.detailErr = ''; IMP.detailForm = null;
       break;

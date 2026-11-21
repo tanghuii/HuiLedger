@@ -130,7 +130,7 @@ const lkRowHtml = (t, L, act, on, chip = '') => `<div class="ed-offpick lk-pick 
 /** 搜索结果：按月分组。 */
 function lkResults(o) {
   const L = computeLookup(), list = lkSearch(o.subj, o.side, o.q);
-  if (!list.length) return `<div class="muted small ed-none">${tr('没有匹配的', 'No match')}</div>`;
+  if (!list.length) return `<div class="muted small ed-none">${tr('无匹配结果', 'No match')}</div>`;
   let ym = '', html = '';
   for (const t of list) {
     const d = dayToDate(t.date), k = ymLabel(d.getUTCFullYear(), d.getUTCMonth() + 1);
@@ -147,7 +147,7 @@ function lkResults(o) {
 function lkSheet(o) {
   const L = computeLookup(), sug = lkSuggest(o.subj, o.side, o.picked);
   return `<div class="muted small lk-h">${tr('智能推荐', 'Suggested')}</div>
-    ${sug.length ? sug.map((s) => lkRowHtml(s.t, L, o.act, false, s.reason)).join('') : `<div class="muted small ed-none">${tr('没有找到相近的', 'Nothing similar found')}</div>`}
+    ${sug.length ? sug.map((s) => lkRowHtml(s.t, L, o.act, false, s.reason)).join('') : `<div class="muted small ed-none">${tr('未找到相近账单', 'Nothing similar found')}</div>`}
     <div class="muted small lk-h">${tr('搜索全部', 'Search all')}</div>
     <label class="ed-search lk-search">${typeof ED_SEARCH_SVG === 'string' ? ED_SEARCH_SVG : ''}<input id="${o.qid}" value="${h(o.q ?? '')}" placeholder="${tr('备注、分类、账户、金额、日期', 'Note, category, account, amount, date')}" autocomplete="off" enterkeyhint="search" aria-label="${tr('搜索全部', 'Search all')}"></label>
     <div class="lk-res">${lkResults(o)}</div>`;
@@ -248,7 +248,7 @@ async function lkLink(incId, expId) {
     const given = list.reduce((s, [, c]) => s + c, 0);
     next = [...list, [expId, Math.max(0, Math.min(total - given, want))]];
   }
-  if (!(next[next.length - 1][1] > 0)) { edToast(tr('这笔已经分完了', 'Nothing left to link')); return; }
+  if (!(next[next.length - 1][1] > 0)) { edToast(tr('该笔已全部关联', 'Nothing left to link')); return; }
   await lkWrite(inc, lkEncode(inc, next), tr('已关联', 'Linked'));
 }
 /** 取消收入 incId 和支出 expId 的关联。 */

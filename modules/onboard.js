@@ -103,7 +103,7 @@ function obWelcome() {
     <div class="ob-hero">${typeof plLoginHero === 'function' ? plLoginHero() : planetSvg(PLANET_BRAND, { px: 120 })}</div>
     <h1 class="ob-title">${tr('欢迎来到行星记账', 'Welcome to Planet Ledger')}</h1>
     <p class="muted ob-lead">${tr('花一分钟，把账本设成你的样子', 'Take a minute to make it yours')}</p>
-    <label class="ob-nick"><span>${tr('用户名', 'Username')}</span><input id="ob-nick" value="${h(ob.nick)}" placeholder="${tr('怎么称呼你？', 'What should we call you?')}" maxlength="20" autocomplete="nickname" enterkeyhint="next"></label></div>`;
+    <label class="ob-nick"><span>${tr('用户名', 'Username')}</span><input id="ob-nick" value="${h(ob.nick)}" placeholder="${tr('如何称呼您？（设置昵称）', 'What should we call you?')}" maxlength="20" autocomplete="nickname" enterkeyhint="next"></label></div>`;
 }
 
 /** 是不是 iPhone：是的话就地装快捷指令（以后账单在分享菜单里一键导入）。 */
@@ -112,8 +112,8 @@ function obIphone() {
   const pick = (v, label) => `<button class="ob-yn${ob.ios === v ? ' on' : ''}" data-ob="ios" data-v="${v ? 1 : 0}" aria-pressed="${ob.ios === v}">${label}</button>`;
   const body = ob.ios === true && has ? `<div class="card ob-card ob-sc"><b>${tr('装上快捷指令，账单一键导入', 'Add the Shortcut for one-tap imports')}</b>${scSteps()}${scButton()}</div>`
     : ob.ios === false ? `<p class="muted ob-lead">${tr('以后用 iPhone 时：设置 › iPhone 快捷导入', 'Using an iPhone later? Settings › iPhone quick import')}</p>` : '';
-  return `<h2 class="ob-h">${tr('你用的是 iPhone 吗？', 'Are you on an iPhone?')}</h2>
-    <div class="ob-yns">${pick(true, tr('是，iPhone', 'Yes, iPhone'))}${pick(false, tr('不是', 'No'))}</div>${body}`;
+  return `<h2 class="ob-h">${tr('您使用的是 iOS 设备吗？', 'Are you on an iPhone?')}</h2>
+    <div class="ob-yns">${pick(true, tr('是，iOS', 'Yes, iPhone'))}${pick(false, tr('不是', 'No'))}</div>${body}`;
 }
 
 function obCurrency() {
@@ -138,7 +138,7 @@ function obAccounts() {
         <label class="ob-bal"><span>${h(sym)}</span><input data-k="${h(p.k)}" inputmode="decimal" autocomplete="off" placeholder="${tr('初始余额', 'Opening balance')}" value="${h(p.init)}" aria-label="${tr('初始余额', 'Opening balance')}"></label>
         <button class="ob-x" data-ob="unpick" data-v="${h(p.k)}" aria-label="${tr('移除', 'Remove')}">✕</button></div>
       <div class="ob-types">${obTypes().map(([t, n]) => `<button class="chip${p.type === t ? ' on' : ''}" data-ob="type" data-v="${h(p.k)}" data-t="${t}">${n}</button>`).join('')}</div></div>`).join('');
-  return `<h2 class="ob-h">${tr('你用哪些钱包和银行？', 'Which wallets and banks do you use?')}</h2>
+  return `<h2 class="ob-h">${tr('选择您使用的银行或支付钱包', 'Which wallets and banks do you use?')}</h2>
     ${ob.note ? `<div class="ob-note">${h(ob.note)}</div>` : ''}
     ${groups}${add}
     ${rows ? `<div class="card ob-new">${rows}</div>` : ''}`;
@@ -162,11 +162,11 @@ function obFinish() {
   const n = [...state.data.account.values()].filter((a) => !a.archived).length;
   return `<div class="ob-center ob-fin">
     <div class="ob-big">${planetSvg(p, { px: 128, mood: 1 })}</div>
-    <h1 class="ob-title">${tr('准备好了！', 'All set!')}</h1>
+    <h1 class="ob-title">${tr('初始设置完成！', 'All set!')}</h1>
     <div class="card ob-sum">
       <div><span class="ob-flag">${hmFlag(HOME)}</span><span>${tr('主货币', 'Main currency')} <b>${h(HOME)}</b></span></div>
       <div>${iconTile('wallet', 'sm')}<span>${tr(`${n} 个账户`, `${n} account${n === 1 ? '' : 's'}`)}</span></div>
-      <div>${planetSvg(p, { px: 24, spin: false })}<span>${mine ? h(planetName(mine)) : tr('还没选星球', 'No planet yet')}</span></div></div>
+      <div>${planetSvg(p, { px: 24, spin: false })}<span>${mine ? h(planetName(mine)) : tr('暂未选择星球', 'No planet yet')}</span></div></div>
     <div class="ob-tips"><div><b>＋</b><span>${tr('记一笔，长按＋可以语音', 'Tap ＋ to log, hold it to speak')}</span></div>
       <div>${hmSvg(ICONS.sparkle.d)}<span>${tr('AI 设置里填密钥，就能一句话记账', 'Add an AI key in settings to log by sentence')}</span></div></div></div>`;
 }
@@ -188,7 +188,7 @@ function obToggle(key) {
     if (ob.drop.has(ex.id)) { ob.drop.delete(ex.id); return; }
     // 默认账户（和这次向导里加的）没记过账可以取消，其余的不动
     if ((OB_DEFAULT_IDS.includes(ex.id) || ob.created.has(ex.id)) && !obUsed(ex.id)) ob.drop.add(ex.id);
-    else ob.note = obUsed(ex.id) ? tr(`「${ex.name}」有账单，不能取消`, `“${ex.name}” has entries`) : tr(`「${ex.name}」已经在用`, `“${ex.name}” is already set up`);
+    else ob.note = obUsed(ex.id) ? tr(`「${ex.name}」有账单，不能取消`, `“${ex.name}” has entries`) : tr(`「${ex.name}」已在使用`, `“${ex.name}” is already set up`);
     return;
   }
   const i = ob.picks.findIndex((p) => p.k === key);
@@ -213,7 +213,7 @@ async function obCommit() {
   const parsed = [];
   for (const p of ob.picks) {
     const text = String(p.init ?? '').trim().replace(/\s/g, '').replace(',', '.'), v = text ? Number(text) : 0;
-    if (!Number.isFinite(v)) { ob.err = tr(`「${p.name}」的初始余额不对`, `Invalid opening balance for “${p.name}”`); return false; }
+    if (!Number.isFinite(v)) { ob.err = tr(`「${p.name}」初始余额不正确`, `Invalid opening balance for “${p.name}”`); return false; }
     parsed.push([p, Math.round(v * 100)]);
   }
   const all = [...state.data.account.values()];
@@ -236,7 +236,7 @@ async function obSetCurrency(code) {
     || Number(shared.get('budget', 0)) > 0 || Object.keys(shared.get('catBudgets', {}) ?? {}).length > 0;
   if (hasTx && !(await uiConfirm(tr(`把主货币改成 ${code}？`, `Change main currency to ${code}?`), {
     ok: tr('折算并更改', 'Convert and change'),
-    detail: tr(`所有账单、初始余额和预算按最新汇率折算成 ${code}。`, `All entries, opening balances and the budget are converted to ${code} at the latest rates.`),
+    detail: tr(`账单、初始余额与预算将按最新汇率折算成 ${code}。`, `All entries, opening balances and the budget are converted to ${code} at the latest rates.`),
   }))) return;
   ob.busy = true; ob.err = ''; obRender();
   try {

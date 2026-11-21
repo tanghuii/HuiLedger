@@ -343,7 +343,7 @@ function tdTransfersView() {
   const right = (ignored.length ? `<button class="td-tb" data-act="td-restore">${tr(`恢复已忽略 ${ignored.length}`, `Restore ${ignored.length}`)}</button>` : '')
     + `<button class="td-tb" data-act="td-rescan">${tr('重新识别', 'Scan again')}</button>`;
   const bar = tdBar('transfers', tr('整理转账', 'Tidy transfers'), right);
-  if (!fixes.length) return `${bar}<p class="td-empty">${tr('没有发现需要整理的账单。', 'Nothing to tidy.')}</p>`;
+  if (!fixes.length) return `${bar}<p class="td-empty">${tr('未发现需要整理的账单。', 'Nothing to tidy.')}</p>`;
   const L = computeLookup();
   const all = chosen.length === fixes.length;
   const card = (f) => {
@@ -352,16 +352,16 @@ function tdTransfersView() {
       : f.kind === TD_KIND.CONVERT ? (f.a.kind === KIND.EXPENSE ? [f.a.accountId, f.toAccount] : [f.toAccount, f.a.accountId])
         : f.kind === TD_KIND.DUP_TRANSFER ? [f.b.accountId, f.b.toAccountId] : [f.a.accountId, f.a.toAccountId];
     const action = {
-      DUP_TRANSFER: tr('和已有转账重复，合并后只保留转账', 'Repeats a transfer: merge and keep the transfer'),
-      CONVERT: tr('其实是转账，改成转账', 'Really a transfer: convert it'),
-      MERGE: tr('一出一进，合并成转账', 'Out and in: merge into a transfer'),
-      DUPLICATE: tr('重复录入，合并成一笔', 'Recorded twice: merge into one'),
+      DUP_TRANSFER: tr('与已有转账重复，合并后仅保留转账', 'Repeats a transfer: merge and keep the transfer'),
+      CONVERT: tr('实为转账，改为转账', 'Really a transfer: convert it'),
+      MERGE: tr('一出一进，合并为转账', 'Out and in: merge into a transfer'),
+      DUPLICATE: tr('重复录入，合并为一笔', 'Recorded twice: merge into one'),
     }[f.kind];
     const both = [f.a, f.b].filter(Boolean).map((t) => `<div class="td-date">${dayISO(t.date)}</div>${txRow(t, L)}`).join('');
     return `<div class="card td-card">
       <div class="td-r1">${tdCheck(on(f), 'td-pick', f.a.id)}${accountTile(acc.get(from), 'td-logo')}${to ? `<span class="td-arrow">→</span>${accountTile(acc.get(to), 'td-logo')}` : ''}
         <span class="td-name">${h(to ? `${name(from)} → ${name(to)}` : name(from))}</span><b class="num td-amt">${money(f.a.amountCents)}</b></div>
-      <div class="td-r2"><span class="td-what">${action}</span><button class="td-ign" data-act="td-ignore" data-v="${h(f.key)}">${f.kind === TD_KIND.CONVERT ? tr('不用改', 'Leave it') : tr('不是重复', 'Not a duplicate')}</button></div>
+      <div class="td-r2"><span class="td-what">${action}</span><button class="td-ign" data-act="td-ignore" data-v="${h(f.key)}">${f.kind === TD_KIND.CONVERT ? tr('无需修改', 'Leave it') : tr('不是重复', 'Not a duplicate')}</button></div>
       <div class="td-txs">${both}</div>
     </div>`;
   };
@@ -375,7 +375,7 @@ function tdCatsView() {
   if (tdEntered('cats')) TD.skipped.clear();
   const groups = tdCatPlan();
   const bar = tdBar('cats', tr('整理分类', 'Tidy categories'));
-  if (!groups.length) return `${bar}<p class="td-empty">${tr('分类很整齐，没有需要合并的。', 'Categories are tidy. Nothing to merge.')}</p>`;
+  if (!groups.length) return `${bar}<p class="td-empty">${tr('分类已整齐，无需合并。', 'Categories are tidy. Nothing to merge.')}</p>`;
   const chosen = groups.filter((g) => !TD.skipped.get(g.top.id)), n = chosen.reduce((s, g) => s + g.moves.length, 0);
   const card = (g) => `<div class="card td-card">
     <div class="td-r1">${tdCheck(!TD.skipped.get(g.top.id), 'td-skip', g.top.id)}${iconTile(g.top.icon ?? 'tag', 'td-ctile')}<b class="td-cname">${h(tdCat(g.top.name))}</b></div>

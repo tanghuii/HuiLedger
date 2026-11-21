@@ -36,8 +36,8 @@ function aiModelList(p, chosen = aiModel(p)) {
 class AiError extends Error {}
 
 /** DeepSeek 只认文字：要发图片或 PDF 时在发送之前就停下。 */
-const aiNoFilesMsg = () => tr('DeepSeek 不能读 PDF，请在 AI 设置里换成 Claude', "DeepSeek can't read PDFs. Switch to Claude in AI settings.");
-const aiNoImagesMsg = () => tr('这个 DeepSeek 模型不能读图片，请选 deepseek-flash 或换成 Claude', "This DeepSeek model can't read images. Pick deepseek-flash or switch to Claude.");
+const aiNoFilesMsg = () => tr('DeepSeek 不支持读取 PDF，请在 AI 设置中换成 Claude（中国大陆地区不可用）', "DeepSeek can't read PDFs. Switch to Claude in AI settings.");
+const aiNoImagesMsg = () => tr('该 DeepSeek 模型不支持读取图片，请选择 deepseek-flash 多模态模型，或换成 Claude（中国大陆地区不可用）', "This DeepSeek model can't read images. Pick deepseek-flash or switch to Claude.");
 /** 发之前检查：kind = 'pdf' | 'image'。DeepSeek 读不了 PDF；图片只有 deepseek-flash 能读。 */
 function aiCheckFiles(kind = 'pdf') {
   if (aiProvider() !== 'deepseek') return;
@@ -59,13 +59,13 @@ function aiHttpErr(status, msg, model) {
 function aiHttpErr0(status, msg, model) {
   if (status === 401 || status === 403) return new AiError(tr('API 密钥无效或没有权限，请检查设置。', 'The API key is invalid or lacks permission. Check the settings.'));
   if (status === 402) return new AiError(tr('账户余额不足，请先充值。', 'Out of balance. Top up your account first.'));
-  if (status === 404 || /model.*(not ?exist|not found)/i.test(msg)) return new AiError(tr(`找不到模型「${model}」，请在 AI 设置里换一个。`, `Model "${model}" not found. Pick another in AI settings.`));
-  if (status === 413) return new AiError(tr('内容太大，这次发不过去。', 'Too large to send.'));
+  if (status === 404 || /model.*(not ?exist|not found)/i.test(msg)) return new AiError(tr(`未找到模型「${model}」，请在 AI 设置中更换。`, `Model "${model}" not found. Pick another in AI settings.`));
+  if (status === 413) return new AiError(tr('内容过大，无法发送。', 'Too large to send.'));
   if (status === 429) return new AiError(tr('请求太频繁或额度已用完，请稍后再试。', 'Rate limited or out of credit. Try again later.'));
   if (status >= 500) return new AiError(tr('AI 服务暂时繁忙，请稍后再试。', 'The AI service is busy. Try again later.'));
-  return new AiError(tr(`没成功（${status}）：`, `Failed (${status}): `) + msg);
+  return new AiError(tr(`请求失败（${status}）：`, `Failed (${status}): `) + msg);
 }
-const aiTooLong = () => Object.assign(new AiError(tr('内容太长，AI 没写完。', 'Too long; the AI ran out of space.')), { tooLong: true });
+const aiTooLong = () => Object.assign(new AiError(tr('内容过长，AI 未能完整输出。', 'Too long; the AI ran out of space.')), { tooLong: true });
 const aiBadJson = () => new AiError(tr('AI 返回的结果无法解析，请重试。', "Couldn't parse the AI's answer. Try again."));
 
 /**
@@ -74,7 +74,7 @@ const aiBadJson = () => new AiError(tr('AI 返回的结果无法解析，请重�
  * Claude 被安全策略拒绝时开了服务端的备用模型（fallbacks），仍然被拒就报错。输出被截断时错误带 tooLong，调用方可以拆小再试。
  */
 async function aiJson(system, content, schema, maxTokens = 16000) {
-  if (!aiKey()) throw new AiError(tr('还没有填 API 密钥。', 'No API key set.'));
+  if (!aiKey()) throw new AiError(tr('尚未填写 API 密钥。', 'No API key set.'));
   if (aiProvider() === 'deepseek') return aiDeepseekJson(system, content, schema, maxTokens);
   const model = aiModel('claude'), key = aiKey('claude');
   const body = {
@@ -105,7 +105,7 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
   if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
   if (cut) throw aiNetErr(); // 回答收到一半连接断了
   if (!json) throw aiBadJson();
-  if (json.stop_reason === 'refusal') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
+  if (json.stop_reason === 'refusal') throw new AiError(tr('AI 拒绝处理该内容。', 'The AI declined this content.'));
   if (json.stop_reason === 'max_tokens') throw aiTooLong();
   const text = (json.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
   try { return JSON.parse(text); } catch { throw aiBadJson(); }
@@ -154,7 +154,7 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
   if (cut) throw aiNetErr(); // 回答收到一半连接断了
   const choice = json?.choices?.[0];
   if (choice?.finish_reason === 'length') throw aiTooLong();
-  if (choice?.finish_reason === 'content_filter') throw new AiError(tr('AI 拒绝处理这段内容。', 'The AI declined this content.'));
+  if (choice?.finish_reason === 'content_filter') throw new AiError(tr('AI 拒绝处理该内容。', 'The AI declined this content.'));
   const text = String(choice?.message?.content ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   try { return JSON.parse(text); } catch { throw aiBadJson(); }
 }
@@ -162,13 +162,13 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
 /** 用填的密钥取这家的模型列表：[{ id, name }]。失败抛 AiError（话很短，显示在设置框里）。 */
 async function aiFetchModels(p, key) {
   const fail = (status) => new AiError(status === 401 || status === 403 ? tr('密钥无效', 'Invalid key') : status === 402 ? tr('余额不足', 'Out of balance')
-    : status === 429 ? tr('太频繁，稍后再试', 'Too many requests. Try later') : tr(`没成功（${status}）`, `Failed (${status})`));
+    : status === 429 ? tr('请求过于频繁，请稍后再试', 'Too many requests. Try later') : tr(`请求失败（${status}）`, `Failed (${status})`));
   const get = async (url, headers) => {
     let res;
-    try { res = await fetch(url, { headers }); } catch { throw new AiError(tr(`浏览器连不上 ${AI_PROVIDERS[p].name}`, `Can't reach ${AI_PROVIDERS[p].name}`)); }
+    try { res = await fetch(url, { headers }); } catch { throw new AiError(tr(`浏览器无法连接 ${AI_PROVIDERS[p].name}`, `Can't reach ${AI_PROVIDERS[p].name}`)); }
     if (!res.ok) throw fail(res.status);
     const json = await res.json().catch(() => null);
-    if (!Array.isArray(json?.data)) throw new AiError(tr('返回的列表看不懂', "Couldn't read the list"));
+    if (!Array.isArray(json?.data)) throw new AiError(tr('无法解析返回的列表', "Couldn't read the list"));
     return json;
   };
   const out = [];
@@ -185,7 +185,7 @@ async function aiFetchModels(p, key) {
     const json = await get('https://api.deepseek.com/models', { Authorization: `Bearer ${key}` });
     for (const m of json.data) if (m?.id) out.push({ id: String(m.id), name: '' });
   }
-  if (!out.length) throw new AiError(tr('没有可用的模型', 'No models available'));
+  if (!out.length) throw new AiError(tr('暂无可用模型', 'No models available'));
   return out;
 }
 
@@ -207,13 +207,13 @@ function aiSettingsView() {
   return `<div class="modal" data-act="ai-close"><div class="card grid" role="dialog" aria-label="${tr('AI 设置', 'AI settings')}">
     <b style="font-size:18px">${tr('AI 设置', 'AI settings')}</b>
     <div class="seg">${seg}</div>
-    <label class="f">${tr('API 密钥', 'API key')}<input id="ai-key" type="password" autocomplete="off" value="${h(d.keys[d.p])}" placeholder="${saved ? tr('已保存，留空表示不改', 'Saved; leave blank to keep') : P.ph}"></label>
+    <label class="f">${tr('API 密钥', 'API key')}<input id="ai-key" type="password" autocomplete="off" value="${h(d.keys[d.p])}" placeholder="${saved ? tr('已保存，留空则不修改', 'Saved; leave blank to keep') : P.ph}"></label>
     <div class="f ai-mf"><span>${tr('模型', 'Model')}</span>
       <div class="ai-mrow"><button type="button" class="ai-msel${d.open ? ' open' : ''}" data-act="ai-mopen" aria-haspopup="listbox" aria-expanded="${d.open}">${label(cur)}<i aria-hidden="true">▾</i></button>
         <button type="button" class="btn" data-act="ai-refresh" ${d.busy ? 'disabled' : ''}>${d.busy ? `<span class="ai-spin" role="status" aria-label="${tr('正在刷新', 'Refreshing')}"></span>` : tr('刷新', 'Refresh')}</button></div>
       ${d.open ? `<div class="ai-mlist" role="listbox">${list.map((m) => `<button type="button" role="option" aria-selected="${m.id === chosen}" class="${m.id === chosen ? 'on' : ''}" data-act="ai-mpick" data-v="${h(m.id)}">${label(m)}</button>`).join('')}</div>` : ''}
       ${d.status ? `<div class="err small">${h(d.status)}</div>` : ''}</div>
-    <p class="muted small" style="margin:0">${tr('密钥只保存在这台设备上', 'The key stays on this device')}</p>
+    <p class="muted small" style="margin:0">${tr('密钥仅保存在本设备', 'The key stays on this device')}</p>
     <div class="between"><span>${saved ? `<button class="btn danger" data-act="ai-clear">${tr('清除密钥', 'Remove key')}</button>` : ''}</span><span><button class="btn" data-act="ai-close-btn">${tr('取消', 'Cancel')}</button> <button class="btn primary" data-act="ai-save">${tr('保存', 'Save')}</button></span></div>
   </div></div>`;
 }
@@ -222,13 +222,13 @@ function aiSettingsView() {
 async function aiRefreshModels() {
   const d = aiDraft(), p = d.p, key = d.keys[p].trim() || aiKey(p);
   if (d.busy) return;
-  if (!key) { d.status = tr('先填密钥', 'Enter a key first'); render(); return; }
+  if (!key) { d.status = tr('请先填写密钥', 'Enter a key first'); render(); return; }
   d.busy = true; d.status = ''; render();
   try {
     const list = await aiFetchModels(p, key);
     store.set(AI_PROVIDERS[p].listK, list);
     if (state.aiDraft === d) d.open = true;
-  } catch (e) { d.status = e instanceof AiError ? e.message : tr('没成功', 'Failed'); }
+  } catch (e) { d.status = e instanceof AiError ? e.message : tr('请求失败', 'Failed'); }
   d.busy = false;
   if (state.aiDraft === d && state.aiSettings) render();
 }
@@ -269,7 +269,7 @@ const aiMD = (day) => { const d = dayToDate(day); return `${d.getUTCMonth() + 1}
 function aiPicker(id, label, lead, options, act) {
   const open = state.aiPick === id;
   return `<div class="ai-pk"><button type="button" class="ai-chip${open ? ' open' : ''}" data-act="ai-pick" data-v="${h(id)}" aria-haspopup="listbox" aria-expanded="${open}">${lead}<span>${h(label)}</span><i aria-hidden="true">▾</i></button>
-    ${open ? `<div class="ai-pop" role="listbox">${options.map((o) => `<button type="button" role="option" aria-selected="${!!o.on}" class="${o.on ? 'on' : ''}" data-act="${act}" data-v="${h(o.v)}">${o.lead ?? ''}<span>${h(o.name)}</span></button>`).join('') || `<div class="muted small ai-pop-none">${tr('没有可选的', 'Nothing to choose')}</div>`}</div>` : ''}</div>`;
+    ${open ? `<div class="ai-pop" role="listbox">${options.map((o) => `<button type="button" role="option" aria-selected="${!!o.on}" class="${o.on ? 'on' : ''}" data-act="${act}" data-v="${h(o.v)}">${o.lead ?? ''}<span>${h(o.name)}</span></button>`).join('') || `<div class="muted small ai-pop-none">${tr('暂无可选项', 'Nothing to choose')}</div>`}</div>` : ''}</div>`;
 }
 // 点弹出框外面就收起
 document.addEventListener('click', (ev) => {
@@ -368,10 +368,10 @@ related 给出最相关的账单的行号，最多 8 个，没有就给空数组
 ${data.text}`;
   const r = await aiJson(system, question, ASK_SCHEMA, 4000);
   if (r.intent !== 'record') {
-    return { kind: 'answer', text: String(r.answer ?? '').trim() || tr('没有答案。', 'No answer.'), related: (r.related ?? []).map((n) => data.rows[n - 1]?.id).filter(Boolean).slice(0, 8) };
+    return { kind: 'answer', text: String(r.answer ?? '').trim() || tr('暂无答案。', 'No answer.'), related: (r.related ?? []).map((n) => data.rows[n - 1]?.id).filter(Boolean).slice(0, 8) };
   }
   const cents = Math.round(Math.abs(Number(r.amount)) * 100);
-  if (!cents) throw new AiError(tr('没听出金额，换个说法试试。', "Couldn't find an amount. Try rephrasing."));
+  if (!cents) throw new AiError(tr('未识别到金额，请换个说法重试。', "Couldn't find an amount. Try rephrasing."));
   const account = String(r.account ?? '').trim(), toAccount = String(r.to_account ?? '').trim();
   const transfer = r.type === 'transfer' && !(account && account === toAccount);
   const p = {
@@ -387,7 +387,7 @@ ${data.text}`;
 
 /** 首页那条"说一句话记账"（app.js 的 hmQuick 会把 ✦ 和 › 换成图标，这两个字别改）。 */
 function quickBar() {
-  return `<form class="quick" data-form="ask"><span class="spark">✦</span><input id="quick" placeholder="${tr('说一句话记账，或者问账本', 'Record or ask in one line')}" autocomplete="off" enterkeyhint="send"><button class="send" aria-label="${tr('发送', 'Send')}">›</button></form>`;
+  return `<form class="quick" data-form="ask"><span class="spark">✦</span><input id="quick" placeholder="${tr('说一句话记账，或问账本', 'Record or ask in one line')}" autocomplete="off" enterkeyhint="send"><button class="send" aria-label="${tr('发送', 'Send')}">›</button></form>`;
 }
 
 /** 待确认的一笔账：先给人看一眼，点"记下"才入账；账户没认出来时直接摆出选择，点"修改"可以换账户和分类。记下之后变成一行可以点开的账单。 */
@@ -404,15 +404,15 @@ function aiDraftCard(m, i, L) {
   const sign = p.kind === KIND.EXPENSE ? '-' : p.kind === KIND.INCOME ? '+' : '';
   const cls = p.kind === KIND.EXPENSE ? 'out' : p.kind === KIND.INCOME ? 'in' : '';
   const head = `<div class="ai-dh">${transfer ? accountTile(to) : iconTile(cat?.icon ?? 'tag')}<div class="main"><div class="title">${h(title)}</div><div class="ai-dsub">${h(sub)}</div></div><div class="num ${cls}">${sign}${money(p.cents, p.currency)}</div></div>`;
-  if (p.currency !== HOME) return `<div class="card ai-msg ai-draft">${head}<div class="amber ai-fx">${tr('外币请到记账页记。', 'Record foreign currency on the entry page.')}</div></div>`;
+  if (p.currency !== HOME) return `<div class="card ai-msg ai-draft">${head}<div class="amber ai-fx">${tr('外币请至记账页记录。', 'Record foreign currency on the entry page.')}</div></div>`;
   const need = !account || (transfer && (!to || to.id === account.id));
   let picks = '';
   if (m.editing || need) {
     const list = aiAccounts().filter((a) => !a.archived || a.id === m.accountId || a.id === m.toAccountId);
     const opt = (a, on) => ({ v: `${i}:${a.id}`, name: a.name, lead: accountTile(a), on });
-    picks = `<div class="ai-picks">${aiPicker(`ask-a${i}`, account?.name ?? tr('选账户', 'Account'), account ? accountTile(account) : aiIcon('wallet'), list.map((a) => opt(a, a.id === m.accountId)), 'ask-acc')}
+    picks = `<div class="ai-picks">${aiPicker(`ask-a${i}`, account?.name ?? tr('选择账户', 'Account'), account ? accountTile(account) : aiIcon('wallet'), list.map((a) => opt(a, a.id === m.accountId)), 'ask-acc')}
       ${transfer ? aiPicker(`ask-t${i}`, to?.name ?? tr('转入账户', 'To'), to ? accountTile(to) : aiIcon('wallet'), list.filter((a) => a.id !== account?.id).map((a) => opt(a, a.id === m.toAccountId)), 'ask-to') : ''}</div>
-      ${!transfer && m.editing ? `<div class="ai-picks">${aiPicker(`ask-c${i}`, top ? aiCat(top) : tr('选分类', 'Category'), top ? iconTile(top.icon ?? 'tag') : aiIcon('tag'),
+      ${!transfer && m.editing ? `<div class="ai-picks">${aiPicker(`ask-c${i}`, top ? aiCat(top) : tr('选择分类', 'Category'), top ? iconTile(top.icon ?? 'tag') : aiIcon('tag'),
         aiTops(p.kind === KIND.INCOME).map((c) => ({ v: `${i}:${c.id}`, name: aiCat(c), lead: iconTile(c.icon ?? 'tag'), on: c.id === top?.id })), 'ask-cat')}</div>` : ''}`;
   }
   const ok = !!aiDraftTx(m);
@@ -422,7 +422,7 @@ function aiDraftCard(m, i, L) {
 
 function askView() {
   if (!aiKey()) {
-    return `<div class="ai-ask"><div class="card ai-nokey"><b>${tr('需要 API 密钥。', 'This needs an API key.')}</b><div class="muted small">${tr('在「我的 → 设置」里填。', 'Set it under Me → Settings.')}</div>
+    return `<div class="ai-ask"><div class="card ai-nokey"><b>${tr('需要 API 密钥。', 'This needs an API key.')}</b><div class="muted small">${tr('请在「我的 → 设置」中填写。', 'Set it under Me → Settings.')}</div>
       <button class="btn primary" data-act="ai-settings">${tr('AI 设置', 'AI settings')}</button></div></div>`;
   }
   const L = computeLookup(), busy = state.asking;
@@ -440,7 +440,7 @@ function askView() {
   }).join('');
   const start = `<div class="ai-hints"><div class="muted ai-hl">${tr('说一句话，记账或提问', 'Say it: record or ask')}</div>${hints.map((x) => `<button class="card ai-hint" data-act="ask-hint" data-v="${h(x)}">${h(x)}</button>`).join('')}</div>`;
   return `<div class="ai-ask">
-    <div class="ai-msgs">${state.chat.length ? msgs : start}${busy ? `<div class="muted ai-think">${typeof plSpinner === 'function' ? plSpinner(22) : ''}${tr('正在想', 'Thinking')}<i></i><i></i><i></i></div>` : ''}</div>
+    <div class="ai-msgs">${state.chat.length ? msgs : start}${busy ? `<div class="muted ai-think">${typeof plSpinner === 'function' ? plSpinner(22) : ''}${tr('思考中', 'Thinking')}<i></i><i></i><i></i></div>` : ''}</div>
     <form class="quick ai-in" data-form="ask"><span class="spark">${hmSvg(ICONS.sparkle.d)}</span><input id="quick" placeholder="${tr('记一笔，或者问一句', 'Record or ask')}" autocomplete="off" enterkeyhint="send" aria-label="${tr('记一笔，或者问一句', 'Record or ask')}"><button class="send" aria-label="${tr('发送', 'Send')}" disabled>${hmSvg(ICONS.forward.d)}</button></form>
     <i class="ai-end" aria-hidden="true"></i></div>`;
 }
@@ -462,7 +462,7 @@ async function sendAsk(text) {
   state.tab = 'ask'; state.q = ''; state.searching = false; state.aiPick = null;
   state.chat.push({ kind: 'q', text: q }); state.asking = true; render(); aiScrollEnd();
   let msg;
-  try { msg = await askLedger(q); } catch (e) { msg = { kind: 'error', text: e instanceof AiError ? e.message : tr('出错了：', 'Something went wrong: ') + (e?.message ?? ''), question: q }; }
+  try { msg = await askLedger(q); } catch (e) { msg = { kind: 'error', text: e instanceof AiError ? e.message : tr('出现错误：', 'Something went wrong: ') + (e?.message ?? ''), question: q }; }
   state.chat.push(msg); state.asking = false; render(); aiScrollEnd();
   // 电脑上把光标放回输入框；手机上不放，免得键盘弹出来挡住回答
   if (state.tab === 'ask' && matchMedia('(hover: hover)').matches) document.getElementById('quick')?.focus();
@@ -509,7 +509,7 @@ function netWorthCard() {
   const head = `<div class="ai-nw-h"><div class="ai-nw-t"><div class="muted ai-nw-l" data-nw="label">${tr('净资产', 'Net worth')}</div><div class="num ai-nw-v" data-nw="value">${money(current)}</div></div>
       <div class="ai-nw-seg">${seg('worth', [[0, tr('12 个月', '12 mo')], [1, tr('全部', 'All')]], state.worthAll ? 1 : 0)}</div></div>
     <div class="ai-nw-d ${change == null ? '' : change >= 0 ? 'in' : 'out'}" data-nw="delta">${delta}</div>`;
-  if (shown.length < 2) return `<div class="card ai-nw">${head}<div class="muted ai-nw-few">${tr('记满两个月就有曲线了', 'The curve appears after two months')}</div></div>`;
+  if (shown.length < 2) return `<div class="card ai-nw">${head}<div class="muted ai-nw-few">${tr('记满两个月后显示曲线', 'The curve appears after two months')}</div></div>`;
   // 画在 100 × 120 的格子里，横向拉伸；圆点和竖线用 HTML 叠在上面，不会被拉扁
   const H = 120, pad = 6, span = Math.max(1, high - low), n = shown.length;
   const X = (i) => +(i * 100 / (n - 1)).toFixed(3), Y = (c) => +(pad + (H - 2 * pad) * (1 - (c - low) / span)).toFixed(3);
@@ -520,7 +520,7 @@ function netWorthCard() {
   const data = h(JSON.stringify({ p: shown.map((s) => [s.label, s.cents]), cur: current, chg: change, H }));
   const [lx, ly] = pts[n - 1];
   return `<div class="card ai-nw">${head}
-    <div class="ai-nw-plot" data-nw-data="${data}" role="img" aria-label="${tr('净资产曲线，按住左右拖看每个月', 'Net worth chart; press and drag to see each month')}">
+    <div class="ai-nw-plot" data-nw-data="${data}" role="img" aria-label="${tr('净资产曲线，按住左右拖动以查看各月', 'Net worth chart; press and drag to see each month')}">
       <svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="ai-nw-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".28"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>
         <path d="${d} L${lx},${H} L0,${H} Z" fill="url(#ai-nw-fill)"/>${zero}<path d="${d}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>
       <i class="ai-nw-guide" hidden></i><i class="ai-nw-dot" style="left:${lx}%;top:${(ly * 100 / H).toFixed(3)}%"></i></div>
@@ -591,7 +591,7 @@ function fixBalance(accountId) {
     box.className = 'modal ai-fix';
     box.innerHTML = `<div class="card grid" role="dialog" aria-modal="true" aria-labelledby="ai-fix-t">
       <b id="ai-fix-t" class="ai-dt">${tr('修正当前余额', 'Correct balance')}</b>
-      <label class="f">${tr(`现在实际有多少（${cur}）`, `Actual balance now (${cur})`)}<input id="ai-fix-in" inputmode="decimal" autocomplete="off" placeholder="${(balance / 100).toFixed(2)}"></label>
+      <label class="f">${tr(`当前实际余额（${cur}）`, `Actual balance now (${cur})`)}<input id="ai-fix-in" inputmode="decimal" autocomplete="off" placeholder="${(balance / 100).toFixed(2)}"></label>
       <div class="seg" role="group"><button type="button" class="on" data-m="0">${tr('改初始余额', 'Adjust opening')}</button><button type="button" data-m="1">${tr('记差额账单', 'Add an entry')}</button></div>
       <div class="muted small ai-fix-note" aria-live="polite"></div>
       <div class="between"><button type="button" class="btn" data-v="0">${tr('取消', 'Cancel')}</button><button type="button" class="btn primary" data-v="1"></button></div></div>`;
@@ -679,10 +679,10 @@ function aiFacts(y, m, r, L) {
   if (r.rise) lines.push(tr(`涨得最多：${aiCatNameOf(r.rise[0])} ${aiSigned(r.rise[1])}`, `Biggest rise: ${aiCatNameOf(r.rise[0])} ${aiSigned(r.rise[1])}`));
   if (r.fall) lines.push(tr(`降得最多：${aiCatNameOf(r.fall[0])} ${aiSigned(r.fall[1])}`, `Biggest drop: ${aiCatNameOf(r.fall[0])} ${aiSigned(r.fall[1])}`));
   if (r.biggest.length) lines.push(tr('最大的几笔支出：', 'Largest expenses:') + r.biggest.map((t) => `${aiCatNameOf(L.top(t.categoryId)?.id ?? 0)} ${money(L.net(t))}`).join('; '));
-  if (r.days > 0) lines.push(tr(`日均支出 ${money(avg)}，没花钱的天数 ${r.quiet}。`, `Average per day ${money(avg)}, days without spending ${r.quiet}.`));
+  if (r.days > 0) lines.push(tr(`日均支出 ${money(avg)}，无支出天数 ${r.quiet}。`, `Average per day ${money(avg)}, days without spending ${r.quiet}.`));
   if (r.busiest) lines.push(tr(`花钱最多的一天花了 ${money(r.busiest[1])}。`, `The busiest day cost ${money(r.busiest[1])}.`));
   if (r.pending > 0 || now.reimbursed > 0) lines.push(tr(`新增待报销 ${money(r.pending)}，报回 ${money(now.reimbursed)}。`, `New claims ${money(r.pending)}, reimbursed ${money(now.reimbursed)}.`));
-  if (r.missing.length) lines.push(tr('本月还没出现的周期性项目：', 'Recurring items not seen yet this month: ') + r.missing.map((x) => x.name).join(', '));
+  if (r.missing.length) lines.push(tr('本月尚未出现的周期性项目：', 'Recurring items not seen yet this month: ') + r.missing.map((x) => x.name).join(', '));
   return lines.join('\n');
 }
 
@@ -693,7 +693,7 @@ function aiStories(y, m, r, L) {
   const line1 = [prev.expense > 0 ? (dlt >= 0 ? tr(`比上月多 ${money(dlt)}`, `${money(dlt)} more than last month`) : tr(`比上月少 ${money(-dlt)}`, `${money(-dlt)} less than last month`)) : '',
     r.days > 0 ? tr(`平均每天 ${money(avg)}`, `${money(avg)} a day`) : ''].filter(Boolean).join(tr('，', ', '));
   // 第一张（封面）：这个月的主题行星 + "土星月"
-  out.push({ c: ['#7B6CF6', '#4E8DF5'], icon: 'receipt', planet: typeof plOfMonth === 'function' ? plOfMonth(y, m) : null, kicker: tr(`${label}，你一共花了`, `In ${label} you spent`), big: money(now.expense), line: line1 });
+  out.push({ c: ['#7B6CF6', '#4E8DF5'], icon: 'receipt', planet: typeof plOfMonth === 'function' ? plOfMonth(y, m) : null, kicker: tr(`${label}，您一共花了`, `In ${label} you spent`), big: money(now.expense), line: line1 });
   if (r.top5.length) {
     const [id, c] = r.top5[0], pct = Math.round(c * 100 / Math.max(1, now.expense));
     out.push({ c: ['#FF8A5B', '#F2557A'], icon: state.data.category.get(id)?.icon ?? 'tag', kicker: tr('钱主要花在了', 'Most of it went to'), big: aiCatNameOf(id), line: tr(`${money(c)}，占 ${pct}%`, `${money(c)}, ${pct}% of spending`) });
@@ -705,11 +705,11 @@ function aiStories(y, m, r, L) {
   }
   if (r.busiest) {
     const [day, c] = r.busiest;
-    out.push({ c: ['#F5A623', '#E5674D'], icon: 'calendar', kicker: tr('花钱最多的一天', 'Your biggest day'), big: money(c), line: aiMD(day) + (r.quiet > 0 ? tr(`，这个月还有 ${r.quiet} 天一分没花`, ` · ${r.quiet} no-spend days`) : '') });
+    out.push({ c: ['#F5A623', '#E5674D'], icon: 'calendar', kicker: tr('花钱最多的一天', 'Your biggest day'), big: money(c), line: aiMD(day) + (r.quiet > 0 ? tr(`，本月有 ${r.quiet} 天零支出`, ` · ${r.quiet} no-spend days`) : '') });
   }
   const net = now.income - now.expense;
-  out.push(net >= 0 ? { c: ['#34C77B', '#15A0A0'], icon: 'star', kicker: tr('这个月存下了', 'You saved'), big: money(net), line: tr(`收入 ${money(now.income)}`, `Income ${money(now.income)}`) }
-    : { c: ['#E5484D', '#9B3FD1'], icon: 'chart', kicker: tr('这个月多花了', 'You overspent by'), big: money(-net), line: tr(`收入 ${money(now.income)}`, `Income ${money(now.income)}`) });
+  out.push(net >= 0 ? { c: ['#34C77B', '#15A0A0'], icon: 'star', kicker: tr('本月存下了', 'You saved'), big: money(net), line: tr(`收入 ${money(now.income)}`, `Income ${money(now.income)}`) }
+    : { c: ['#E5484D', '#9B3FD1'], icon: 'chart', kicker: tr('本月多花了', 'You overspent by'), big: money(-net), line: tr(`收入 ${money(now.income)}`, `Income ${money(now.income)}`) });
   return out;
 }
 
@@ -728,7 +728,7 @@ function reviewView({ switcher = true } = {}) {
   };
   const parts = [];
   if (switcher) parts.push(`<div class="ai-rv-month">${monthBar()}</div>`);
-  if (!r.list.length) parts.push(aiEmpty('review', tr('这个月还没有账单', 'Nothing this month yet')));
+  if (!r.list.length) parts.push(aiEmpty('review', tr('本月暂无账单', 'Nothing this month yet')));
   if (r.spends.length) {
     const stories = aiStories(y, m, r, L);
     parts.push(`<div class="ai-stories"><div class="ai-pager" data-n="${stories.length}">${stories.map((s, i) => `<section class="ai-story" style="--c1:${s.c[0]};--c2:${s.c[1]};--d:${-(i * 3.7).toFixed(1)}s" aria-roledescription="${tr('卡片', 'card')}" aria-label="${i + 1} / ${stories.length}">
@@ -741,16 +741,16 @@ function reviewView({ switcher = true } = {}) {
     if (page) requestAnimationFrame(() => { const p = document.querySelector('.ai-pager'); if (p) p.scrollLeft = page * (p.clientWidth + 12); });
   }
   parts.push(`<div class="card ai-figs"><div class="ai-three">${fig(tr('支出', 'Expense'), now.expense, prev.expense, 'out', false)}${fig(tr('收入', 'Income'), now.income, prev.income, 'in', true)}${fig(tr('结余', 'Net'), now.income - now.expense, prev.income - prev.expense, '', true)}</div>
-    <div class="muted ai-fnote">${tr('小字是和上月比', 'Small print: vs last month')}</div></div>`);
+    <div class="muted ai-fnote">${tr('小字为与上月对比', 'Small print: vs last month')}</div></div>`);
   const busy = state.reviewBusy === key, text = state.reviewText?.[key] ?? '', fail = state.reviewFail?.[key] ?? '';
   parts.push(`<div class="card ai-sum"><div class="ai-sum-h">${iconTile('sparkle', 'ai-t32')}<b>${tr('AI 总结', 'AI summary')}</b>
-      ${busy ? `<span class="ai-spin" role="status" aria-label="${tr('正在写', 'Writing')}"></span>` : `<button class="btn link" data-act="review-ai" ${aiKey() && r.list.length && !state.reviewBusy ? '' : 'disabled'}>${text ? tr('重写', 'Rewrite') : tr('写一段', 'Write')}</button>`}</div>
-    ${aiKey() ? '' : `<div class="muted small">${tr('要先在设置里填 API 密钥', 'Set an API key in Settings first')}</div>`}
+      ${busy ? `<span class="ai-spin" role="status" aria-label="${tr('正在生成', 'Writing')}"></span>` : `<button class="btn link" data-act="review-ai" ${aiKey() && r.list.length && !state.reviewBusy ? '' : 'disabled'}>${text ? tr('重写', 'Rewrite') : tr('写一段', 'Write')}</button>`}</div>
+    ${aiKey() ? '' : `<div class="muted small">${tr('请先在设置中填写 API 密钥', 'Set an API key in Settings first')}</div>`}
     ${text ? `<div class="ai-sum-t">${h(text)}</div>` : ''}${fail ? `<div class="err ai-sum-e">${h(fail)}</div>` : ''}</div>`);
   if (r.top5.length) {
     parts.push(`<div class="card ai-where"><div class="muted ai-ch">${tr('钱花在哪了', 'Where it went')}</div>${r.top5.map(([id, cents]) => {
       const d = cents - (r.catPrev.get(id) ?? 0);
-      const dt = d === 0 ? tr('和上月一样', 'Same as last month') : d > 0 ? tr(`比上月多 ${money(d)}`, `${money(d)} more than last month`) : tr(`比上月少 ${money(-d)}`, `${money(-d)} less than last month`);
+      const dt = d === 0 ? tr('与上月持平', 'Same as last month') : d > 0 ? tr(`比上月多 ${money(d)}`, `${money(d)} more than last month`) : tr(`比上月少 ${money(-d)}`, `${money(-d)} less than last month`);
       return `<div class="ai-wr">${iconTile(state.data.category.get(id)?.icon ?? 'tag')}<div class="main"><div class="title">${h(aiCatNameOf(id))}</div><div class="ai-wd ${d > 0 ? 'out' : d < 0 ? 'in' : 'muted'}">${dt}</div></div><div class="num">${money(cents)}</div></div>`;
     }).join('')}
       ${r.rise || r.fall ? `<div class="ai-rf">${r.rise ? `<div class="out">${tr(`涨得最多：${aiCatNameOf(r.rise[0])} ${aiSigned(r.rise[1])}`, `Biggest rise: ${aiCatNameOf(r.rise[0])} ${aiSigned(r.rise[1])}`)}</div>` : ''}${r.fall ? `<div class="in">${tr(`降得最多：${aiCatNameOf(r.fall[0])} ${aiSigned(r.fall[1])}`, `Biggest drop: ${aiCatNameOf(r.fall[0])} ${aiSigned(r.fall[1])}`)}</div>` : ''}</div>` : ''}</div>`);
@@ -760,10 +760,10 @@ function reviewView({ switcher = true } = {}) {
     const bd = r.busiest ? dayToDate(r.busiest[0]) : null;
     parts.push(`<div class="card ai-rhythm"><div class="ai-three"><div><div class="muted ai-fl">${tr('日均支出', 'Per day')}</div><div class="num ai-rv">${money(Math.trunc(now.expense / r.days))}</div></div>
       <div><div class="muted ai-fl">${tr('花得最多的一天', 'Busiest day')}</div><div class="num ai-rv">${r.busiest ? money(r.busiest[1]) : '—'}</div>${bd ? `<div class="muted ai-fd">${tr(`${bd.getUTCMonth() + 1}月${bd.getUTCDate()}日`, dayISO(r.busiest[0]))}</div>` : ''}</div>
-      <div class="right"><div class="muted ai-fl">${tr('没花钱', 'No-spend days')}</div><div class="num ai-rv">${tr(`${r.quiet} 天`, String(r.quiet))}</div></div></div></div>`);
+      <div class="right"><div class="muted ai-fl">${tr('零支出', 'No-spend days')}</div><div class="num ai-rv">${tr(`${r.quiet} 天`, String(r.quiet))}</div></div></div></div>`);
   }
   if (r.pending > 0 || now.reimbursed > 0) parts.push(`<div class="card ai-claim"><div class="muted ai-ch">${tr('报销', 'Claims')}</div><div class="between"><span class="amber">${tr(`新增待报销 ${money(r.pending)}`, `New to claim ${money(r.pending)}`)}</span><span class="in">${tr(`报回 ${money(now.reimbursed)}`, `Reimbursed ${money(now.reimbursed)}`)}</span></div></div>`);
-  if (r.missing.length) parts.push(`<div class="card ai-miss"><div class="muted ai-ch">${tr('这个月还没出现', 'Not seen yet this month')}</div><div class="amber ai-mt">${h(r.missing.map((x) => x.name).join('、'))}</div></div>`);
+  if (r.missing.length) parts.push(`<div class="card ai-miss"><div class="muted ai-ch">${tr('本月尚未出现', 'Not seen yet this month')}</div><div class="amber ai-mt">${h(r.missing.map((x) => x.name).join('、'))}</div></div>`);
   return `<div class="ai-review grid">${parts.join('')}</div>`;
 }
 // 故事卡片翻页时，下面的小圆点跟着走
@@ -829,7 +829,7 @@ function aiRecSystem(target) {
 async function aiImageBlocks(file) {
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new AiError(tr(`读不了图片「${file.name}」。`, `Couldn't read the image "${file.name}".`))); i.src = url; });
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new AiError(tr(`无法读取图片「${file.name}」。`, `Couldn't read the image "${file.name}".`))); i.src = url; });
     const scale = Math.min(1, 1200 / img.naturalWidth), w = Math.round(img.naturalWidth * scale), hh = Math.round(img.naturalHeight * scale);
     const seg = Math.round(w * 1.6), overlap = Math.round(w * 0.12), blocks = [];
     for (let top = 0; top < hh; top += seg - overlap) {
@@ -868,7 +868,7 @@ async function aiReadStatements(files, target, onProgress) {
     const name = f.name || 'file', type = f.type || '';
     if (/\.pdf$/i.test(name) || type === 'application/pdf') {
       aiCheckFiles();
-      if (f.size > 30 * 1024 * 1024) throw new AiError(tr(`「${name}」超过 30 MB，请拆开再试。`, `"${name}" is over 30 MB. Split it and retry.`));
+      if (f.size > 30 * 1024 * 1024) throw new AiError(tr(`「${name}」超过 30 MB，请拆分后重试。`, `"${name}" is over 30 MB. Split it and retry.`));
       jobs.push({ name, content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await aiBase64(f) } }, { type: 'text', text: '读出这份账单里的全部交易。' }] });
     } else if (type.startsWith('image/') || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(name)) {
       aiCheckFiles('image');
@@ -880,7 +880,7 @@ async function aiReadStatements(files, target, onProgress) {
       for (let i = 1; i < lines.length; i += 20) jobs.push(aiTextJob(name, lines[0], lines.slice(i, i + 20)));
     }
   }
-  if (!jobs.length) throw new AiError(tr('文件里没有内容。', 'The files are empty.'));
+  if (!jobs.length) throw new AiError(tr('文件内容为空。', 'The files are empty.'));
   const system = aiRecSystem(target), order = jobs.slice(), queue = jobs.slice();
   let done = 0, total = jobs.length, found = 0;
   onProgress(0, total, 0);
@@ -1048,8 +1048,8 @@ function reconcileView() {
         <div class="muted ai-ch">${tr('银行账单', 'Statement')}</div>
         <div><label class="btn ai-file">${files.length ? tr(`已选 ${files.length} 个文件`, `${files.length} selected`) : tr('选择文件', 'Choose files')}<input type="file" id="rec-file" multiple hidden></label></div>
         ${files.length ? `<div class="muted small ai-fnames">${files.map((f) => h(f.name)).join('<br>')}</div>` : ''}
-        <label class="f">${tr('银行余额（可不填）', 'Bank balance (optional)')}<input id="rec-bal" inputmode="decimal" autocomplete="off" value="${h(rec.balanceText)}"></label></div>
-      ${rec.error ? `<div class="err">${h(rec.error)}</div>` : ''}${aiKey() ? '' : `<div class="err">${tr('需要先填 API 密钥。', 'Set an API key first.')}</div>`}
+        <label class="f">${tr('银行余额（选填）', 'Bank balance (optional)')}<input id="rec-bal" inputmode="decimal" autocomplete="off" value="${h(rec.balanceText)}"></label></div>
+      ${rec.error ? `<div class="err">${h(rec.error)}</div>` : ''}${aiKey() ? '' : `<div class="err">${tr('请先设置 API 密钥。', 'Set an API key first.')}</div>`}
       <button class="btn primary ai-go" data-act="rec-start" ${target && files.length ? '' : 'disabled'}>${tr('开始对账', 'Start')}</button></div>`;
   }
   const bank = rec.parsed.map((p, i) => ({ date: p.date, cents: aiRecSigned(p, target), text: aiRecDescribe(p), key: i }));
@@ -1060,26 +1060,26 @@ function reconcileView() {
   const line = (row, action = '') => `<div class="ai-bl"><div class="main"><div class="muted ai-bd">${dayISO(row.date)}</div><div class="ai-bt">${h(row.text)}</div></div>
     <div class="num ${row.cents > 0 ? 'in' : 'out'}">${row.cents > 0 ? '+' : '-'}${money(Math.abs(row.cents), cur)}</div>${action}</div>`;
   const stat = (label, cents, cls = '') => `<div><div class="muted ai-fl">${label}</div><div class="num ai-rv ${cls}">${money(cents, cur)}</div></div>`;
-  const parts = [`<div class="card ai-rh"><div class="ai-rh1">${accountTile(target)}<b>${h(target.name)}</b><span class="muted small">${tr(`对上 ${res.matched} 笔`, `${res.matched} matched`)}</span></div>
+  const parts = [`<div class="card ai-rh"><div class="ai-rh1">${accountTile(target)}<b>${h(target.name)}</b><span class="muted small">${tr(`已匹配 ${res.matched} 笔`, `${res.matched} matched`)}</span></div>
     <div class="ai-three">${stat(tr('账本余额', 'Ledger'), ledgerBalance)}${bankBalance != null ? stat(tr('银行余额', 'Bank'), bankBalance) : ''}<div class="right"><div class="muted ai-fl">${tr('差额', 'Difference')}</div><div class="num ai-rv ${gap === 0 ? 'in' : 'amber'}">${money(gap, cur)}</div></div></div>
-    <div class="muted small ai-rh2">${res.open === 0 ? tr('流水范围内都对上了', 'Everything in the statement matches')
-      : tr(`处理完下面 ${res.open} 条，余额将是 ${money(ledgerBalance + res.diff, cur)}`, `After the ${res.open} items below: ${money(ledgerBalance + res.diff, cur)}`)}</div>
-    <div class="ai-rh3"><button class="btn link" data-act="rec-reset">${tr('换文件', 'Other files')}</button></div></div>`];
+    <div class="muted small ai-rh2">${res.open === 0 ? tr('流水范围内全部匹配', 'Everything in the statement matches')
+      : tr(`处理完以下 ${res.open} 条后，余额将为 ${money(ledgerBalance + res.diff, cur)}`, `After the ${res.open} items below: ${money(ledgerBalance + res.diff, cur)}`)}</div>
+    <div class="ai-rh3"><button class="btn link" data-act="rec-reset">${tr('更换文件', 'Other files')}</button></div></div>`];
   if (res.misplaced.length) {
-    parts.push(`<div class="card ai-rc"><b>${tr(`记错账户 ${res.misplaced.length}`, `Wrong account ${res.misplaced.length}`)}</b>${res.misplaced.map((m) => `${txRow(m.tx, L, true)}<div class="ai-ra"><button class="btn link" data-act="rec-move" data-v="${m.tx.id}">${tr(`改到 ${h(target.name)}`, `Move to ${h(target.name)}`)}</button></div>`).join('')}
-      ${res.misplaced.length > 1 ? `<div class="ai-ra"><button class="btn" data-act="rec-move-all">${tr(`全部改到 ${h(target.name)}`, `Move all to ${h(target.name)}`)}</button></div>` : ''}</div>`);
+    parts.push(`<div class="card ai-rc"><b>${tr(`记错账户 ${res.misplaced.length}`, `Wrong account ${res.misplaced.length}`)}</b>${res.misplaced.map((m) => `${txRow(m.tx, L, true)}<div class="ai-ra"><button class="btn link" data-act="rec-move" data-v="${m.tx.id}">${tr(`移至 ${h(target.name)}`, `Move to ${h(target.name)}`)}</button></div>`).join('')}
+      ${res.misplaced.length > 1 ? `<div class="ai-ra"><button class="btn" data-act="rec-move-all">${tr(`全部移至 ${h(target.name)}`, `Move all to ${h(target.name)}`)}</button></div>` : ''}</div>`);
   }
   const bankOpen = res.bankOnly.filter((x) => !x.same);
   if (bankOpen.length) {
-    parts.push(`<div class="card ai-rc"><b>${tr(`银行有，账本没有 ${bankOpen.length}`, `In the bank, not in the ledger ${bankOpen.length}`)}</b>${bankOpen.map((x) => line(x.row, aiRecDraft(rec.parsed[x.row.key], target)
+    parts.push(`<div class="card ai-rc"><b>${tr(`银行有、账本无 ${bankOpen.length}`, `In the bank, not in the ledger ${bankOpen.length}`)}</b>${bankOpen.map((x) => line(x.row, aiRecDraft(rec.parsed[x.row.key], target)
       ? `<button class="btn link ai-add" data-act="rec-add" data-v="${x.row.key}">${tr('补记', 'Add')}</button>` : `<span class="muted ai-fx2">${tr('外币', 'Foreign')}</span>`)).join('')}</div>`);
   }
   const ledgerOpen = res.ledgerOnly.filter((x) => !x.same);
   if (ledgerOpen.length) {
-    parts.push(`<div class="card ai-rc"><b>${tr(`账本有，银行没有 ${ledgerOpen.length}`, `In the ledger, not in the bank ${ledgerOpen.length}`)}</b>${ledgerOpen.map((x) => `${txRow(x.tx, L, true)}<div class="ai-ra"><button class="btn link danger" data-act="rec-del" data-v="${x.tx.id}">${tr('删除', 'Delete')}</button></div>`).join('')}</div>`);
+    parts.push(`<div class="card ai-rc"><b>${tr(`账本有、银行无 ${ledgerOpen.length}`, `In the ledger, not in the bank ${ledgerOpen.length}`)}</b>${ledgerOpen.map((x) => `${txRow(x.tx, L, true)}<div class="ai-ra"><button class="btn link danger" data-act="rec-del" data-v="${x.tx.id}">${tr('删除', 'Delete')}</button></div>`).join('')}</div>`);
   }
   if (sameCount) {
-    parts.push(`<div class="card ai-rc"><button class="ai-same muted" data-act="rec-same" aria-expanded="${!!rec.showSame}">${tr(`只是记法不同 ${sameCount}`, `Same money, recorded differently ${sameCount}`)}  ${rec.showSame ? '▴' : '▾'}</button>
+    parts.push(`<div class="card ai-rc"><button class="ai-same muted" data-act="rec-same" aria-expanded="${!!rec.showSame}">${tr(`仅记法不同 ${sameCount}`, `Same money, recorded differently ${sameCount}`)}  ${rec.showSame ? '▴' : '▾'}</button>
       ${rec.showSame ? res.bankOnly.filter((x) => x.same).map((x) => line(x.row)).join('') + rowsOf(res.ledgerOnly.filter((x) => x.same).map((x) => x.tx), L) : ''}</div>`);
   }
   return `<div class="ai-rec grid">${parts.join('')}</div>`;
@@ -1092,7 +1092,7 @@ async function aiRecStart() {
   render();
   try {
     const rows = await aiReadStatements(rec.files, target, (done, total, found) => { Object.assign(rec, { done, total, found }); if (state.tab === 'accounts') render(); });
-    if (!rows.length) rec.error = tr('没有识别到交易。', 'No transactions found.');
+    if (!rows.length) rec.error = tr('未识别到交易。', 'No transactions found.');
     else { rec.parsed = rows; rec.showSame = false; }
   } catch (e) { rec.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message ?? ''); }
   rec.busy = false;
@@ -1157,7 +1157,7 @@ async function aiAction(act, v) {
       const { y, m } = state.month, key = aiMonthKey();
       if (state.reviewBusy) return true;
       state.reviewBusy = key; state.reviewFail = { ...(state.reviewFail ?? {}), [key]: '' }; render();
-      try { state.reviewText[key] = await writeReview(y, m); } catch (e) { state.reviewFail[key] = e instanceof AiError ? e.message : tr('没写出来：', 'Failed: ') + (e?.message ?? ''); }
+      try { state.reviewText[key] = await writeReview(y, m); } catch (e) { state.reviewFail[key] = e instanceof AiError ? e.message : tr('生成失败：', 'Failed: ') + (e?.message ?? ''); }
       state.reviewBusy = false; break;
     }
     // 对账
@@ -1177,7 +1177,7 @@ async function aiAction(act, v) {
     case 'rec-del': {
       const t = state.data.tx.get(Number(v));
       if (!t) return true;
-      if (!await uiConfirm(tr('删除这笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true, detail: h(`${dayISO(t.date)}  ${money(t.amountCents)}`) })) return true;
+      if (!await uiConfirm(tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true, detail: h(`${dayISO(t.date)}  ${money(t.amountCents)}`) })) return true;
       try { await deleteRecord('tx', t.id); } catch (e) { state.error = e.message; }
       break;
     }

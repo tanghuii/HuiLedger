@@ -93,7 +93,7 @@ async function mbDraw(n) {
   // 支出构成
   rr(cx, boxY, cw, boxH, 22); g.fillStyle = 'rgba(255,255,255,.08)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.stroke();
   font(14, 600); text(tr('支出构成', 'Where it went'), cx + 16, boxY + 16 + 14, '#fff');
-  if (!rows.length) { font(13); text(tr('这个月没有支出', 'No spending this month'), cx + 16, boxY + 16 + 18 + 12 + 14, soft); }
+  if (!rows.length) { font(13); text(tr('本月暂无支出', 'No spending this month'), cx + 16, boxY + 16 + 18 + 12 + 14, soft); }
   const mix = (hex, t) => { const v = parseInt(hex.slice(1), 16), ch = [v >> 16, (v >> 8) & 255, v & 255].map((q) => Math.round(q + (255 - q) * t)); return `rgb(${ch.join(',')})`; };
   rows.forEach((r, i) => {
     const ry = boxY + 16 + 18 + 12 + i * 42, ix = cx + 16, color = ICONS[r.icon]?.c ?? '#8793A6';

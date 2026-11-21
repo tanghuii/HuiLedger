@@ -152,16 +152,16 @@ async function api(method, path, body, { auth = true, prefer } = {}) {
   let res;
   try {
     res = await cloudFetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  } catch { throw Object.assign(new Error(tr('连不上云端，请检查网络。', 'Can\'t reach the cloud. Check your connection.')), { offline: true }); }
+  } catch { throw Object.assign(new Error(tr('无法连接云端，请检查网络。', 'Can\'t reach the cloud. Check your connection.')), { offline: true }); }
   const text = await res.text();
   const json = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
   if (!res.ok) {
     const msg = json?.msg || json?.error_description || json?.message || text.slice(0, 200);
-    if (/invalid login/i.test(msg)) throw new Error(tr('邮箱或密码不对。', 'Wrong email or password.'));
-    if (/not confirmed/i.test(msg)) throw Object.assign(new Error(tr('邮箱还没验证，请点邮件里的确认链接。', 'Email not confirmed yet. Click the link in the email.')), { unconfirmed: true });
-    if (/rate limit|too many|security purposes/i.test(msg)) throw new Error(tr('操作太频繁，请过几分钟再试。', 'Too many attempts. Try again in a few minutes.'));
-    if (/already registered|already exists/i.test(msg)) throw new Error(tr('这个邮箱已经注册过，直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'));
-    if (/weak|at least/i.test(msg) && /password/i.test(msg)) throw new Error(tr('密码太简单，换一个长一点的。', 'Password too weak. Try a longer one.'));
+    if (/invalid login/i.test(msg)) throw new Error(tr('邮箱或密码不正确。', 'Wrong email or password.'));
+    if (/not confirmed/i.test(msg)) throw Object.assign(new Error(tr('邮箱尚未验证，请点击邮件中的确认链接。', 'Email not confirmed yet. Click the link in the email.')), { unconfirmed: true });
+    if (/rate limit|too many|security purposes/i.test(msg)) throw new Error(tr('操作过于频繁，请几分钟后再试。', 'Too many attempts. Try again in a few minutes.'));
+    if (/already registered|already exists/i.test(msg)) throw new Error(tr('该邮箱已注册，请直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'));
+    if (/weak|at least/i.test(msg) && /password/i.test(msg)) throw new Error(tr('密码过于简单，请使用更长的密码。', 'Password too weak. Try a longer one.'));
     if (res.status === 401 && auth) { signOut(); throw new Error(tr('登录已失效，请重新登录。', 'Session expired. Please sign in again.')); }
     throw new Error(tr(`云端返回错误（${res.status}）：${msg}`, `Cloud error (${res.status}): ${msg}`));
   }
@@ -174,7 +174,7 @@ function saveSession(o) {
 }
 async function accessToken() {
   const s = state.session;
-  if (!s) throw new Error(tr('还没有登录。', 'Not signed in.'));
+  if (!s) throw new Error(tr('暂未登录。', 'Not signed in.'));
   if (Date.now() < s.expires - 60000) return s.access;
   saveSession(await api('POST', '/auth/v1/token?grant_type=refresh_token', { refresh_token: s.refresh }, { auth: false }));
   return state.session.access;
@@ -209,7 +209,7 @@ async function loadAll() {
     saveSnapshot();
     for (const f of MOD.onLoad) { try { await f(); } catch (e) { console.warn(e); } }
     pickLedger();
-  } catch (e) { if (!(hadSnap && isNetworkError(e))) state.error = e.message; else state.notice = tr('离线中，显示的是上次的数据', 'Offline: showing last saved data'); }
+  } catch (e) { if (!(hadSnap && isNetworkError(e))) state.error = e.message; else state.notice = tr('离线中，当前显示上次的数据', 'Offline: showing last saved data'); }
   state.loading = false; hm.syncing = false; render();
 }
 
@@ -478,7 +478,7 @@ function hmBudgetPage(t) {
   const total = typeof BUD !== 'undefined' ? BUD.total() : 0;
   const { y, m } = state.month, now = new Date(), current = now.getFullYear() === y && now.getMonth() + 1 === m;
   const label = `<div class="muted hm-lbl">${current ? tr('本月预算', 'Budget this month') : tr(`${m}月预算`, `${MONTH_EN[m - 1]} budget`)}</div>`;
-  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget">${label}<div class="hm-nob">${tr('还没设预算', 'No budget yet')}</div><div class="muted hm-lbl">${tr('在 我的 → 预算 里设置', 'Set it in Me → Budget')}</div></section>`;
+  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget">${label}<div class="hm-nob">${tr('暂未设置预算', 'No budget yet')}</div><div class="muted hm-lbl">${tr('请前往 我的 → 预算 设置', 'Set it in Me → Budget')}</div></section>`;
   const spent = t.expense, left = total - spent, over = left < 0, ratio = Math.min(1, Math.max(0, spent / total));
   const daysLeft = current ? new Date(y, m, 0).getDate() - now.getDate() + 1 : 0;
   const bar = over ? 'var(--on-card-out)' : ratio > 0.8 ? '#FFE3A3' : '#fff';
@@ -570,7 +570,7 @@ function settingsView() {
 
   // 数据安全：立即备份（下载文件）/ 从备份恢复（备份页），上次备份是几天前
   const last = Number(store.get('hl.backupLast', 0)) || 0, ago = last ? Math.max(0, Math.floor((Date.now() - last) / 86400000)) : -1;
-  const lastText = ago < 0 ? tr('还没备份过', 'Never backed up') : ago === 0 ? tr('上次备份 今天', 'Last backup today') : tr(`上次备份 ${ago} 天前`, `Last backup ${ago} day${ago === 1 ? '' : 's'} ago`);
+  const lastText = ago < 0 ? tr('暂未备份', 'Never backed up') : ago === 0 ? tr('上次备份 今天', 'Last backup today') : tr(`上次备份 ${ago} 天前`, `Last backup ${ago} day${ago === 1 ? '' : 's'} ago`);
   const safety = MOD.pages.backup ? `<div class="card hm-sc">${head(tr('数据安全', 'Data safety'))}
     <div class="hm-sub2${ago < 0 || ago > 30 ? ' amber' : ''}">${lastText}</div>
     <div class="hm-btns"><button class="btn" data-act="bk-download">${tr('立即备份', 'Back up now')}</button><button class="btn" data-act="tab" data-v="backup">${tr('从备份恢复', 'Restore')}</button></div></div>` : '';
@@ -582,7 +582,7 @@ function settingsView() {
   const currency = `<div class="card hm-sc">${head(tr('货币', 'Currency'))}
     <div class="hm-li"><span class="hm-li-t">${tr('主货币', 'Main currency')}</span>
       <span class="hm-acts hm-curw"><button class="hm-chip" data-act="hm-cur" aria-haspopup="menu" aria-expanded="${state.hmCurMenu ? 'true' : 'false'}" ${busy ? 'disabled' : ''}><span class="hm-flag">${hmFlag(HOME)}</span><span>${h(hmCurLabel(HOME))}</span><i>▾</i></button></span></div>
-    <div class="hm-li"><div class="hm-li-c"><div>${tr('汇率', 'Exchange rates')}</div><div class="muted hm-rates">${Object.keys(fx.rates).length ? `<div>${tr('欧洲央行参考汇率', 'ECB reference rates')}${fx.date ? ' · ' + h(fx.date) : ''}</div>${rateLines}` : tr('还没有取到汇率，需要联网', 'No rates yet. Needs a connection.')}</div></div>
+    <div class="hm-li"><div class="hm-li-c"><div>${tr('汇率', 'Exchange rates')}</div><div class="muted hm-rates">${Object.keys(fx.rates).length ? `<div>${tr('欧洲央行参考汇率', 'ECB reference rates')}${fx.date ? ' · ' + h(fx.date) : ''}</div>${rateLines}` : tr('暂未获取汇率，需联网', 'No rates yet. Needs a connection.')}</div></div>
       <button class="btn link" data-act="hm-rates" ${state.hmRateBusy ? 'disabled' : ''}>${state.hmRateBusy ? tr('更新中…', 'Updating…') : tr('更新', 'Update')}</button></div>
     ${note(state.hmFx)}</div>`;
   const progress = busy ? `<div class="modal hm-fxbusy"><div class="card grid" role="alertdialog" aria-busy="true">
@@ -592,7 +592,7 @@ function settingsView() {
 
   // 云端同步：账号、立即同步、状态、退出登录
   const pending = outbox.list().length, t = hm.syncedAt ? new Date(hm.syncedAt) : null;
-  const status = !navigator.onLine ? tr('离线中，联网后自动上传', 'Offline. Will upload when online.')
+  const status = !navigator.onLine ? tr('离线中，联网后将自动上传', 'Offline. Will upload when online.')
     : pending ? tr(`${pending} 条待上传`, `${pending} to upload`)
     : t ? tr('已同步 · ', 'Synced · ') + `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '';
   const cloud = `<div class="card hm-sc">
@@ -603,7 +603,7 @@ function settingsView() {
 
   // 版本（App 的"软件更新"）：网页是打开时自动拿最新的，有新版本时顶上会弹一条"点击刷新"
   const canCheck = !!navigator.serviceWorker?.controller;
-  const install = STANDALONE ? '' : `<div class="hm-sub2 muted">${IS_IOS ? tr('在 Safari 点 分享 → 添加到主屏幕', 'In Safari: Share → Add to Home Screen') : tr('浏览器菜单 → 添加到主屏幕', 'Browser menu → Add to Home Screen')}</div>`;
+  const install = STANDALONE ? '' : `<div class="hm-sub2 muted">${IS_IOS ? tr('在 Safari 中点击 分享 → 添加到主屏幕', 'In Safari: Share → Add to Home Screen') : tr('浏览器菜单 → 添加到主屏幕', 'Browser menu → Add to Home Screen')}</div>`;
   const version = `<div class="card hm-sc">
     <div class="hm-cl2">${iconTile('upload')}<div class="hm-grow"><b>${tr('网页版本', 'Web version')}</b><div class="muted hm-sub2 num">${h(WEB_VERSION || tr('开发版', 'Dev build'))}</div></div>
       ${canCheck ? `<button class="btn link" data-act="hm-sw-check" ${state.hmSwBusy ? 'disabled' : ''}>${state.hmSwBusy ? tr('正在检查…', 'Checking…') : tr('检查更新', 'Check')}</button>` : ''}</div>
@@ -611,7 +611,7 @@ function settingsView() {
 
   // iPhone 快捷导入：iPhone 上放在最上面、显眼一点；别的设备放在列表里
   const scOn = typeof scView === 'function' && IMP_SHORTCUT_URL;
-  const shortcut = scOn && IS_IOS ? `<button class="card hm-sc-card" data-act="tab" data-v="shortcut">${iconTile('bolt')}<span class="hm-grow"><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b><span class="muted hm-sub2">${tr('账单在分享菜单里一键导入', 'Import statements from the Share menu')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : '';
+  const shortcut = scOn && IS_IOS ? `<button class="card hm-sc-card" data-act="tab" data-v="shortcut">${iconTile('bolt')}<span class="hm-grow"><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b><span class="muted hm-sub2">${tr('可在分享菜单中一键导入账单', 'Import statements from the Share menu')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : '';
   return `<div class="grid hm-set">
     ${shortcut}${lang}${safety}
     ${extra(typeof lockSettingsHtml === 'function' ? lockSettingsHtml : null)}${extra(typeof remindersSettingsHtml === 'function' ? remindersSettingsHtml : null)}
@@ -626,7 +626,7 @@ function settingsView() {
     ${currency}
     <div class="card hm-list">
       ${row('chip', tr('AI 设置', 'AI settings'), 'data-act="ai-settings"', aiKey() ? AI_PROVIDERS[aiProvider()].name : tr('未设置', 'Not set'))}
-      <label class="hm-li"><span class="tile" style="background:#FF8A3D">${hmSvg(ICONS.user.d)}</span><span class="hm-li-t">${tr('本人姓名', 'Your name')}</span><input class="hm-in" id="hm-owner" value="${h(store.get('hl.ownerName', '') ?? '')}" placeholder="${tr('导入时认出本人', 'For imports')}" autocomplete="name" enterkeyhint="done"></label>
+      <label class="hm-li"><span class="tile" style="background:#FF8A3D">${hmSvg(ICONS.user.d)}</span><span class="hm-li-t">${tr('本人姓名', 'Your name')}</span><input class="hm-in" id="hm-owner" value="${h(store.get('hl.ownerName', '') ?? '')}" placeholder="${tr('导入时识别本人', 'For imports')}" autocomplete="name" enterkeyhint="done"></label>
     </div>
     ${cloud}${version}${progress}${menu}
   </div>`;
@@ -650,8 +650,8 @@ function hmDeleteConfirm() {
     box.className = 'modal ui-confirm';
     box.innerHTML = `<div class="card grid" role="alertdialog" aria-modal="true">
       <b style="font-size:17px">${tr('注销账户？', 'Delete your account?')}</b>
-      <div class="muted small">${tr('云端和这台设备上的所有账单、账户、设置都会永久删除，不能恢复。需要的话先在「数据安全」里备份。', 'Every entry, account and setting in the cloud and on this device is deleted for good. Back up first under Data safety if you need it.')}</div>
-      <div class="small">${tr(`输入「${word}」确认`, `Type "${word}" to confirm`)}</div>
+      <div class="muted small">${tr('云端和本设备上的所有账单、账户、设置都将永久删除，且不可恢复。如有需要，请先在「数据安全」中备份。', 'Every entry, account and setting in the cloud and on this device is deleted for good. Back up first under Data safety if you need it.')}</div>
+      <div class="small">${tr(`请输入「${word}」以确认`, `Type "${word}" to confirm`)}</div>
       <input id="hm-del-word" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
       <div class="between"><button class="btn" data-x="0">${tr('取消', 'Cancel')}</button><button class="btn danger-fill" data-x="1" disabled>${tr('永久注销', 'Delete forever')}</button></div></div>`;
     const input = box.querySelector('#hm-del-word'), ok = box.querySelector('[data-x="1"]');
@@ -684,13 +684,13 @@ async function hmDeleteAccount() {
       await api('DELETE', `/rest/v1/records?user_id=eq.${encodeURIComponent(state.session.user)}`, null, { prefer: 'return=minimal' });
       partial = true;
     }
-  } catch (e) { state.error = tr('没能注销：', "Couldn't delete: ") + e.message; render(); return; }
+  } catch (e) { state.error = tr('注销失败：', "Couldn't delete: ") + e.message; render(); return; }
   await hmWipeLocal();
   state.session = null;
   for (const m of Object.values(state.data)) m.clear();
   state.tab = 'ledger';
-  state.notice = partial ? tr('数据已全部删除。登录账号还在，请联系管理员删除。', 'All data is deleted. The sign-in account still exists; ask the admin to remove it.')
-    : tr('账户已注销，所有数据都已删除。', 'Account deleted. All data is gone.');
+  state.notice = partial ? tr('数据已全部删除。登录账号仍存在，请联系管理员删除。', 'All data is deleted. The sign-in account still exists; ask the admin to remove it.')
+    : tr('账户已注销，所有数据均已删除。', 'Account deleted. All data is gone.');
   render();
 }
 
@@ -719,7 +719,7 @@ MOD.actions.push(async (act, v) => {
       if (!FX_CODES.includes(code) || code === HOME || state.hmFx?.busy) return true;
       const ok = await uiConfirm(tr(`把主货币改成 ${code}？`, `Change main currency to ${code}?`), {
         ok: tr('折算并更改', 'Convert and change'),
-        detail: tr(`所有账单、初始余额和预算按最新汇率折算成 ${code}。`, `All entries, opening balances and the budget are converted to ${code} at the latest rates.`),
+        detail: tr(`账单、初始余额与预算将按最新汇率折算成 ${code}。`, `All entries, opening balances and the budget are converted to ${code} at the latest rates.`),
       });
       if (!ok) return true;
       state.hmFx = { busy: true, code, done: 0, total: 0 }; render();
@@ -740,7 +740,7 @@ MOD.actions.push(async (act, v) => {
       let found = false;
       try { const reg = await navigator.serviceWorker.getRegistration(); await reg?.update(); found = !!(reg?.installing || reg?.waiting); } catch { /* 查不了就当没有 */ }
       state.hmSwBusy = false;
-      if (found) hmShowUpdate(true); else state.hmSwMsg = { msg: navigator.onLine ? tr('已经是最新版本', 'You\'re up to date') : tr('离线中，联网后再查', 'Offline. Try again online.') };
+      if (found) hmShowUpdate(true); else state.hmSwMsg = { msg: navigator.onLine ? tr('已是最新版本', 'You\'re up to date') : tr('离线中，请联网后再检查', 'Offline. Try again online.') };
       break;
     }
     // 列表 ⇄ 日历（同一个"明细"页的两种看法）
@@ -768,8 +768,8 @@ function loginView() {
   // 邮件已发出：告诉用户发到哪了、接下来点什么，并能重发
   // 注册后的激活：和 App 一样——"账户激活邮件已发送"，点"已激活"用刚输的账号密码直接登录（密码只留在内存里）
   const sentBox = mode === 'sent' ? (state.sentKind === 'recovery'
-    ? `<p style="margin:0">${tr(`重设密码的链接已发到 <b>${h(state.authEmail)}</b>。点邮件里的链接，会回到这里设置新密码。`, `A reset link was sent to <b>${h(state.authEmail)}</b>. Open it to come back here and set a new password.`)}</p>
-    <p class="hint">${tr('没收到？看看垃圾邮件，或者过一分钟再重发。', 'Nothing yet? Check spam, or resend in a minute.')}</p>
+    ? `<p style="margin:0">${tr(`重设密码之链接已发至 <b>${h(state.authEmail)}</b>。点击邮件内链接，将自动跳转以设置新密码。`, `A reset link was sent to <b>${h(state.authEmail)}</b>. Open it to come back here and set a new password.`)}</p>
+    <p class="hint">${tr('未收到邮件？请查看垃圾邮件，或一分钟后申请重发。', 'Nothing yet? Check spam, or resend in a minute.')}</p>
     <button class="btn" data-act="auth-resend" ${dis}>${tr('重发邮件', 'Resend email')}</button>`
     : `<div class="act-box">${typeof iconTile === 'function' ? iconTile('mail') : ''}<b>${tr('账户激活邮件已发送', 'Activation email sent')}</b>
       <span class="muted">${tr('请您前往邮箱激活', 'Open your inbox to activate your account')}</span><span class="act-mail">${h(state.authEmail)}</span></div>
@@ -785,17 +785,17 @@ function loginView() {
     ${sentBox}
     ${mode === 'reset' || mode === 'sent' ? '' : email}
     ${mode === 'reset' ? `<p class="hint">${h(state.authEmail || '')}</p>` : ''}
-    ${mode === 'forgot' || mode === 'sent' ? '' : pass('l-pass', mode === 'reset' ? tr('新密码（至少 6 位）', 'New password (6+ characters)') : mode === 'register' ? tr('密码（至少 6 位）', 'Password (6+ characters)') : tr('密码', 'Password'))}
-    ${mode === 'register' || mode === 'reset' ? pass('l-pass2', tr('再输一遍密码', 'Repeat password')) : ''}
-    ${mode === 'forgot' ? `<p class="hint">${tr('输入注册时的邮箱，我们会发一个重设密码的链接。', 'Enter your account email and we\'ll send a reset link.')}</p>` : ''}
+    ${mode === 'forgot' || mode === 'sent' ? '' : pass('l-pass', mode === 'reset' ? tr('新密码（请输入至少 6 位）', 'New password (6+ characters)') : mode === 'register' ? tr('密码（请输入至少 6 位）', 'Password (6+ characters)') : tr('密码', 'Password'))}
+    ${mode === 'register' || mode === 'reset' ? pass('l-pass2', tr('请再输入密码', 'Repeat password')) : ''}
+    ${mode === 'forgot' ? `<p class="hint">${tr('请输入注册邮箱，以接收重设密码的链接。', 'Enter your account email and we\'ll send a reset link.')}</p>` : ''}
     ${state.error ? `<p class="err">${h(state.error)}</p>` : ''}
     ${state.unconfirmed && mode === 'login' ? `<button class="btn" data-act="auth-resend" ${dis}>${tr('重发确认邮件', 'Resend confirmation email')}</button>` : ''}
     ${title ? `<button class="btn primary" data-act="auth" ${dis}>${state.loading ? tr('请稍候…', 'Please wait…') : title}</button>` : ''}
     <div class="between" style="justify-content:center">
-      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>${tr('还没有账号？注册', 'No account? Sign up')}</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>${tr('忘记密码', 'Forgot password')}</button>`
+      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>${tr('没有账号？注册', 'No account? Sign up')}</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>${tr('忘记密码', 'Forgot password')}</button>`
         : `<button class="btn link" data-act="mode" data-v="login" ${dis}>${tr('返回登录', 'Back to sign in')}</button>`}
     </div>
-    ${IS_ANDROID ? `<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">${tr('在 App 中打开', 'Open in app')}</a>` : ''}
+    ${IS_ANDROID ? `<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">${tr('App 中打开', 'Open in app')}</a>` : ''}
   </div></div>`;
 }
 
@@ -848,7 +848,7 @@ function ledgerView() {
   // 预算已经是汇总卡片的第二页，不再单独放一张预算卡
   const extra = MOD.homeCards.map((f) => { try { return f(); } catch (e) { console.warn(e); return ''; } }).filter((x) => x && !x.includes('bud-home')).join('');
   return `<div class="cols hm-home"><div class="grid sticky hm-head">${monthBar({ planet: true })}${summaryCard(totals)}${hmQuick()}${extra}</div>
-    <div class="grid hm-days">${list || (typeof emptyState === 'function' ? emptyState('receipt', tr('这个月还没有账单', 'Nothing this month yet')) : `<div class="hm-empty muted">${hmSvg(ICONS.receipt.d)}<span>${tr('这个月还没有账单', 'Nothing this month yet')}</span></div>`)}</div></div>`;
+    <div class="grid hm-days">${list || (typeof emptyState === 'function' ? emptyState('receipt', tr('本月暂无账单', 'Nothing this month yet')) : `<div class="hm-empty muted">${hmSvg(ICONS.receipt.d)}<span>${tr('本月暂无账单', 'Nothing this month yet')}</span></div>`)}</div></div>`;
 }
 
 function statsView() {
@@ -880,7 +880,7 @@ function statsView() {
       <div class="seg"><button class="${!state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="0">${tr('支出', 'Expense')}</button><button class="${state.statsIncome ? 'on' : ''}" data-act="stats-kind" data-v="1">${tr('收入', 'Income')}</button></div>
       <div><div class="muted small">${state.statsIncome ? tr('总收入', 'Total income') : tr('总支出', 'Total expense')}</div><div class="big num">${money(total)}</div></div>
     </div>
-    <div class="card">${rows || `<span class="muted">${tr('这段时间没有记录', 'Nothing in this period')}</span>`}</div>
+    <div class="card">${rows || `<span class="muted">${tr('该时段暂无记录', 'Nothing in this period')}</span>`}</div>
   </div>`;
 }
 
@@ -915,9 +915,9 @@ function hmSyncHome() {
 async function hmSetHome(code, onProgress = () => {}) {
   const old = HOME;
   if (code === old) return { queued: 0 };
-  if (!navigator.onLine) throw new Error(tr('需要联网才能更改主货币', 'Changing the currency needs a connection'));
+  if (!navigator.onLine) throw new Error(tr('需联网才可更改主货币', 'Changing the currency needs a connection'));
   if (!Object.keys(fx.rates).length) await refreshRates();
-  const noRate = () => new Error(tr('没有汇率，无法折算，请联网后再试', 'No rates available. Go online and try again.'));
+  const noRate = () => new Error(tr('暂无汇率，无法折算，请联网后重试', 'No rates available. Go online and try again.'));
   const conv = (c, from) => convert(c, from, code);
   if (conv(10000, old) == null) throw noRate();
   const norm = (kind, o) => (typeof HL_JSON !== 'undefined' && HL_JSON[kind] ? HL_JSON[kind](o) : o);
@@ -943,7 +943,7 @@ async function hmSetHome(code, onProgress = () => {}) {
       await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', part.map((r) => ({ user_id: state.session.user, ...r })), { prefer: 'resolution=merge-duplicates,return=minimal' });
     } catch (e) {
       // 一行都没写进去就当没发生过；已经写了一部分的话，剩下的排队补传，免得云端一半新一半旧
-      if (!done) throw isNetworkError(e) ? new Error(tr('需要联网才能更改主货币', 'Changing the currency needs a connection')) : e;
+      if (!done) throw isNetworkError(e) ? new Error(tr('需联网才可更改主货币', 'Changing the currency needs a connection')) : e;
       const rest = rows.slice(done), key = (r) => r.kind + ':' + r.id, keys = new Set(rest.map(key));
       store.set('hl.outbox', [...outbox.list().filter((r) => !keys.has(key(r))), ...rest]);
       queued = rest.length; break;
@@ -1046,7 +1046,7 @@ function parseCsv(text) {
 function readPatch(text) {
   const rows = parseCsv(text.replace(/^﻿/, ''));
   const head = (rows[0] ?? []).map((x) => x.trim());
-  if (head[0] !== '操作') throw new Error(tr('这不是修正文件：第一列应该是"操作"。', 'Not a fix file: the first column should be "操作".'));
+  if (head[0] !== '操作') throw new Error(tr('该文件不是修正文件：第一列应为「操作」。', 'Not a fix file: the first column should be "操作".'));
   const col = (r, name) => (r[head.indexOf(name)] ?? '').trim();
   const accountByName = new Map([...state.data.account.values()].map((a) => [a.name, a]));
   const used = new Set();
@@ -1086,7 +1086,7 @@ function patchView() {
   const line = (r) => `<div class="between small"><span>${r.iso} ${r.kind === KIND.TRANSFER ? h(r.account) + ' → ' + h(r.toAccount) : h([r.category, r.sub].filter(Boolean).join(' · ')) + ' ' + h(r.account)} <span class="muted">${h(r.note.slice(0, 40))}</span></span><span class="num">${money(r.cents)}</span></div>`;
   return `<div class="modal"><div class="card grid">
     <h2 style="margin:0">${tr('修正文件', 'Fix file')}</h2>
-    <p class="muted" style="margin:0">${tr(`删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔，改账户 ${p.moves.length} 笔`, `Delete ${p.deletes.length}, add ${p.adds.length}, edit notes ${p.notes.length}, move ${p.moves.length}`)}${p.lost ? tr(`，${p.lost} 笔没找到`, `, ${p.lost} not found`) : ''}${p.bad ? tr(`，${p.bad} 行无效（日期、金额或账户不对）`, `, ${p.bad} invalid rows`) : ''}</p>
+    <p class="muted" style="margin:0">${tr(`删除 ${p.deletes.length} 笔，新增 ${p.adds.length} 笔，改备注 ${p.notes.length} 笔，改账户 ${p.moves.length} 笔`, `Delete ${p.deletes.length}, add ${p.adds.length}, edit notes ${p.notes.length}, move ${p.moves.length}`)}${p.lost ? tr(`，${p.lost} 笔未找到`, `, ${p.lost} not found`) : ''}${p.bad ? tr(`，${p.bad} 行无效（日期、金额或账户有误）`, `, ${p.bad} invalid rows`) : ''}</p>
     ${p.deletes.length ? `<div><b class="out">${tr('删除', 'Delete')}</b>${p.deletes.map((d) => line(d.row)).join('')}</div>` : ''}
     ${p.adds.length ? `<div><b class="in">${tr('新增', 'Add')}</b>${p.adds.map(line).join('')}</div>` : ''}
     ${p.moves.length ? `<div><b>${tr('改账户', 'Move')}</b>${p.moves.slice(0, 40).map((m) => `<div class="small">${dayISO(m.tx.date)} ${money(m.tx.amountCents)} → ${h(m.account.name)} <span class="muted">${h((m.tx.note ?? '').slice(0, 50))}</span></div>`).join('')}</div>` : ''}
@@ -1163,7 +1163,7 @@ app.addEventListener('click', async (ev) => {
       try {
         const o = await api('POST', '/auth/v1/token?grant_type=password', { email, password: pass }, { auth: false });
         saveSession(o); state.authPass = null; state.loading = false; state.authMode = 'login'; await loadAll();
-      } catch (e) { state.loading = false; state.error = e.unconfirmed ? tr('还没激活，请先点邮件里的链接。', 'Not activated yet. Open the link in the email first.') : e.message; render(); }
+      } catch (e) { state.loading = false; state.error = e.unconfirmed ? tr('账号尚未激活，请先点击邮件中的链接。', 'Not activated yet. Open the link in the email first.') : e.message; render(); }
       break;
     }
     case 'auth': {
@@ -1178,7 +1178,7 @@ app.addEventListener('click', async (ev) => {
       try {
         if (mode !== 'reset' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error(tr('请填写正确的邮箱。', 'Please enter a valid email.'));
         if (mode !== 'forgot' && pass.length < 6) throw new Error(tr('密码至少 6 位。', 'Password needs at least 6 characters.'));
-        if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error(tr('两次输入的密码不一样。', 'The passwords don\'t match.'));
+        if ((mode === 'register' || mode === 'reset') && pass !== pass2) throw new Error(tr('两次输入的密码不一致。', 'The passwords don\'t match.'));
         if (mode === 'forgot') {
           await api('POST', '/auth/v1/recover?redirect_to=' + HERE, { email }, { auth: false });
           state.loading = false; state.authMode = 'sent'; state.sentKind = 'recovery'; render(); break;
@@ -1186,10 +1186,10 @@ app.addEventListener('click', async (ev) => {
         if (mode === 'reset') {
           // 邮件链接带来的临时登录：改好密码就直接进去，不用再输一遍
           const res = await cloudFetch('/auth/v1/user', { method: 'PUT', headers: { apikey: state.cfg.key, 'Content-Type': 'application/json', Authorization: `Bearer ${state.recover.access_token}` }, body: JSON.stringify({ password: pass }) });
-          if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? tr('新密码不能和旧密码一样。', 'New password must differ from the old one.') : res.status === 401 || res.status === 403 ? tr('链接已失效，请重新点"忘记密码"。', 'The link has expired. Use "Forgot password" again.') : `${res.status} ${j.msg || ''}`); }
+          if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(/same|different/i.test(j.msg || '') ? tr('新密码不可与旧密码相同。', 'New password must differ from the old one.') : res.status === 401 || res.status === 403 ? tr('链接已失效，请重新点击「忘记密码」。', 'The link has expired. Use "Forgot password" again.') : `${res.status} ${j.msg || ''}`); }
           const user = await res.json().catch(() => null);
           saveSession({ ...state.recover, user: user ?? state.recover.user });
-          state.recover = null; state.loading = false; state.authMode = 'login'; state.notice = tr('密码已改好，已登录。', 'Password changed. You\'re signed in.');
+          state.recover = null; state.loading = false; state.authMode = 'login'; state.notice = tr('密码已修改，已登录。', 'Password changed. You\'re signed in.');
           await loadAll(); break;
         }
         const o = mode === 'register'
@@ -1198,7 +1198,7 @@ app.addEventListener('click', async (ev) => {
         // 开着邮箱验证时，注册不会直接给登录凭证；已注册过的邮箱 Supabase 也会假装成功（identities 为空）
         if (!o.access_token) {
           state.loading = false;
-          if (mode === 'register' && Array.isArray(o.identities) && o.identities.length === 0) { state.authMode = 'login'; state.error = tr('这个邮箱已经注册过，直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'); }
+          if (mode === 'register' && Array.isArray(o.identities) && o.identities.length === 0) { state.authMode = 'login'; state.error = tr('该邮箱已注册，请直接登录或找回密码。', 'This email is already registered. Sign in or reset your password.'); }
           else { state.authMode = 'sent'; state.sentKind = 'signup'; state.authPass = pass; }
           render(); break;
         }
@@ -1209,7 +1209,7 @@ app.addEventListener('click', async (ev) => {
     case 'patch-cancel': state.patch = null; state.error = ''; render(); break;
     case 'patch-apply':
       state.loading = true; state.error = ''; render();
-      try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = tr('没有写完，可以再点一次：', 'Not finished, try again: ') + e.message; }
+      try { await applyPatch(); state.patch = null; state.notice = ''; } catch (e) { state.error = tr('未完成，可再次点击：', 'Not finished, try again: ') + e.message; }
       state.loading = false; render(); break;
     case 'signout': if (await uiConfirm(tr('退出登录？', 'Sign out?'), { ok: tr('退出', 'Sign out'), danger: true })) signOut(); break;
     case 'notice-x': state.notice = ''; render(); break;
@@ -1280,7 +1280,7 @@ app.addEventListener('change', async (ev) => {
   if (err) {
     state.authMode = 'login';
     state.error = code === 'otp_expired' || /expired|invalid/i.test(err)
-      ? tr('邮件里的链接已过期或已用过。可以重发确认邮件，或点"忘记密码"重新获取。', 'That email link has expired or was already used. Resend the confirmation, or use "Forgot password".')
+      ? tr('邮件中之链接已过期或已使用。您可以选择重发确认邮件，或点击「忘记密码」重新获取。', 'That email link has expired or was already used. Resend the confirmation, or use "Forgot password".')
       : err;
     state.unconfirmed = true; render(); return;
   }

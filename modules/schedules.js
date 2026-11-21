@@ -92,7 +92,7 @@ function schedView() {
   return `<div class="cols">
     <div class="card cc sticky"><div class="muted small">${tr('自动记账', 'Recurring')}</div><div class="big num">${money(monthly)}</div><div class="muted small">${tr(`每月支出约 · ${list.filter((s) => !s.paused).length} 项进行中`, `Approx. monthly spend · ${list.filter((s) => !s.paused).length} active`)}</div>
       <div style="margin-top:12px"><button class="pill" data-act="sc-new">${tr('＋ 新建', '＋ New')}</button></div></div>
-    <div class="card">${rows || `<span class="muted">${tr('房租、订阅这类，到期自动记', 'Rent, subscriptions… logged when due')}</span>`}</div>
+    <div class="card">${rows || `<span class="muted">${tr('房租、订阅等，到期自动记账', 'Rent, subscriptions… logged when due')}</span>`}</div>
   </div>${state.schedEdit ? schedDialog() : ''}`;
 }
 
@@ -107,7 +107,7 @@ function schedRecurringCard() {
       <div class="num ${s.kind === KIND.INCOME ? 'in' : ''}">${money(s.cents, a ? acctCur(a) : HOME)}</div></div>`;
   }).join('');
   return `<div class="card sc-card"><div class="between"><span class="muted small" style="font-weight:500">${tr('自动记账', 'Auto entries')}</span><button class="btn link" data-act="sc-new">${tr('＋ 新建', '＋ New')}</button></div>
-    ${rows || `<div class="muted small">${tr('房租、订阅这类，到期自动记', 'Rent, subscriptions: logged on the day')}</div>`}</div>`;
+    ${rows || `<div class="muted small">${tr('房租、订阅等，到期自动记账', 'Rent, subscriptions: logged on the day')}</div>`}</div>`;
 }
 
 function schedDialog() {
@@ -153,9 +153,9 @@ function schedCollect() {
 async function schedSaveEditing() {
   schedCollect();
   const e = state.schedEdit, cents = parseCents(e._amount), cat = state.data.category.get(e.categoryId), transfer = e.kind === KIND.TRANSFER;
-  const err = !e.name.trim() ? tr('请填名称', 'Enter a name') : cents == null ? tr('请填金额', 'Enter an amount') : !state.data.account.has(e.accountId) ? tr('请选账户', 'Choose an account')
-    : transfer ? (!state.data.account.has(e.toAccountId) || e.toAccountId === e.accountId ? tr('请选转入账户', 'Choose the "To" account') : '')
-    : !cat || !!cat.isIncome !== (e.kind === KIND.INCOME) ? tr('请选分类', 'Choose a category') : '';
+  const err = !e.name.trim() ? tr('请输入名称', 'Enter a name') : cents == null ? tr('请输入金额', 'Enter an amount') : !state.data.account.has(e.accountId) ? tr('请选择账户', 'Choose an account')
+    : transfer ? (!state.data.account.has(e.toAccountId) || e.toAccountId === e.accountId ? tr('请选择转入账户', 'Choose the "To" account') : '')
+    : !cat || !!cat.isIncome !== (e.kind === KIND.INCOME) ? tr('请选择分类', 'Choose a category') : '';
   if (err) { state.schedError = err; return; }
   const s = schedOf({ ...e, name: e.name.trim(), cents, categoryId: transfer ? 0 : e.categoryId, toAccountId: transfer ? e.toAccountId : 0, anchor: dayToDate(e.next).getUTCDate() });
   await schedSave([...schedList().filter((x) => x.id !== s.id), s]);
@@ -182,7 +182,7 @@ MOD.actions.push(async (act, v) => {
       case 'sc-save': await schedSaveEditing(); break;
       case 'sc-delete': {
         const e = state.schedEdit;
-        if (!await uiConfirm(tr(`删除「${e.name}」？`, `Delete "${e.name}"?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('已记的账单不会删', 'Past entries are kept') })) return true;
+        if (!await uiConfirm(tr(`确定删除「${e.name}」？`, `Delete "${e.name}"?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('已记账单不会被删除', 'Past entries are kept') })) return true;
         await schedSave(schedList().filter((x) => x.id !== e.id)); state.schedEdit = null;
         break;
       }

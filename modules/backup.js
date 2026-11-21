@@ -32,7 +32,7 @@ function bkDump() {
 function bkPeek(text) {
   let o;
   try { o = JSON.parse(text); } catch { o = null; }
-  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('不是行星记账的备份', 'Not a Planet Ledger backup'));
+  if (!o || o.app !== 'HuiLedger' || !BK_KINDS.every((k) => Array.isArray(o[k]))) throw new Error(tr('非行星记账备份文件', 'Not a Planet Ledger backup'));
   const data = {};
   for (const k of BK_KINDS) {
     data[k] = o[k].map(HL_JSON[k]);
@@ -93,18 +93,18 @@ function bkView() {
       <b style="font-size:18px">${tr('恢复备份？', 'Restore backup?')}</b>
       <div class="cell"><div class="muted">${tr('备份', 'Backup')}${b.peek.time ? ' · ' + h(new Date(b.peek.time).toLocaleString(loc, { hour12: false })) : ''}</div><div class="v">${c(b.peek.counts)}</div></div>
       <div class="cell"><div class="muted">${tr('现在', 'Now')}</div><div class="v">${c(now)}</div></div>
-      <p class="err" style="margin:0">${tr('云端和所有设备的数据都会换成这个备份', 'Cloud data on all devices will be replaced')}</p>
+      <p class="err" style="margin:0">${tr('云端与所有设备的数据都将替换为该备份', 'Cloud data on all devices will be replaced')}</p>
       ${b.error ? `<p class="err" style="margin:0">${h(b.error)}</p>` : ''}
       <div class="between"><button class="btn" data-act="bk-cancel" ${b.busy ? 'disabled' : ''}>${tr('取消', 'Cancel')}</button>
         <button class="btn primary bk-danger" data-act="bk-restore" ${b.busy ? 'disabled' : ''}>${b.busy ? `${tr('正在恢复', 'Restoring')} ${b.done}/${b.total}` : tr('恢复', 'Restore')}</button></div>
     </div></div>` : '';
   return `<div class="cols">
-    <div class="card cc sticky"><div class="muted small">${tr('备份与恢复', 'Backup & restore')}</div><div style="font-size:20px;font-weight:700;margin-top:4px">${last ? tr('上次下载 ', 'Last download ') + new Date(last).toLocaleDateString(loc) : tr('还没下载过', 'Never downloaded')}</div>
+    <div class="card cc sticky"><div class="muted small">${tr('备份与恢复', 'Backup & restore')}</div><div style="font-size:20px;font-weight:700;margin-top:4px">${last ? tr('上次下载 ', 'Last download ') + new Date(last).toLocaleDateString(loc) : tr('暂未下载', 'Never downloaded')}</div>
       <div class="muted small" style="margin-top:4px">${c(now)}</div></div>
     <div class="grid">
       <div class="card grid"><div class="row" style="padding:0">${iconTile('upload')}<div class="main"><div class="title">${tr('下载备份', 'Download backup')}</div><div class="sub">${tr('手机和网页通用', 'Works on phone and web')}</div></div></div>
         <button class="btn primary" data-act="bk-download">${tr('下载', 'Download')}</button></div>
-      <div class="card grid"><div class="row" style="padding:0">${iconTile('document')}<div class="main"><div class="title">${tr('从备份恢复', 'Restore from backup')}</div><div class="sub">${tr('选一个 .json 备份文件', 'Pick a .json backup file')}</div></div></div>
+      <div class="card grid"><div class="row" style="padding:0">${iconTile('document')}<div class="main"><div class="title">${tr('从备份恢复', 'Restore from backup')}</div><div class="sub">${tr('请选择 .json 备份文件', 'Pick a .json backup file')}</div></div></div>
         <label class="btn" style="text-align:center;cursor:pointer">${tr('选择文件', 'Choose file')}<input type="file" id="bk-file" accept=".json,application/json" hidden></label>
         ${b.error && !b.peek ? `<p class="err" style="margin:0">${h(b.error)}</p>` : ''}${b.ok ? `<p class="ok">${h(b.ok)}</p>` : ''}</div>
     </div></div>${peek}`;
@@ -122,7 +122,7 @@ MOD.actions.push(async (act) => {
     case 'bk-restore':
       if (b.busy || !b.peek) return true;
       b.busy = true; b.error = ''; render();
-      try { await bkRestore(b.peek); b.peek = null; b.ok = tr('已恢复', 'Restored'); } catch (e) { b.error = (isNetworkError(e) ? tr('需要联网才能恢复：', 'Restore needs a connection: ') : tr('没有恢复完，可以再点一次：', 'Restore incomplete, tap again: ')) + e.message; }
+      try { await bkRestore(b.peek); b.peek = null; b.ok = tr('已恢复', 'Restored'); } catch (e) { b.error = (isNetworkError(e) ? tr('需联网才能恢复：', 'Restore needs a connection: ') : tr('恢复未完成，请再次点击：', 'Restore incomplete, tap again: ')) + e.message; }
       b.busy = false; break;
     default: return false;
   }

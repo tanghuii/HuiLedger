@@ -98,12 +98,12 @@ function tagsView() {
   const spentRaw = (l) => sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => t.amountCents);
   const list = [...groups.entries()].sort((a, b) => spentRaw(b[1]) - spentRaw(a[1]));
   const bar = `<div class="subbar"><button class="round" data-act="tab" data-v="me" aria-label="${tr('返回', 'Back')}">‹</button><b>${tr('标签', 'Tags')}</b></div>`;
-  if (!list.length) return `${bar}<p class="muted tg-none">${tr('还没有带标签的账单。', 'No tagged entries yet.')}</p>`;
+  if (!list.length) return `${bar}<p class="muted tg-none">${tr('暂无带标签的账单。', 'No tagged entries yet.')}</p>`;
   const cards = list.map(([tag, l]) => {
     const open = state.tgOpen === tag, spent = sum(l.filter((t) => t.kind === KIND.EXPENSE), (t) => L.net(t));
     const from = dayISO(Math.min(...l.map((t) => t.date))), to = dayISO(Math.max(...l.map((t) => t.date)));
     return `<div class="card tg-card"><div class="row click tg-row" data-act="tg-open" data-v="${h(tag)}">
-        <button class="tg-lbtn" data-act="tg-color" data-v="${h(tag)}" aria-label="${tr('换颜色', 'Color')}">${tagLogo(tag, 38)}</button>
+        <button class="tg-lbtn" data-act="tg-color" data-v="${h(tag)}" aria-label="${tr('更换颜色', 'Color')}">${tagLogo(tag, 38)}</button>
         <div class="main"><div class="title">${h(tag)}</div><div class="sub">${tr(`${l.length} 笔 · ${from} 至 ${to}`, `${nTx(l.length)} · ${from} to ${to}`)}</div></div>
         <div class="num out">${money(spent)}</div></div>
       ${open ? `<div class="tg-list">${l.map((t) => txRow(t, L, true)).join('')}</div>` : ''}</div>`;

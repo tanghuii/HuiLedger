@@ -174,7 +174,7 @@ function mgCategoriesView() {
   }).join('');
   return `<div class="card grid mg-cbar">${seg('mg-income', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], m.income ? 1 : 0)}
     <div class="between"><span class="muted small">${tr(`${tops.length} 个分类 · 长按拖动排序`, `${tops.length} ${tops.length === 1 ? 'category' : 'categories'} · long-press to reorder`)}</span><button class="btn link" data-act="mg-cat-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div></div>
-    <div class="card mg-clist">${rows ? `<div data-ro="category">${rows}</div>` : `<span class="muted">${tr('还没有分类', 'No categories yet')}</span>`}</div>`;
+    <div class="card mg-clist">${rows ? `<div data-ro="category">${rows}</div>` : `<span class="muted">${tr('暂无分类', 'No categories yet')}</span>`}</div>`;
 }
 
 /** 点了一个分类：修改 / 合并到… / 删除。 */
@@ -195,7 +195,7 @@ function mgMergeDialog(e) {
   const opt = (c, sub) => `<button class="mg-mopt ${sub ? 'sub' : ''}" data-act="mg-merge-to" data-v="${c.id}">${iconTile(c.icon, 'sm')}<span>${h(catName(c))}</span></button>`;
   const list = cats.filter((c) => !c.parentId && !!c.isIncome === !!from.isIncome && c.id !== from.id)
     .map((t) => opt(t, false) + cats.filter((s) => s.parentId === t.id && s.id !== from.id).map((s) => opt(s, true)).join('')).join('');
-  return `<b style="font-size:17px">${tr(`把「${h(catName(from))}」合并到`, `Merge “${h(catName(from))}” into`)}</b><div class="mg-mlist">${list}</div>`;
+  return `<b style="font-size:17px">${tr(`将「${h(catName(from))}」合并至`, `Merge “${h(catName(from))}” into`)}</b><div class="mg-mlist">${list}</div>`;
 }
 
 /** 合并分类（同手机端 mergeCategory）：from 的账单都改记到 into，然后删掉 from；from 的子分类挪到 into 下面（into 是子分类时连账单一起并进去）。 */
@@ -302,7 +302,7 @@ function mgAccountDialog(e) {
     <label class="f">${tr('名称', 'Name')}<input id="mg-name" value="${h(a.name)}" placeholder="${tr('如 ING、支付宝', 'e.g. ING, PayPal')}"></label>
     ${seg('mg-type', mgTypes(), a.type ?? 0)}
     <div class="two"><label class="f">${tr('币种', 'Currency')}<select id="mg-cur">${[...new Set([...MG_CODES, a._cur])].map((c) => `<option value="${c}" ${c === a._cur ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-      <label class="f">${tr('初始余额', 'Opening balance')}<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="${tr('0.00，欠款填负数', '0.00, negative if owed')}"></label></div>
+      <label class="f">${tr('初始余额', 'Opening balance')}<input id="mg-init" inputmode="decimal" value="${h(a._init)}" placeholder="${tr('0.00，欠款请填负数', '0.00, negative if owed')}"></label></div>
     ${a.type === 2 ? `<label class="f">${tr('还款日（每月几号）', 'Due day (of month)')}<input id="mg-due" inputmode="numeric" value="${h(a._due)}" placeholder="1–31"></label>` : ''}
     ${e.isNew ? '' : `<label class="sc-check"><input type="checkbox" id="mg-arch" ${a.archived ? 'checked' : ''}> ${tr('归档', 'Archived')}</label>`}`;
 }
@@ -341,16 +341,16 @@ function mgCollect() {
 async function mgSave() {
   mgCollect();
   const m = mgState(), e = m.edit, o = e.obj, name = o.name.trim();
-  if (!name) { m.error = tr('请填名称', 'Enter a name'); return; }
+  if (!name) { m.error = tr('请输入名称', 'Enter a name'); return; }
   if (e.kind === 'category') await saveRecord('category', HL_JSON.category({ ...o, name }));
   else if (e.kind === 'ledger') {
     await saveRecord('ledger', HL_JSON.ledger({ ...o, name }));
     if (e.isNew) { state.ledgerId = o.id; store.set('hl.ledger', o.id); }
   } else {
     const text = String(o._init ?? '').trim().replace(',', '.'), init = text ? Number(text) : 0;
-    if (!Number.isFinite(init)) { m.error = tr('初始余额不对', 'Invalid opening balance'); return; }
+    if (!Number.isFinite(init)) { m.error = tr('初始余额不正确', 'Invalid opening balance'); return; }
     const dueText = String(o._due ?? '').trim(), day = Number(dueText);
-    if (o.type === 2 && dueText && !(Number.isInteger(day) && day >= 1 && day <= 31)) { m.error = tr('还款日填 1–31', 'Due day must be 1–31'); return; }
+    if (o.type === 2 && dueText && !(Number.isInteger(day) && day >= 1 && day <= 31)) { m.error = tr('还款日请填写 1–31', 'Due day must be 1–31'); return; }
     await saveRecord('account', HL_JSON.account({ ...o, name, initialCents: Math.round(init * 100), currency: o._cur === HOME ? '' : o._cur }));
     // 信用卡还款日：和手机端共享（cardDue），不是信用卡就去掉
     const due = { ...(shared.get('cardDue', {}) ?? {}) }, key = String(o.id), want = o.type === 2 && dueText ? day : null;
@@ -391,8 +391,8 @@ MOD.actions.push(async (act, v) => {
         if (!from || !into) break;
         const n = allTxs().filter((t) => t.categoryId === from.id || state.data.category.get(t.categoryId)?.parentId === from.id).length;
         const subsMove = !from.parentId && !into.parentId && [...state.data.category.values()].some((x) => x.parentId === from.id);
-        if (!await uiConfirm(tr(`合并到「${catName(into)}」？`, `Merge into “${catName(into)}”?`), { ok: tr('合并', 'Merge'),
-          detail: h(tr(`${n ? `「${catName(from)}」的 ${n} 笔账单改记到「${catName(into)}」${subsMove ? '，子分类一起移过去' : ''}，然后` : subsMove ? `子分类移到「${catName(into)}」下面，然后` : ''}删掉「${catName(from)}」。`,
+        if (!await uiConfirm(tr(`合并至「${catName(into)}」？`, `Merge into “${catName(into)}”?`), { ok: tr('合并', 'Merge'),
+          detail: h(tr(`${n ? `「${catName(from)}」的 ${n} 笔账单将改记至「${catName(into)}」${subsMove ? '，子分类一并移入' : ''}，随后` : subsMove ? `子分类将移至「${catName(into)}」下，随后` : ''}删除「${catName(from)}」。`,
             `${n ? `${n} ${n === 1 ? 'entry moves' : 'entries move'} to “${catName(into)}”${subsMove ? ', with its subcategories' : ''}, then ` : subsMove ? `Its subcategories move to “${catName(into)}”, then ` : ''}“${catName(from)}” is removed.`)) })) return true;
         await mgMergeCategory(from, into); m.edit = null;
         break;
@@ -445,7 +445,7 @@ MOD.actions.push(async (act, v) => {
       case 'mg-type': mgCollect(); m.edit.obj.type = Number(v); break;
       case 'mg-acc-delete': {
         const a = m.edit.obj;
-        if (mgAccountUsed(a.id)) { m.error = tr('还有账单，不能删', "Has entries, can't delete"); break; }
+        if (mgAccountUsed(a.id)) { m.error = tr('仍有账单，无法删除', "Has entries, can't delete"); break; }
         if (!await uiConfirm(tr(`删除账户「${a.name}」？`, `Delete account "${a.name}"?`), { ok: tr('删除', 'Delete'), danger: true })) return true;
         await deleteRecord('account', a.id);
         const due = { ...(shared.get('cardDue', {}) ?? {}) };

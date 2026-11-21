@@ -87,7 +87,7 @@ function loansView() {
           : `<span class="muted small">${tr('到期日', 'Due')}</span><input type="date" data-change="loan-due" value="${dayISO(due)}" aria-label="${tr('到期日', 'Due date')}">${!current.done && now > due ? `<span class="small out">${tr(`逾期 ${now - due} 天`, `${now - due} days overdue`)}</span>` : ''}<button class="btn link danger" data-act="loan-due-clear">${tr('清除', 'Clear')}</button>`}</div></div></div>
       <div class="card">${current.list.map((t) => loanTxRow(t, acc, LOAN.side)).join('')}</div></div>`;
   } else if (LOAN.loose && loose.length) {
-    body = `<div class="grid" style="max-width:760px;width:100%;margin:0 auto"><div class="between"><button class="btn" data-act="loan-back">${tr('‹ 借款', '‹ Loans')}</button><span class="muted small">${tr('点一笔，指给某人', 'Tap one to assign it')}</span></div>
+    body = `<div class="grid" style="max-width:760px;width:100%;margin:0 auto"><div class="between"><button class="btn" data-act="loan-back">${tr('‹ 借款', '‹ Loans')}</button><span class="muted small">${tr('点击一笔，将其指定给某人', 'Tap one to assign it')}</span></div>
       <div class="card">${loose.map((t) => loanTxRow(t, acc, 0, "loan-assign")).join("")}</div></div>`;
   } else {
     const total = loans.reduce((s, l) => s + l.total, 0), back = loans.reduce((s, l) => s + l.back, 0);
@@ -101,7 +101,7 @@ function loansView() {
       <div class="row" style="padding:0"><div class="main"><div class="muted small">${tr('剩余未还', 'Outstanding')}</div><div class="big">${money(Math.max(0, total - back))}</div><div class="muted small">${tr(`共 ${loans.length} 人`, `${loans.length} ${loans.length === 1 ? 'person' : 'people'}`)}</div></div>${ring}</div>
       <div class="between" style="margin-top:10px">${[[lend ? tr('总借出', 'Total lent') : tr('总借入', 'Total borrowed'), total], [tr('已还', 'Repaid'), back], [tr('剩余', 'Left'), Math.max(0, total - back)]].map(([k, c]) => `<div><div class="muted small">${k}</div><div class="num">${money(c)}</div></div>`).join('')}</div>
       <div style="margin-top:12px"><button class="pill" data-act="loan-add" data-v="new">${lend ? tr('＋ 借出', '＋ Lend') : tr('＋ 借入', '＋ Borrow')}</button></div></div>`;
-    const looseCard = loose.length ? `<div class="card click" data-act="loan-loose"><div class="between"><div><b style="font-weight:500">${tr('未归属', 'Unassigned')}</b><div class="muted small">${tr(`${loose.length} 笔没指定对方`, `${loose.length} without a person`)}</div></div>
+    const looseCard = loose.length ? `<div class="card click" data-act="loan-loose"><div class="between"><div><b style="font-weight:500">${tr('未归属', 'Unassigned')}</b><div class="muted small">${tr(`${loose.length} 笔未指定对方`, `${loose.length} without a person`)}</div></div>
       <span class="num">${money(loose.reduce((s, t) => s + effect(acc, t), 0), acctCur(acc))}</span></div></div>` : '';
     const active = loans.filter((l) => !l.done), settled = loans.filter((l) => l.done);
     const card = (l) => {
@@ -115,7 +115,7 @@ function loansView() {
         <div class="right">${status}</div></div></div>`;
     };
     body = `<div class="cols"><div class="grid sticky"><div class="card" style="padding:8px">${seg('loan-side', [[1, tr('借出', 'Lent')], [2, tr('借入', 'Borrowed')]], LOAN.side)}</div>${sumCard}</div>
-      <div class="grid">${looseCard}${!loans.length && !loose.length ? pgEmpty('piggy', tr('还没有借款，点 ＋ 记一笔', 'No loans yet. Tap ＋ to add.')) : ''}
+      <div class="grid">${looseCard}${!loans.length && !loose.length ? pgEmpty('piggy', tr('暂无借款，点击 ＋ 记一笔', 'No loans yet. Tap ＋ to add.')) : ''}
         ${active.map(card).join('')}
         ${settled.length ? `<button class="btn link ln-done" data-act="loan-done">${tr(`已结清 ${settled.length} 人`, `Settled (${settled.length})`)} ${LOAN.showDone ? '▴' : '▾'}</button>` : ''}
         ${LOAN.showDone ? settled.map(card).join('') : ''}</div></div>`;
@@ -150,8 +150,8 @@ function loanAddDialog(acc) {
 function loanAssignDialog() {
   if (LOAN.assign == null) return '';
   const people = loanPeople();
-  return `<div class="modal bl-modal"><div class="bl-back" data-act="loan-cancel"></div><div class="card grid" role="dialog" aria-label="${tr('归到谁名下', 'Assign to')}">
-    <b style="font-size:18px">${tr('归到谁名下', 'Assign to')}</b>
+  return `<div class="modal bl-modal"><div class="bl-back" data-act="loan-cancel"></div><div class="card grid" role="dialog" aria-label="${tr('归属人', 'Assign to')}">
+    <b style="font-size:18px">${tr('归属人', 'Assign to')}</b>
     ${seg('loan-assign-side', [[1, tr('借出', 'Lent')], [2, tr('借入', 'Borrowed')]], LOAN.assignSide)}
     <label class="f">${tr('对方', 'Person')}<input id="ln-name" list="ln-people" autocomplete="off"><datalist id="ln-people">${people.map((p) => `<option value="${h(p)}">`).join('')}</datalist></label>
     ${people.length ? `<div class="chips" style="margin:0">${people.slice(0, 12).map((p) => `<button class="chip" data-act="loan-pick" data-v="${h(p)}">${h(p)}</button>`).join('')}</div>` : ''}
@@ -214,9 +214,9 @@ MOD.actions.push(async (act, v) => {
     case 'loan-save': {
       loanCollect();
       const a = LOAN.add, person = (a.person || a.name || '').trim(), cents = parseCents(a.amount ?? ''), account = state.data.account.get(a.accountId) ?? state.data.account.get(Number(document.getElementById('ln-account')?.value));
-      if (!person) { LOAN.err = tr('请填对方', 'Enter a person'); break; }
-      if (cents == null) { LOAN.err = tr('请填金额', 'Enter an amount'); break; }
-      if (!account) { LOAN.err = tr('请选账户', 'Choose an account'); break; }
+      if (!person) { LOAN.err = tr('请输入对方', 'Enter a person'); break; }
+      if (cents == null) { LOAN.err = tr('请输入金额', 'Enter an amount'); break; }
+      if (!account) { LOAN.err = tr('请选择账户', 'Choose an account'); break; }
       try {
         await addLoan(person, LOAN.side, a.repay, cents, account, a.date ?? today(), a.note ?? '');
         store.set('hl.lastAccount', account.id);
@@ -228,7 +228,7 @@ MOD.actions.push(async (act, v) => {
     case 'loan-assign-side': LOAN.assignSide = Number(v); { const keep = document.getElementById('ln-name')?.value ?? ''; render(); const el = document.getElementById('ln-name'); if (el) el.value = keep; } return true;
     case 'loan-assign-save': {
       const name = (document.getElementById('ln-name')?.value ?? '').trim(), t = state.data.tx.get(LOAN.assign);
-      if (!name) { LOAN.err = tr('请填对方', 'Enter a person'); break; }
+      if (!name) { LOAN.err = tr('请输入对方', 'Enter a person'); break; }
       try { if (t) await saveRecord('tx', { ...t, loanPerson: name, loanSide: LOAN.assignSide }); LOAN.assign = null; LOAN.err = ''; } catch (e) { LOAN.err = e.message; }
       break;
     }

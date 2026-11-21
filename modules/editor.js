@@ -325,11 +325,11 @@ function edCheck(e) {
   const given = offs.reduce((s, [, c]) => s + c, 0);
   let why = '';
   if (cents == null) why = tr('请输入金额', 'Enter an amount');
-  else if (home == null) why = tr('没有汇率，请填折合金额', 'No rate: enter the amount in ' + HOME);
+  else if (home == null) why = tr('暂无汇率，请填写折合金额', 'No rate: enter the amount in ' + HOME);
   else if (!state.data.account.get(e.accountId)) why = tr('请选择账户', 'Choose an account');
   else if (transfer && !edTo(e)) why = tr('请选择两个不同的账户', 'Choose two different accounts');
   else if (!transfer && !edCats(e).leafId) why = tr('请选择分类', 'Choose a category');
-  else if (given > home) why = tr('抵扣超过了这笔收入', 'Offsets exceed this income');
+  else if (given > home) why = tr('抵扣金额超过该笔收入', 'Offsets exceed this income');
   return { cents, cur, home, offs, given, why, ok: !why };
 }
 
@@ -338,7 +338,7 @@ function edAmountCard(e) {
   const cls = !a ? 'zero' : cents == null ? 'bad' : e.kind === KIND.INCOME ? 'in' : e.kind === KIND.EXPENSE ? 'out' : '';
   const home = foreign ? edHomeCents(e, cents ?? 0) : null;
   const formula = cents != null && edIsFormula(a) ? `= ${edInput(cents)}` : '';
-  const equiv = !foreign ? '' : home != null ? `≈ ${money(home)}` : tr('没有汇率，点这里填', 'No rate, tap to enter');
+  const equiv = !foreign ? '' : home != null ? `≈ ${money(home)}` : tr('暂无汇率，点击此处填写', 'No rate, tap to enter');
   return `<div class="ed-amount"><button class="ed-cur" data-act="ed-pick" data-v="cur" aria-label="${tr('币种', 'Currency')}">${edFlag(cur)}<span>${h(cur)}</span><i>▾</i></button>
     <div class="ed-amt-w"><div class="ed-amt num ${cls} ${a.length > 12 ? 'long' : ''}">${h(a || '0.00')}</div>${formula || equiv ? `<div class="ed-amt-sub">${formula ? `<span>${formula}</span>` : ''}${equiv ? `<button class="ed-equiv ${home == null ? 'bad' : ''}" data-act="ed-pick" data-v="equiv">${equiv}</button>` : ''}</div>` : ''}</div></div>`;
 }
@@ -351,14 +351,14 @@ function edOffsetCard(e, L) {
     const bad = String(text).trim() !== '' && parseCents(text) == null;
     return `<div class="ed-off"><div class="muted ed-offdate">${dayISO(t.date)}</div>
       <div class="ed-offrow">${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>
-      <div class="ed-offline"><label class="ed-offamt ${bad ? 'bad' : ''}"><span>${h(edSym(HOME))}</span><input class="ed-offin" data-i="${i}" value="${h(text)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${tr('留空 = 剩下的全部', 'Empty = the rest')}" aria-label="${tr('抵扣金额', 'Amount')}"></label>
+      <div class="ed-offline"><label class="ed-offamt ${bad ? 'bad' : ''}"><span>${h(edSym(HOME))}</span><input class="ed-offin" data-i="${i}" value="${h(text)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${tr('留空 = 剩余全部', 'Empty = the rest')}" aria-label="${tr('抵扣金额', 'Amount')}"></label>
         <button class="btn link muted" data-act="ed-off-rm" data-v="${i}">${tr('移除', 'Remove')}</button></div></div>`;
   }).join('');
   // "选择"打开面板：智能推荐 + 搜索全部（links.js）；有推荐时按钮上带个数
   const n = typeof lkSuggest === 'function' ? lkSuggest(lkFromEditing(e), 'exp', new Set((e._offs ?? []).map(([id]) => id))).length : 0;
   return `<div class="ed-box ed-offs"><div class="muted small">${tr('关联支出', 'Linked expenses')}</div>${rows}
     <div class="small ed-offsum">${edOffSum(e)}</div>
-    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}${n ? `<span class="lk-n">${n}</span>` : ''}</button></div>`;
+    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再添加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}${n ? `<span class="lk-n">${n}</span>` : ''}</button></div>`;
 }
 /** 记账页里这笔收入是"报销"（关联的支出不抵扣，只标已报销）。 */
 const edIsClaim = (e) => e.kind === KIND.INCOME && edCats(e).top?.name === '报销';
@@ -367,7 +367,7 @@ function edOffSum(e) {
   const { home, given } = edCheck(e);
   if (home == null) return '';
   if (edIsClaim(e)) return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已关联 ${money(given)}`, `${money(given)} linked`)}</span>`;
-  return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已抵扣 ${money(given)}，剩余 ${money(Math.max(0, home - given))} 算收入`, `${money(given)} offset, ${money(Math.max(0, home - given))} left as income`)}</span>`;
+  return `<span class="${given > home ? 'ed-err' : 'muted'}">${tr(`已抵扣 ${money(given)}，剩余 ${money(Math.max(0, home - given))} 计入收入`, `${money(given)} offset, ${money(Math.max(0, home - given))} left as income`)}</span>`;
 }
 
 /** 支出：退款 · 报销 · 代付收回（已关联的、选择、新建），画法在 links.js 的 lkExpenseBox。 */
@@ -385,8 +385,8 @@ function editorView() {
   const from = acc.get(e.accountId), to = edTo(e), tags = edTags(e);
   const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? tr('选择账户', 'Choose account'))}</span></button>`;
   const head = transfer
-    ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('至少要两个账户', 'Needs two accounts')}</div>` : ''}</div>`
-    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('还没有分类', 'No categories yet')}</div>`}
+    ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('需至少两个账户', 'Needs two accounts')}</div>` : ''}</div>`
+    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('暂无分类', 'No categories yet')}</div>`}
       ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(edCatName(s))}</button>`).join('')}</div>` : ''}</div>`;
   // 可报销的支出、报销收入才问项目和资金来源（已经填了的照样显示）
   const pf = !transfer && (e.kind === KIND.EXPENSE && e.reimburse || e.kind === KIND.INCOME && top?.name === '报销' || e.project || e.fund);
@@ -431,7 +431,7 @@ function editorView() {
 function edPopList(e) {
   const p = e._pick, q = String(e._q ?? '').trim().toLowerCase();
   const opt = (k, v, label, on, lead = '') => `<button class="ed-opt ${on ? 'on' : ''}" data-act="ed-set" data-k="${k}" data-v="${h(v)}">${lead}<span>${label}</span>${on ? edSvg('check') : ''}</button>`;
-  const none = `<div class="muted small ed-none">${tr('没有匹配的', 'No match')}</div>`;
+  const none = `<div class="muted small ed-none">${tr('无匹配结果', 'No match')}</div>`;
   if (p === 'acc' || p === 'to') {
     const k = p === 'to' ? 'toAccountId' : 'accountId', sel = p === 'to' ? edTo(e)?.id : e.accountId;
     const list = edAccounts(sel).filter((a) => (p !== 'to' || a.id !== e.accountId) && (!q || a.name.toLowerCase().includes(q)));
@@ -470,9 +470,9 @@ function edPop(e) {
     const auto = cents != null && r ? Math.round(cents * r) : null;
     const now = String(e._equiv ?? '').trim() ? e._equiv : e._keep ? edInput(edHomeCents(e, cents ?? e.origCents) ?? 0) : '';
     title = tr(`折合 ${HOME}`, `In ${HOME}`);
-    body = `<label class="ed-eqfield"><span>${h(edSym(HOME))}</span><input id="ed-equiv" value="${h(now)}" data-was="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${auto != null ? edInput(auto) : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
-      <div class="muted small">${r ? `1 ${h(cur)} = ${r.toFixed(4)} ${HOME} · ${dayISO(e.date)}` : tr('没有汇率，请手动填写', 'No rate available, enter it yourself')}</div>
-      <div class="ed-eqbtns"><button class="btn" data-act="ed-eq-reset">${tr('按汇率算', 'Use the rate')}</button><button class="btn primary" data-act="ed-eq-ok">${tr('好', 'OK')}</button></div>`;
+    body = `<label class="ed-eqfield"><span>${h(edSym(HOME))}</span><input id="ed-equiv" value="${h(now)}" data-was="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${auto != null ? edInput(auto) : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
+      <div class="muted small">${r ? `1 ${h(cur)} = ${r.toFixed(4)} ${HOME} · ${dayISO(e.date)}` : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}</div>
+      <div class="ed-eqbtns"><button class="btn" data-act="ed-eq-reset">${tr('按汇率计算', 'Use the rate')}</button><button class="btn primary" data-act="ed-eq-ok">${tr('好', 'OK')}</button></div>`;
   } else if (p === 'mood') {
     title = tr('这笔花得值吗？', 'Worth it?');
     body = `<div class="mood-ed">${moodRater(e._score || 0, 'ed')}</div>` + (moodPercent() ? `<button class="btn primary mood-ok" data-act="ed-pick-x">${tr('完成', 'Done')}</button>` : '') + opt('_score', 0, tr('不打分', 'No rating'), !e._score);
@@ -487,11 +487,11 @@ function edPop(e) {
   } else if (p === 'tags') {
     const on = edTags(e), all = [...on.filter((x) => !edKnownTags().includes(x)), ...edKnownTags()];
     title = tr('标签', 'Tags');
-    body = `<div class="ed-chips">${all.map((x) => { const logo = edTagLogo(x, 24); return `<button class="chip ed-tagpick ${logo ? 'ed-tagchip' : ''} ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">${logo}<span>${logo ? '' : '#'}${h(x)}</span></button>`; }).join('') || `<span class="muted small">${tr('还没有标签', 'No tags yet')}</span>`}</div>
+    body = `<div class="ed-chips">${all.map((x) => { const logo = edTagLogo(x, 24); return `<button class="chip ed-tagpick ${logo ? 'ed-tagchip' : ''} ${on.includes(x) ? 'on' : ''}" data-act="ed-tag" data-v="${h(x)}">${logo}<span>${logo ? '' : '#'}${h(x)}</span></button>`; }).join('') || `<span class="muted small">${tr('暂无标签', 'No tags yet')}</span>`}</div>
       <div class="ed-new"><input id="ed-newtag" placeholder="${tr('新标签', 'New tag')}" enterkeyhint="done" autocomplete="off"><button class="btn primary" data-act="ed-tags-done">${tr('好', 'Done')}</button></div>`;
   }
   const top = search
-    ? `<div class="ed-pophead"><label class="ed-search">${ED_SEARCH_SVG}<input id="ed-q" value="${h(e._q ?? '')}" placeholder="${p === 'offset' ? tr('搜分类或备注，如 医保、房租', 'Search category or note') : tr('搜索', 'Search')}" autocomplete="off" enterkeyhint="search" aria-label="${h(title)}"></label><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>`
+    ? `<div class="ed-pophead"><label class="ed-search">${ED_SEARCH_SVG}<input id="ed-q" value="${h(e._q ?? '')}" placeholder="${p === 'offset' ? tr('搜索分类或备注，如 医保、房租', 'Search category or note') : tr('搜索', 'Search')}" autocomplete="off" enterkeyhint="search" aria-label="${h(title)}"></label><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>`
     : `<div class="between"><b>${title}</b><button class="ed-x" data-act="ed-pick-x" aria-label="${tr('关闭', 'Close')}">✕</button></div>`;
   return `<div class="ed-pop ${cls}${search ? ' search' : ''}" data-act="ed-pick-close"><div class="ed-popcard" data-act="noop">${top}<div class="ed-opts">${body}</div></div></div>`;
 }
@@ -626,7 +626,7 @@ async function saveEditing(again = false) {
     if (again && e._isNew) {
       state.editing = { ...e, id: newId(), createdAt: Date.now(), _amount: '', note: '', _pick: null, _equiv: '', _offs: [], _q: '' };
       render();
-      edToast(tr('已保存，接着记下一笔', 'Saved. Next one.'));
+      edToast(tr('已保存，可继续记下一笔', 'Saved. Next one.'));
       star();
       return;
     }
@@ -705,7 +705,7 @@ async function edCopy(t) {
   const copy = { ...t, id: newId(), date: today(), createdAt: Date.now(), offsetOf: 0, offsetParts: '', reimburse: t.reimburse ? 1 : 0 };
   try { await saveRecord('tx', copy); } catch (e) { state.error = e.message; render(); return; }
   render();
-  edToast(tr('已复制到今天', 'Copied to today'), async () => { await deleteRecord('tx', copy.id); });
+  edToast(tr('已复制至今天', 'Copied to today'), async () => { await deleteRecord('tx', copy.id); });
 }
 
 // ---------------------------------------------------------------- #app 外面的一层：撤销提示、多选操作条、删除确认
@@ -748,7 +748,7 @@ function edConfirmView() {
     <b style="font-size:17px">${copy ? tr('确认复制此笔账目？', 'Copy this entry?') : tr('确认删除此笔账目？', 'Delete this entry?')}</b>
     <div class="small muted">${tr(`${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEK[d.getUTCDay()]}`, `${WEEK[d.getUTCDay()]}, ${MONTH_EN[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`)}</div>
     <div class="ed-cfrow">${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div>
-    <div class="small" style="color:${copy ? '#5B8DEF' : 'var(--expense)'}">${copy ? tr('会复制一笔到今天', 'A copy will be added today') : tr('删除后可在底部撤销', 'You can undo after deleting')}</div>
+    <div class="small" style="color:${copy ? '#5B8DEF' : 'var(--expense)'}">${copy ? tr('将复制一笔至今天', 'A copy will be added today') : tr('删除后可在底部撤销', 'You can undo after deleting')}</div>
     <div class="ed-selbtns"><button class="btn" data-ed="cf-no">${tr('取消', 'Cancel')}</button><button class="btn ${copy ? 'primary' : 'ed-redbtn'}" data-ed="cf-yes">${copy ? tr('复制', 'Copy') : tr('删除', 'Delete')}</button></div>
   </div></div>`;
 }
@@ -813,7 +813,7 @@ function edSelBar() {
 function edBulkPop() {
   const p = ed.bulkPick, b = ed.bulk;
   const opt = (v, label, on, lead = '') => `<button class="ed-opt ${on ? 'on' : ''}" data-ed="bset" data-k="${p}" ${v == null ? 'data-none="1"' : `data-v="${h(v)}"`}>${lead}<span>${label}</span>${on ? edSvg('check') : ''}</button>`;
-  let title = '', body = opt(null, tr('（不改）', '(Keep)'), b[p] == null);
+  let title = '', body = opt(null, tr('（不修改）', '(Keep)'), b[p] == null);
   if (p === 'project' || p === 'fund') {
     title = p === 'project' ? tr('报销项目', 'Project') : tr('资金来源', 'Funding');
     body += opt('', tr('（清空）', '(Clear)'), b[p] === '') + (p === 'project' ? projectNames() : fundNames()).map((n) => opt(n, h(n), b[p] === n)).join('')
@@ -843,21 +843,21 @@ async function edBulkApply() {
   if (!plan.length || ed.busy) return;
   for (let i = 0; i < plan.length; i++) {
     ed.busy = tr(`保存中 ${i + 1}/${plan.length}`, `Saving ${i + 1}/${plan.length}`); edPaintLayer();
-    try { await saveRecord('tx', plan[i].now); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('没存完：', 'Not all saved: ') + e.message); return; }
+    try { await saveRecord('tx', plan[i].now); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('未能全部保存：', 'Not all saved: ') + e.message); return; }
   }
   if (b.project) rememberName('hl.projects', b.project);
   if (b.fund) rememberName('hl.funds', b.fund);
   edExitSelect(); render();
-  edToast(tr(`已改 ${plan.length} 笔`, `Updated ${plan.length}`), async () => { for (const p of plan) await saveRecord('tx', p.old); });
+  edToast(tr(`已修改 ${plan.length} 笔`, `Updated ${plan.length}`), async () => { for (const p of plan) await saveRecord('tx', p.old); });
 }
 
 async function edBulkDelete() {
   const list = [...state.sel].map((id) => state.data.tx.get(id)).filter(Boolean);
   if (!list.length || ed.busy) return;
-  if (!await uiConfirm(tr(`删除 ${list.length} 笔？`, `Delete ${list.length} ${list.length === 1 ? 'entry' : 'entries'}?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('可以撤销', 'You can undo') })) return;
+  if (!await uiConfirm(tr(`删除 ${list.length} 笔？`, `Delete ${list.length} ${list.length === 1 ? 'entry' : 'entries'}?`), { ok: tr('删除', 'Delete'), danger: true, detail: tr('可撤销', 'You can undo') })) return;
   for (let i = 0; i < list.length; i++) {
     ed.busy = tr(`删除中 ${i + 1}/${list.length}`, `Deleting ${i + 1}/${list.length}`); edPaintLayer();
-    try { await deleteRecord('tx', list[i].id); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('没删完：', 'Not all deleted: ') + e.message); return; }
+    try { await deleteRecord('tx', list[i].id); } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('未能全部删除：', 'Not all deleted: ') + e.message); return; }
   }
   edExitSelect(); render();
   edToast(tr(`已删除 ${list.length} 笔`, `Deleted ${list.length}`), async () => { for (const t of list) await saveRecord('tx', t); });

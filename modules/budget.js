@@ -58,7 +58,7 @@ function budgetPace(n, total, grow) {
   const diff = forecast - total;
   return `<div class="card"><b class="muted small">${tr('本月花费走势', 'Spending this month')}</b>${svg}
     <div class="between small muted"><span>1</span><span>${tr('虚线：匀速花完', 'Dashed: even pace')}</span><span>${days}</span></div>
-    ${current ? `<div class="${diff > 0 ? 'out' : 'in'}" style="font-weight:600;margin-top:6px">${tr(`预计月底花 ${money(forecast)}，${diff > 0 ? '超 ' + money(diff) : '剩 ' + money(-diff)}`, `Month-end forecast ${money(forecast)}, ${diff > 0 ? money(diff) + ' over' : money(-diff) + ' left'}`)}</div>` : ''}</div>`;
+    ${current ? `<div class="${diff > 0 ? 'out' : 'in'}" style="font-weight:600;margin-top:6px">${tr(`预计月底支出 ${money(forecast)}，${diff > 0 ? '超 ' + money(diff) : '剩 ' + money(-diff)}`, `Month-end forecast ${money(forecast)}, ${diff > 0 ? money(diff) + ' over' : money(-diff) + ' left'}`)}</div>` : ''}</div>`;
 }
 
 function budgetView() {
@@ -68,7 +68,7 @@ function budgetView() {
   // 左边：大圆环
   let head;
   if (total <= 0) {
-    head = `<div class="card grid">${monthBar()}<div><b>${tr('还没设月度预算', 'No monthly budget yet')}</b><div class="muted">${tr('本月已支出', 'Spent this month')} ${money(spent)}</div></div>
+    head = `<div class="card grid">${monthBar()}<div><b>${tr('暂未设置月度预算', 'No monthly budget yet')}</b><div class="muted">${tr('本月已支出', 'Spent this month')} ${money(spent)}</div></div>
       <div><button class="btn link" style="padding:0" data-act="bud-edit" data-v="total">${tr('设置预算', 'Set a budget')}</button></div></div>`;
   } else {
     const left = total - spent, ratio = spent / total;
@@ -167,7 +167,7 @@ MOD.actions.push(async (act, v, el) => {
     case 'bud-save': {
       const text = document.getElementById('bud-input')?.value.trim() ?? '';
       const cents = text ? parseCents(text) : 0;
-      if (cents == null) { BUD.err = tr('金额不对', 'Invalid amount'); break; }
+      if (cents == null) { BUD.err = tr('金额不正确', 'Invalid amount'); break; }
       await budgetSave(cents);
       break;
     }

@@ -46,7 +46,7 @@ function moodRater(s, where, id = '') {
   const attrs = (i) => (where === 'ed' ? `data-act="ed-set" data-k="_score" data-v="${lv === i ? 0 : i * 20}"` : `data-act="mood-set" data-v="${id}:${lv === i ? 0 : i * 20}"`);
   return `<div class="mood-rate"><span class="mood-rate-pl">${pl}</span>
     <div class="mood-stars">${[1, 2, 3, 4, 5].map((i) => `<button class="${i <= lv ? 'on' : ''}" ${attrs(i)} aria-label="${i}★">${MOOD_STAR}</button>`).join('')}</div>
-    <span class="mood-rate-lb" style="color:${m?.color ?? 'var(--muted)'}">${m ? h(tr(m.zh, m.en)) : tr('点星星打分', 'Tap a star')}</span></div>`;
+    <span class="mood-rate-lb" style="color:${m?.color ?? 'var(--muted)'}">${m ? h(tr(m.zh, m.en)) : tr('点击星星打分', 'Tap a star')}</span></div>`;
 }
 // 百分制拖动时：数字和行星跟着变（不重画整页）；松手才存
 document.addEventListener('input', (ev) => {
@@ -82,7 +82,7 @@ function moodView() {
   const avgS = Math.round(avg), pct = moodPercent();
   const { y, m } = state.month;
   const head = avgS ? moodPlanet(avgS, 54) : typeof plOfMonth === 'function' ? planetSvg(plOfMonth(y, m), { px: 54, mood: 0 }) : '';
-  const avgTxt = !avgS ? tr('这个月还没给支出打分', 'No ratings this month yet')
+  const avgTxt = !avgS ? tr('本月暂未给支出打分', 'No ratings this month yet')
     : pct ? tr(`平均 ${avgS} 分 · ${moodLabel(avgS)}`, `Average ${avgS} · ${moodLabel(avgS)}`)
     : tr(`平均 ★${(avg / 20).toFixed(1)} · ${moodLabel(avgS)}`, `Average ★${(avg / 20).toFixed(1)} · ${moodLabel(avgS)}`);
   const bar = rated.length ? `<div class="mood-bar">${MOODS.map((md) => { const v = sumOf(rated.filter((t) => lvOf(t) === md.level)); return v > 0 ? `<i style="flex:${v};background:${md.color}"></i>` : ''; }).join('')}</div>
@@ -96,7 +96,7 @@ function moodView() {
       <div class="between mood-figs"><div><b class="num" style="color:${MOODS[0].color}">${money(sumOf(rated.filter((t) => lvOf(t) <= 2)))}</b><div class="muted small">${tr('后悔的花费', 'Regretted')}</div></div>
         <div class="right"><b class="num" style="color:${MOODS[3].color}">${money(sumOf(rated.filter((t) => lvOf(t) >= 4)))}</b><div class="muted small">${tr('开心的花费', 'Joyful')}</div></div></div>${bar}</div>
     ${top(tr('最后悔的几笔', 'Most regretted'), byAmt(rated.filter((t) => lvOf(t) <= 2)), 1)}${top(tr('最开心的几笔', 'Most joyful'), byAmt(rated.filter((t) => lvOf(t) >= 4)), 5)}
-    ${unrated.length ? `<div class="card mood-list"><div class="mood-h"><b>${tr(`还没打分 · ${unrated.length} 笔`, `Not rated · ${unrated.length}`)}</b></div>
+    ${unrated.length ? `<div class="card mood-list"><div class="mood-h"><b>${tr(`未打分 · ${unrated.length} 笔`, `Not rated · ${unrated.length}`)}</b></div>
       ${unrated.slice(0, 30).map((t) => `${rowsOf([t], L)}<div class="mood-under">${moodRater(0, 'tx', t.id)}</div>`).join('')}</div>` : ''}
   </div>`;
 }

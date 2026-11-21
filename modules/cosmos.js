@@ -89,7 +89,7 @@ function plSheet() {
 /** 桌面图标：十个小图标（和真的图标一样的紫色底），品牌星排第一，写"默认"。 */
 function plIconCard() {
   const cur = plLauncher();
-  const note = IS_IOS ? tr('删掉主屏幕图标，在 Safari 重新添加后生效', 'Delete the Home Screen icon and re-add it from Safari')
+  const note = IS_IOS ? tr('删除主屏幕图标并在 Safari 中重新添加后生效', 'Delete the Home Screen icon and re-add it from Safari')
     : tr('重新安装到桌面后生效', 'Reinstall to the home screen to apply');
   const name = (k) => (k === 'brand' ? tr('默认', 'Default') : planetName(planetByKey(k)));
   return `<div class="card grid"><span class="ap-h">${tr('桌面图标', 'App icon')}</span>

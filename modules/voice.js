@@ -26,8 +26,8 @@ function vcShow() {
   }
   vc.card.setAttribute('aria-label', tr('正在听', 'Listening'));
   vc.card.innerHTML = `<div class="vc-mic"><i class="vc-pulse"></i><span class="vc-dot">${VC_MIC}</span></div>
-    <div class="vc-heard muted" aria-live="polite">${tr('正在听…说一句话记账', 'Listening… say it')}</div>
-    <div class="vc-hint">${tr('比如：午饭 12 欧 ING', 'e.g. lunch 12 euros ING')}</div>
+    <div class="vc-heard muted" aria-live="polite">${tr('正在听…请说一句话记账', 'Listening… say it')}</div>
+    <div class="vc-hint">${tr('例如：午饭 12 欧 ING', 'e.g. lunch 12 euros ING')}</div>
     <div class="vc-btns"><button class="btn" data-vc="cancel">${tr('取消', 'Cancel')}</button><button class="btn primary" data-vc="stop">${tr('说完了', 'Done')}</button></div>`;
   document.body.appendChild(vc.card);
   void vc.card.offsetWidth; // 先排一次版，下一句的淡入动画才会生效
@@ -41,7 +41,7 @@ function vcClose() {
 function vcSetHeard(text) {
   const el = vc.card?.querySelector('.vc-heard');
   if (!el) return;
-  el.textContent = text || tr('正在听…说一句话记账', 'Listening… say it');
+  el.textContent = text || tr('正在听…请说一句话记账', 'Listening… say it');
   el.classList.toggle('muted', !text);
 }
 /** 音量 0–1 → 外圈放大（1 + level × 0.5，和手机端一样）。 */
@@ -106,14 +106,14 @@ function vcTypeInstead(msg) {
 }
 
 function vcStart() {
-  if (!VC_SR) { vcTypeInstead(tr('这个浏览器不能语音识别，可以点键盘上的麦克风说', 'No speech recognition here. Use the mic on your keyboard.')); return; }
+  if (!VC_SR) { vcTypeInstead(tr('该浏览器不支持语音识别，可点击键盘上的麦克风输入', 'No speech recognition here. Use the mic on your keyboard.')); return; }
   let rec;
   try {
     rec = new VC_SR();
     rec.lang = LANG === 'en' ? 'en-US' : 'zh-CN';
     // 连续听：停顿时不会提前结束；电脑上松开鼠标、手机上点"说完了"才算说完（和手机端按住说话一样）
     rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
-  } catch { vcTypeInstead(tr('语音识别没成功，可以点键盘上的麦克风说', 'Voice didn\'t work. Use the mic on your keyboard.')); return; }
+  } catch { vcTypeInstead(tr('语音识别失败，可点击键盘上的麦克风输入', 'Voice didn\'t work. Use the mic on your keyboard.')); return; }
   vc.rec = rec;
   let final = '', failed = false;
   rec.onaudiostart = () => vcMeterOn();
@@ -127,12 +127,12 @@ function vcStart() {
     failed = true;
     const e = ev.error;
     if (e === 'aborted') return;
-    if (e === 'no-speech') { vc.done = true; vcClose(); xsToast(tr('没听清，再说一次', 'Didn\'t catch that. Try again.')); return; }
+    if (e === 'no-speech') { vc.done = true; vcClose(); xsToast(tr('未能识别，请再说一次', 'Didn\'t catch that. Try again.')); return; }
     if (vc.heard) return; // 已经听到了一些：交给 onend 发出去
-    vcTypeInstead(e === 'not-allowed' || e === 'service-not-allowed' ? tr('没有麦克风权限，可以点键盘上的麦克风说', 'No microphone permission. Use the mic on your keyboard.')
-      : e === 'network' ? tr('语音识别连不上网，先打字吧', 'Voice service can\'t reach the network. Type it instead.')
-        : e === 'audio-capture' ? tr('没找到麦克风，可以点键盘上的麦克风说', 'No microphone found. Use the mic on your keyboard.')
-          : tr(`语音识别出错（${e}），先打字吧`, `Voice recognition failed (${e}). Type it instead.`));
+    vcTypeInstead(e === 'not-allowed' || e === 'service-not-allowed' ? tr('无麦克风权限，可点击键盘上的麦克风输入', 'No microphone permission. Use the mic on your keyboard.')
+      : e === 'network' ? tr('语音识别无法联网，请改用打字输入', 'Voice service can\'t reach the network. Type it instead.')
+        : e === 'audio-capture' ? tr('未找到麦克风，可点击键盘上的麦克风输入', 'No microphone found. Use the mic on your keyboard.')
+          : tr(`语音识别出错（${e}），请改用打字输入`, `Voice recognition failed (${e}). Type it instead.`));
   };
   rec.onend = () => {
     if (vc.rec !== rec) return;
@@ -140,12 +140,12 @@ function vcStart() {
     if (vc.cancelled || vc.done) return;
     const text = (final || vc.heard).trim();
     vc.done = true; vcClose();
-    if (!text) { if (!failed) xsToast(tr('没听清，再说一次', 'Didn\'t catch that. Try again.')); return; }
+    if (!text) { if (!failed) xsToast(tr('未能识别，请再说一次', 'Didn\'t catch that. Try again.')); return; }
     // 交给"问账本"，和在输入框里打字后按发送一样
     state.tab = 'ask'; render();
     sendAsk(text);
   };
-  try { rec.start(); } catch { vc.rec = null; vcTypeInstead(tr('语音识别没成功，可以点键盘上的麦克风说', 'Voice didn\'t work. Use the mic on your keyboard.')); }
+  try { rec.start(); } catch { vc.rec = null; vcTypeInstead(tr('语音识别失败，可点击键盘上的麦克风输入', 'Voice didn\'t work. Use the mic on your keyboard.')); }
 }
 function vcStop() {
   if (vc.rec) { try { vc.rec.stop(); } catch { /* 已经停了 */ } } else if (!vc.done) vcCancel();

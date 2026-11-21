@@ -111,7 +111,7 @@ async function lkUnlock(auto = false) {
     // 只看系统有没有验证通过（面容 / 指纹 / 设备密码），不在服务器上验签：这是遮挡屏，不是加密
     if (got) lkHide();
   } catch (e) {
-    if (!auto && e?.name !== 'NotAllowedError' && e?.name !== 'AbortError') lkErr(tr('验证没成功', 'Couldn\'t verify'));
+    if (!auto && e?.name !== 'NotAllowedError' && e?.name !== 'AbortError') lkErr(tr('验证失败', 'Couldn\'t verify'));
   } finally { lk.busy = false; }
 }
 
@@ -126,14 +126,14 @@ async function lkTryPin() {
   lk.fails++;
   // 连错 5 次之后每次要等 30 秒
   if (lk.fails >= 5) lk.waitUntil = Date.now() + 30000;
-  lkErr(tr('密码不对', 'Wrong PIN'));
+  lkErr(tr('密码不正确', 'Wrong PIN'));
 }
 
 async function lkClick(ev) {
   const t = ev.target;
   if (t.closest('.lk-out')) {
     // 忘了密码 / 面容用不了时的出口：退出登录（数据在云端，重新登录要账号密码），同时关掉应用锁
-    if (!await uiConfirm(tr('退出登录？', 'Sign out?'), { ok: tr('退出', 'Sign out'), danger: true, detail: tr('应用锁会关掉', 'App lock will be turned off') })) return;
+    if (!await uiConfirm(tr('退出登录？', 'Sign out?'), { ok: tr('退出', 'Sign out'), danger: true, detail: tr('应用锁将关闭', 'App lock will be turned off') })) return;
     lk.save(null); lkHide();
     if (typeof signOut === 'function') signOut();
     return;
@@ -170,14 +170,14 @@ function lkAskPin() {
     let first = null;
     box.innerHTML = `<div class="card grid" role="dialog" aria-modal="true">
         <b style="font-size:17px" class="lk-sp-t"></b>
-        <div class="muted small lk-sp-d">${tr('这台设备用不了面容 / 指纹', 'Face ID / Touch ID not available here')}</div>
+        <div class="muted small lk-sp-d">${tr('本设备不支持面容 / 指纹', 'Face ID / Touch ID not available here')}</div>
         <input class="lk-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="new-password" enterkeyhint="done" aria-label="${tr('密码', 'PIN')}">
         <div class="err" aria-live="polite"></div>
         <div class="between"><button class="btn" data-v="0">${tr('取消', 'Cancel')}</button><button class="btn primary" data-v="1"></button></div></div>`;
     const inp = box.querySelector('input');
     // 只换文字、清空输入框，输入框本身不换（焦点和键盘不会丢）
     const paint = (err = '') => {
-      box.querySelector('.lk-sp-t').textContent = first == null ? tr('设个 4–6 位数字密码', 'Set a 4–6 digit PIN') : tr('再输一次', 'Enter it again');
+      box.querySelector('.lk-sp-t').textContent = first == null ? tr('请设置 4–6 位数字密码', 'Set a 4–6 digit PIN') : tr('请再次输入', 'Enter it again');
       box.querySelector('.lk-sp-d').hidden = first != null;
       box.querySelector('.err').textContent = err;
       box.querySelector('button[data-v="1"]').textContent = first == null ? tr('下一步', 'Next') : tr('确定', 'OK');
@@ -186,9 +186,9 @@ function lkAskPin() {
     const close = (v) => { box.remove(); done(v); };
     const next = () => {
       const v = inp.value;
-      if (!/^\d{4,6}$/.test(v)) { paint(tr('要 4–6 位数字', 'Use 4–6 digits')); return; }
+      if (!/^\d{4,6}$/.test(v)) { paint(tr('需为 4–6 位数字', 'Use 4–6 digits')); return; }
       if (first == null) { first = v; paint(); return; }
-      if (v !== first) { first = null; paint(tr('两次不一样，重新设', 'They don\'t match. Start over.')); return; }
+      if (v !== first) { first = null; paint(tr('密码不一致，请重新设置', 'They don\'t match. Start over.')); return; }
       close(v);
     };
     box.addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) { if (b.dataset.v === '1') next(); else close(null); } else if (e.target === box) close(null); });
@@ -213,10 +213,10 @@ async function lkEnable() {
       if (cred) { lk.save({ on: true, kind: 'key', id: lkB64(cred.rawId) }); return true; }
     } catch (e) {
       // 用户自己取消了：就不开；别的错误（不支持等）退回到数字密码
-      if (e?.name === 'NotAllowedError' || e?.name === 'AbortError') { xsToast(tr('没有开启', 'Not turned on')); return false; }
+      if (e?.name === 'NotAllowedError' || e?.name === 'AbortError') { xsToast(tr('未开启', 'Not turned on')); return false; }
     }
   }
-  if (!window.crypto?.subtle) { xsToast(tr('这个浏览器开不了应用锁', 'App lock isn\'t supported in this browser')); return false; }
+  if (!window.crypto?.subtle) { xsToast(tr('该浏览器不支持应用锁', 'App lock isn\'t supported in this browser')); return false; }
   const pin = await lkAskPin();
   if (pin == null) return false;
   const salt = lkB64(lkRand(16));
@@ -228,7 +228,7 @@ async function lkEnable() {
 function lockSettingsHtml() {
   const on = !!lk.cfg.on;
   return `<div class="card hm-list xs-set lk-set">
-    <div class="hm-li"><span class="xs-lbl"><span>${tr('应用锁', 'App lock')}</span><small>${tr('用面容、指纹或密码解锁', 'Unlock with Face ID, Touch ID or PIN')}</small></span>${xsSwitch('lk-toggle', on, tr('应用锁', 'App lock'))}</div>
+    <div class="hm-li"><span class="xs-lbl"><span>${tr('应用锁', 'App lock')}</span><small>${tr('使用面容、指纹或密码解锁', 'Unlock with Face ID, Touch ID or PIN')}</small></span>${xsSwitch('lk-toggle', on, tr('应用锁', 'App lock'))}</div>
   </div>`;
 }
 

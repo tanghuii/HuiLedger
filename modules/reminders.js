@@ -37,7 +37,7 @@ function rmItems() {
       if (owed > 0 && [0, 1, 3].includes(left)) out.push({
         key: 'card:' + a.id, icon: 'card', go: 'card:' + a.id,
         title: tr(`${a.name} 还款日`, `${a.name} payment due`),
-        text: (left === 0 ? tr('今天到期', 'Due today') : tr(`还有 ${left} 天`, `In ${left} days`)) + tr(`，欠款 ${money(owed, acctCur(a))}`, `, ${money(owed, acctCur(a))} owed`),
+        text: (left === 0 ? tr('今天到期', 'Due today') : tr(`剩余 ${left} 天`, `In ${left} days`)) + tr(`，欠款 ${money(owed, acctCur(a))}`, `, ${money(owed, acctCur(a))} owed`),
       });
     }
     // 借款到期：前 3 天、当天、过期后每 7 天；还清了不提
@@ -49,7 +49,7 @@ function rmItems() {
       if (net !== 0 && (left === 3 || left === 0 || (left < 0 && -left % 7 === 0))) out.push({
         key: 'loan:' + person, icon: 'people', go: 'loan:' + person,
         title: tr(`借款到期：${person}`, `Loan due: ${person}`),
-        text: (left > 0 ? tr(`还有 ${left} 天`, `In ${left} days`) : left === 0 ? tr('今天到期', 'Due today') : tr(`已逾期 ${-left} 天`, `${-left} days overdue`))
+        text: (left > 0 ? tr(`剩余 ${left} 天`, `In ${left} days`) : left === 0 ? tr('今天到期', 'Due today') : tr(`已逾期 ${-left} 天`, `${-left} days overdue`))
           + tr(`，剩余 ${money(Math.abs(net))}`, `, ${money(Math.abs(net))} left`),
       });
     }
@@ -57,7 +57,7 @@ function rmItems() {
   // 今天还没记账：过了提醒时间才提
   if (p.daily && new Date().getHours() >= p.hour) {
     const start = new Date(); start.setHours(0, 0, 0, 0);
-    if (!txs.some((t) => (t.createdAt ?? 0) >= start.getTime())) out.push({ key: 'daily', icon: 'pen', go: 'new', title: tr('今天还没记账', 'Nothing logged today'), text: tr('花一分钟记一下', 'Take a minute to log it') });
+    if (!txs.some((t) => (t.createdAt ?? 0) >= start.getTime())) out.push({ key: 'daily', icon: 'pen', go: 'new', title: tr('今日暂未记账', 'Nothing logged today'), text: tr('花一分钟记一笔', 'Take a minute to log it') });
   }
   const gone = rmDismissed();
   return out.filter((x) => !gone.includes(x.key));
@@ -112,7 +112,7 @@ function rmIcs() {
       `DTSTART;VALUE=DATE:${icsDate(first)}`, `DTEND;VALUE=DATE:${icsDate(first + 1)}`, `RRULE:${rule}`,
       `SUMMARY:${icsText(title)}`, 'TRANSP:TRANSPARENT',
       // 提醒时间和设置里的一样：3 天前、1 天前、当天
-      ...alarm(`-P2DT${24 - hr}H`, tr(`${a.name} 还有 3 天还款`, `${a.name} due in 3 days`)),
+      ...alarm(`-P2DT${24 - hr}H`, tr(`${a.name} 3 天后还款`, `${a.name} due in 3 days`)),
       ...alarm(`-PT${24 - hr}H`, tr(`${a.name} 明天还款`, `${a.name} due tomorrow`)),
       ...alarm(`PT${hr}H`, tr(`${a.name} 今天还款`, `${a.name} due today`)),
       'END:VEVENT');
@@ -122,7 +122,7 @@ function rmIcs() {
 }
 
 async function rmExportIcs() {
-  if (!rmCards().length) { xsToast(tr('还没有设还款日', 'No payment days set')); return; }
+  if (!rmCards().length) { xsToast(tr('暂未设置还款日', 'No payment days set')); return; }
   const name = 'PlanetLedger-due.ics', text = rmIcs();
   const file = new File([text], name, { type: 'text/calendar' });
   // iPhone 上用分享面板；不行就直接下载
@@ -144,7 +144,7 @@ function remindersSettingsHtml() {
     <div class="hm-li"><span class="xs-lbl"><span>${tr('每日记账提醒', 'Daily reminder')}</span></span>${xsSwitch('rm-daily', p.daily, tr('每日记账提醒', 'Daily reminder'))}</div>
     <div class="hm-li"><span class="xs-lbl"><span>${tr('还款日、借款到期', 'Card payments, loans due')}</span></span>${xsSwitch('rm-dues', p.dues, tr('还款日、借款到期', 'Card payments, loans due'))}</div>
     <div class="hm-li"><span class="xs-lbl"><span>${tr('提醒时间', 'Time')}</span></span><select id="rm-hour" class="xs-sel" aria-label="${tr('提醒时间', 'Time')}">${hours.map((x) => `<option value="${x}" ${x === p.hour ? 'selected' : ''}>${x}:00</option>`).join('')}</select></div>
-    ${cards ? `<button class="hm-li" data-act="rm-ics"><span class="xs-lbl"><span>${tr('还款日加到日历', 'Add due days to Calendar')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : ''}
+    ${cards ? `<button class="hm-li" data-act="rm-ics"><span class="xs-lbl"><span>${tr('将还款日添加至日历', 'Add due days to Calendar')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : ''}
   </div>`;
 }
 
