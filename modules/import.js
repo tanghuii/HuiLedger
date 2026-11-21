@@ -1284,7 +1284,7 @@ const scStep = (n, title, path) => `<li><i>${n}</i><div><b>${title}</b><span>${p
 /** 三步：添加 → 在账单上分享 → 开始识别。 */
 function scSteps() {
   return `<ol class="imp-steps">
-    ${scStep(1, tr('添加快捷指令', 'Add the Shortcut'), [tr('点下面的按钮', 'Tap the button below'), tr('添加快捷指令', 'Add Shortcut')])}
+    ${scStep(1, tr('添加快捷指令', 'Add the Shortcut'), [tr('点击下方按钮', 'Tap the button below'), tr('添加快捷指令', 'Add Shortcut')])}
     ${scStep(2, tr('在账单上点分享', 'Share a statement'), [tr('微信、邮件、「文件」里打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('行星记账导入', 'Planet Ledger import')])}
     ${scStep(3, tr('开始识别', 'Read it'), [tr('自动打开网页版', 'The web app opens'), tr('开始识别', 'Read it')])}
   </ol>`;
@@ -1299,7 +1299,7 @@ const scTips = () => `<ul class="sc-tips muted small">
 function scView() {
   return `<div class="subbar"><button class="round" data-act="tab" data-v="settings" aria-label="${tr('返回', 'Back')}">‹</button><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b></div>
     <div class="grid sc-page">
-      <div class="card sc-hero">${iconTile('bolt')}<div><b>${tr('账单一键导入', 'One-tap statement import')}</b><span class="muted small">${tr('微信、银行的 Excel / PDF / zip 都行', 'WeChat or bank Excel / PDF / zip')}</span></div></div>
+      <div class="card sc-hero">${iconTile('bolt')}<div><b>${tr('账单一键导入', 'One-tap statement import')}</b><span class="muted small">${tr('支持各银行、微信、支付宝账单（PDF、CSV、Excel、zip）', 'Bank, WeChat and Alipay statements (PDF, CSV, Excel, zip)')}</span></div></div>
       <div class="card grid">${scSteps()}${scButton()}</div>
       <div class="card">${scTips()}</div>
     </div>`;
