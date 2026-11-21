@@ -275,3 +275,9 @@ div.hm-li { cursor: default; }
 .mb-share svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .mb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mb-row .btn { min-height: 46px; }
+
+/* 设置最上面的"iPhone 快捷导入"（只在 iPhone 上）：主题色描边，比普通一行显眼 */
+.hm-sc-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  border: 1.5px solid color-mix(in srgb, var(--primary) 55%, transparent); background: color-mix(in srgb, var(--primary) 10%, var(--card)); }
+.hm-sc-card .tile { width: 40px; height: 40px; border-radius: 12px; }
+.hm-sc-card .hm-grow { display: grid; gap: 2px; } .hm-sc-card b { font-size: 16px; }

@@ -90,3 +90,11 @@ input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0;
 .imp-gd-sc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--primary) 9%, transparent); }
 .imp-gd-sc > div { flex: 1; display: grid; gap: 2px; } .imp-gd-sc .btn { white-space: nowrap; padding: 8px 12px; }
 .imp-gd-sc a.btn { text-decoration: none; }
+
+/* iPhone 快捷导入（设置 › iPhone 快捷导入、使用向导）：三步 + 添加按钮 + 小提示 */
+.sc-page { gap: 12px; }
+.sc-hero { display: flex; align-items: center; gap: 12px; }
+.sc-hero > div { display: grid; gap: 2px; } .sc-hero b { font-size: 16px; }
+.sc-add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 48px; font-size: 16px; text-decoration: none; }
+.sc-add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.sc-tips { margin: 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.5; }

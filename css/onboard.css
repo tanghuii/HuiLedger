@@ -113,3 +113,14 @@ html.ap-solid .ob { background: color-mix(in srgb, var(--bg) 94%, transparent); 
   .ob, .ob-step.in-r, .ob-step.in-l { animation: none; }
   .ob-cur button, .ob-tile, .ob-colors button { transition: none; }
 }
+
+/* 第一步：用户名 */
+.ob-nick { display: grid; gap: 6px; width: min(320px, 100%); margin-top: 14px; text-align: left; }
+.ob-nick span { font-size: 13px; color: var(--muted); padding-left: 4px; }
+.ob-nick input { height: 48px; font-size: 17px; text-align: center; border-radius: 14px; }
+
+/* 第二步：是不是 iPhone，是的话装快捷指令 */
+.ob-yns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ob-yn { height: 52px; border-radius: 16px; border: var(--bw, 1px) solid var(--stroke); background: var(--card); color: var(--text); font-size: 16px; font-weight: 600; }
+.ob-yn.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--card)); color: var(--primary); }
+.ob-sc { display: grid; gap: 12px; }

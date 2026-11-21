@@ -609,12 +609,16 @@ function settingsView() {
       ${canCheck ? `<button class="btn link" data-act="hm-sw-check" ${state.hmSwBusy ? 'disabled' : ''}>${state.hmSwBusy ? tr('正在检查…', 'Checking…') : tr('检查更新', 'Check')}</button>` : ''}</div>
     ${note(state.hmSwMsg)}${install}</div>`;
 
+  // iPhone 快捷导入：iPhone 上放在最上面、显眼一点；别的设备放在列表里
+  const scOn = typeof scView === 'function' && IMP_SHORTCUT_URL;
+  const shortcut = scOn && IS_IOS ? `<button class="card hm-sc-card" data-act="tab" data-v="shortcut">${iconTile('bolt')}<span class="hm-grow"><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b><span class="muted hm-sub2">${tr('账单在分享菜单里一键导入', 'Import statements from the Share menu')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : '';
   return `<div class="grid hm-set">
-    ${lang}${safety}
+    ${shortcut}${lang}${safety}
     ${extra(typeof lockSettingsHtml === 'function' ? lockSettingsHtml : null)}${extra(typeof remindersSettingsHtml === 'function' ? remindersSettingsHtml : null)}
     <div class="card hm-list">
       ${MOD.pages.appearance ? row('paint', tr('外观', 'Appearance'), 'data-act="tab" data-v="appearance"') : ''}
       ${typeof obOpen === 'function' ? row('sparkle', tr('使用向导', 'Setup guide'), 'data-act="ob-open"') : ''}
+      ${scOn && !IS_IOS ? row('bolt', tr('iPhone 快捷导入', 'iPhone quick import'), 'data-act="tab" data-v="shortcut"') : ''}
       ${MOD.pages.manage ? row('bank', tr('账户', 'Accounts'), 'data-act="hm-go" data-v="accounts"') : ''}
       ${modRow(mod('schedules'))}${modRow(mod('loans'))}
       ${MOD.me.filter((m) => !covered.includes(m.key)).map(modRow).join('')}

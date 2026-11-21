@@ -1,12 +1,14 @@
-// 使用向导：五步（欢迎、主货币、账户、个性化、完成），和手机端的向导一样。
+// 使用向导：六步（欢迎 + 用户名、是不是 iPhone（是的话装快捷指令）、主货币、账户、个性化、完成）。
 // 新账号第一次读完数据、还没有账单、这台设备没走过向导（hl.onboarded）时自动打开；已经有账单的账号直接记成走过了。
 // 设置 → 使用向导 可以随时再打开。走完或点"跳过"都记成走过了。
 // 画在 #app 外面的一层（不受 render() 影响，输入框里打的字不会被冲掉）；背后的页面照常重画，换外观、颜色马上看得到。
 // 样式在 css/onboard.css。
 'use strict';
 
-/** 进度条上的五颗星（当前那步的大一点、在转）。 */
-const OB_DOTS = ['mercury', 'earth', 'mars', 'jupiter', 'saturn'];
+/** 进度条上的六颗星（当前那步的大一点、在转）。 */
+const OB_DOTS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn'];
+/** 写账户的那一步（点"下一步"时把选的账户存进去）。 */
+const OB_ACC_STEP = 3;
 /** 主货币：最常用的八种排前面，其余按原来的顺序。 */
 const OB_COMMON = ['EUR', 'CNY', 'USD', 'GBP', 'HKD', 'JPY', 'CHF', 'CAD'];
 /** 默认账户的 id（shared.js 的 DEFAULT_ACCOUNTS）：没有账单时在向导里可以取消掉。 */
@@ -27,7 +29,7 @@ const OB_GROUPS = [
 /** 账户类型的小标签（类型号和 manage.js 的 mgTypes 一样：0 储蓄、1 投资、2 信用、3 现金）。 */
 const obTypes = () => [[0, tr('储蓄', 'Savings')], [2, tr('信用卡', 'Credit card')], [1, tr('投资', 'Investing')], [3, tr('现金', 'Cash')]];
 
-const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1 };
+const ob = { el: null, open: false, shown: false, step: 0, picks: [], drop: new Set(), created: new Set(), adding: false, busy: false, err: '', note: '', seq: 0, dir: 1, nick: '', ios: null };
 
 const obDone = () => { try { return JSON.parse(localStorage.getItem('hl.onboarded')) === true; } catch { return false; } };
 const obMark = () => { try { localStorage.setItem('hl.onboarded', 'true'); } catch { /* 存不了就算了 */ } };
@@ -45,7 +47,7 @@ const obBrand = (key) => OB_GROUPS.flatMap((g) => g[2]).find((b) => b[0] === key
 
 function obOpen() {
   if (!state.session) return;
-  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, busy: false, err: '', note: '', dir: 1 });
+  Object.assign(ob, { open: true, step: 0, picks: [], adding: false, busy: false, err: '', note: '', dir: 1, nick: String(shared.get('nickname', '') || '').trim(), ios: IS_IOS ? true : null });
   ob.drop.clear(); ob.created.clear();
   if (!ob.el) {
     ob.el = document.createElement('div');
@@ -54,7 +56,11 @@ function obOpen() {
     ob.el.setAttribute('aria-modal', 'true');
     ob.el.addEventListener('click', obClick);
     ob.el.addEventListener('input', obInput);
-    ob.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'ob-name' && !e.isComposing) { e.preventDefault(); obAddCustom(); } });
+    ob.el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      if (e.target.id === 'ob-name') { e.preventDefault(); obAddCustom(); }
+      if (e.target.id === 'ob-nick') { e.preventDefault(); ob.el.querySelector('[data-ob="next"]')?.click(); }
+    });
   }
   document.body.appendChild(ob.el);
   document.documentElement.classList.add('ob-lock');
@@ -78,7 +84,7 @@ function obRender() {
   if (!state.session) { obClose(false); return; }
   const prev = ob.el.querySelector('.ob-body'), keep = prev && prev.dataset.step === String(ob.step) ? prev.scrollTop : 0;
   const s = ob.step, last = s === OB_DOTS.length - 1;
-  const steps = [obWelcome, obCurrency, obAccounts, obStyle, obFinish];
+  const steps = [obWelcome, obIphone, obCurrency, obAccounts, obStyle, obFinish];
   const dots = OB_DOTS.map((k, i) => `<span class="ob-dot${i === s ? ' on' : ''}${i < s ? ' done' : ''}">${planetSvg(k, { px: i === s ? 26 : 14, spin: i === s, face: i === s })}</span>`).join('');
   ob.el.setAttribute('aria-label', tr('使用向导', 'Setup guide'));
   ob.el.innerHTML = `<div class="ob-head">
@@ -96,7 +102,18 @@ function obWelcome() {
   return `<div class="ob-center">
     <div class="ob-hero">${typeof plLoginHero === 'function' ? plLoginHero() : planetSvg(PLANET_BRAND, { px: 120 })}</div>
     <h1 class="ob-title">${tr('欢迎来到行星记账', 'Welcome to Planet Ledger')}</h1>
-    <p class="muted ob-lead">${tr('花一分钟，把账本设成你的样子', 'Take a minute to make it yours')}</p></div>`;
+    <p class="muted ob-lead">${tr('花一分钟，把账本设成你的样子', 'Take a minute to make it yours')}</p>
+    <label class="ob-nick"><span>${tr('用户名', 'Username')}</span><input id="ob-nick" value="${h(ob.nick)}" placeholder="${tr('怎么称呼你？', 'What should we call you?')}" maxlength="20" autocomplete="nickname" enterkeyhint="next"></label></div>`;
+}
+
+/** 是不是 iPhone：是的话就地装快捷指令（以后账单在分享菜单里一键导入）。 */
+function obIphone() {
+  const has = typeof scSteps === 'function' && typeof IMP_SHORTCUT_URL !== 'undefined' && IMP_SHORTCUT_URL;
+  const pick = (v, label) => `<button class="ob-yn${ob.ios === v ? ' on' : ''}" data-ob="ios" data-v="${v ? 1 : 0}" aria-pressed="${ob.ios === v}">${label}</button>`;
+  const body = ob.ios === true && has ? `<div class="card ob-card ob-sc"><b>${tr('装上快捷指令，账单一键导入', 'Add the Shortcut for one-tap imports')}</b>${scSteps()}${scButton()}</div>`
+    : ob.ios === false ? `<p class="muted ob-lead">${tr('以后用 iPhone 时：设置 › iPhone 快捷导入', 'Using an iPhone later? Settings › iPhone quick import')}</p>` : '';
+  return `<h2 class="ob-h">${tr('你用的是 iPhone 吗？', 'Are you on an iPhone?')}</h2>
+    <div class="ob-yns">${pick(true, tr('是，iPhone', 'Yes, iPhone'))}${pick(false, tr('不是', 'No'))}</div>${body}`;
 }
 
 function obCurrency() {
@@ -157,6 +174,7 @@ function obFinish() {
 // ---------------------------------------------------------------- 动作
 
 function obInput(e) {
+  if (e.target.id === 'ob-nick') { ob.nick = e.target.value; return; }
   const k = e.target.dataset?.k;
   if (k == null) return;
   const p = ob.picks.find((x) => x.k === k);
@@ -245,7 +263,18 @@ async function obClick(e) {
       if (ob.busy) return;
       ob.err = '';
       if (ob.step === OB_DOTS.length - 1) { obClose(true); return; }
-      if (ob.step === 2) {
+      if (ob.step === 0) {
+        // 用户名：必填（和手机端同步，显示在"我的"页上）
+        const nick = ob.nick.trim().slice(0, 20);
+        if (!nick) { ob.err = tr('起一个用户名吧', 'Pick a username'); obRender(); document.getElementById('ob-nick')?.focus(); return; }
+        if (nick !== String(shared.get('nickname', '') || '').trim()) {
+          ob.busy = true; obRender();
+          try { await shared.set('nickname', nick); } catch (err) { ob.err = err.message; }
+          ob.busy = false; render();
+          if (ob.err) break;
+        }
+      }
+      if (ob.step === OB_ACC_STEP) {
         ob.busy = true; obRender();
         let ok = false;
         try { ok = await obCommit(); } catch (err) { ob.err = err.message; }
@@ -256,6 +285,7 @@ async function obClick(e) {
       break;
     }
     case 'cur': await obSetCurrency(v); return;
+    case 'ios': ob.ios = v === '1'; break;
     case 'tile': obToggle(v); break;
     case 'unpick': ob.picks = ob.picks.filter((p) => p.k !== v); break;
     case 'type': { const p = ob.picks.find((x) => x.k === v); if (p) p.type = Number(el.dataset.t); break; }

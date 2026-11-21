@@ -24,8 +24,11 @@ const IMP = {
 // ---------------------------------------------------------------- 快捷指令直传
 // iPhone 的快捷指令"行星记账导入"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
 // # 后面的内容不会发到服务器；这里读出来就把地址栏抹掉（要在 app.js 处理登录回跳之前，所以放在这个文件的顶层）。
-/** 快捷指令安装文件（tools/make_shortcut.py 生成，shortcuts sign --mode anyone 签名）；为空时说明里不显示"添加快捷指令"。 */
-const IMP_SHORTCUT_URL = encodeURI('shortcuts/行星记账导入.shortcut');
+/**
+ * 快捷指令的 iCloud 分享链接：iPhone 上点开直接进「快捷指令」App 添加（不用下载文件）。
+ * 快捷指令本身是 tools/make_shortcut.py 生成、签过名的那个（web/shortcuts/ 里留了一份）。为空时不显示"添加快捷指令"。
+ */
+const IMP_SHORTCUT_URL = 'https://www.icloud.com/shortcuts/6e104e48e6dc4bf4add6da4f9da337b9';
 /** 看文件开头猜类型：pdf / xls / xlsx / zip / csv。 */
 function impSniff(b) {
   const at = (s, o = 0) => [...s].every((c, i) => b[o + i] === c.charCodeAt(0));
@@ -1180,8 +1183,8 @@ function impGuideView() {
       ${step(3, tr('回这里选文件', 'Pick it here'), [tr('记一笔', 'Add'), tr('文件', 'File'), tr('最近使用', 'Recents')])}
       ${step(4, tr('输入解压密码', 'Enter the password'), [tr('微信支付消息里的 6 位数', 'From the WeChat Pay message')])}
     </ol>
-    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('装一次，以后在 zip 上点 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
-      <a class="btn primary" href="${IMP_SHORTCUT_URL}" download="行星记账导入.shortcut">${tr('添加快捷指令', 'Add Shortcut')}</a></div>` : ''}
+    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('装一次，以后在账单上点 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
+      <button class="btn primary" data-act="imp-sc">${tr('去设置', 'Set up')}</button></div>` : ''}
   </div></div>`;
 }
 
@@ -1192,6 +1195,34 @@ function importView() {
 }
 
 MOD.pages.import = () => importView();
+
+// ---------------------------------------------------------------- iPhone 快捷导入（设置里的页面；使用向导里也用这一套）
+
+const scStep = (n, title, path) => `<li><i>${n}</i><div><b>${title}</b><span>${path.map(h).join('<em>›</em>')}</span></div></li>`;
+/** 三步：添加 → 在账单上分享 → 开始识别。 */
+function scSteps() {
+  return `<ol class="imp-steps">
+    ${scStep(1, tr('添加快捷指令', 'Add the Shortcut'), [tr('点下面的按钮', 'Tap the button below'), tr('添加快捷指令', 'Add Shortcut')])}
+    ${scStep(2, tr('在账单上点分享', 'Share a statement'), [tr('微信、邮件、「文件」里打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('行星记账导入', 'Planet Ledger import')])}
+    ${scStep(3, tr('开始识别', 'Read it'), [tr('自动打开网页版', 'The web app opens'), tr('开始识别', 'Read it')])}
+  </ol>`;
+}
+/** 添加按钮：iCloud 链接，在新窗口打开（主屏幕上的网页 App 里也不会把自己关掉）。 */
+const scButton = () => `<a class="btn primary sc-add" href="${IMP_SHORTCUT_URL}" target="_blank" rel="noopener">${hmSvg(ICONS.plus.d)}${tr('添加快捷指令', 'Add Shortcut')}</a>`;
+const scTips = () => `<ul class="sc-tips muted small">
+    <li>${tr('第一次会问能否打开网页：点「允许」', 'First time it asks to open the page: tap Allow')}</li>
+    <li>${tr('分享菜单里没有：滑到底点「编辑操作」加上', 'Not in the Share menu? Scroll down › Edit Actions')}</li>
+    <li>${tr('会用 Safari 打开：在 Safari 里也要登录', 'It opens in Safari: sign in there too')}</li></ul>`;
+
+function scView() {
+  return `<div class="subbar"><button class="round" data-act="tab" data-v="settings" aria-label="${tr('返回', 'Back')}">‹</button><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b></div>
+    <div class="grid sc-page">
+      <div class="card sc-hero">${iconTile('bolt')}<div><b>${tr('账单一键导入', 'One-tap statement import')}</b><span class="muted small">${tr('微信、银行的 Excel / PDF / zip 都行', 'WeChat or bank Excel / PDF / zip')}</span></div></div>
+      <div class="card grid">${scSteps()}${scButton()}</div>
+      <div class="card">${scTips()}</div>
+    </div>`;
+}
+MOD.pages.shortcut = () => scView();
 
 // ---------------------------------------------------------------- 点击、选择、输入
 
@@ -1225,6 +1256,7 @@ MOD.actions.push(async (act, v, el) => {
     case 'imp-paste': await impPaste(); return true;
     case 'imp-guide': IMP.guide = true; break;
     case 'imp-guide-x': IMP.guide = false; break;
+    case 'imp-sc': IMP.guide = false; state.tab = 'shortcut'; scrollTo(0, 0); break;
     case 'imp-noop': return true;
     case 'imp-inc-x': IMP.incoming = null; break;
     case 'imp-inc-go': { const f = IMP.incoming; IMP.incoming = null; if (f) await impStart([f]); return true; }
