@@ -1181,7 +1181,7 @@ function impGuideView() {
       ${step(4, tr('输入解压密码', 'Enter the password'), [tr('微信支付消息里的 6 位数', 'From the WeChat Pay message')])}
     </ol>
     ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('装一次，以后在 zip 上点 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
-      <a class="btn primary" href="${IMP_SHORTCUT_URL}">${tr('添加快捷指令', 'Add Shortcut')}</a></div>` : ''}
+      <a class="btn primary" href="${IMP_SHORTCUT_URL}" download="行星记账导入.shortcut">${tr('添加快捷指令', 'Add Shortcut')}</a></div>` : ''}
   </div></div>`;
 }
 
