@@ -754,9 +754,11 @@ async function impJobsFor(file, name) {
     return jobs;
   }
   if (mime === 'application/pdf' || lower.endsWith('.pdf')) {
-    aiCheckFiles();
     if (file.size > IMP_MAX_PDF) throw new AiError(tr(`「${name}」超过 20 MB，请拆分后再导入。`, `“${name}” is over 20 MB. Split it and import again.`));
-    const bytes = new Uint8Array(await file.arrayBuffer()), data = impB64(bytes);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // DeepSeek 不收 PDF 文件：先在本机读出文字，和 CSV 一样分段交给它（扫描件读不出文字，转成图片）
+    if (aiProvider() === 'deepseek') return impPdfJobs(bytes, name);
+    const data = impB64(bytes);
     return [{ blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, title: name }], name: '', header: '', lines: [], fallback: null, pdf: true, pages: impPdfPages(bytes) }];
   }
   if (lower.endsWith('.xls') || mime.includes('excel')) {
@@ -765,6 +767,109 @@ async function impJobsFor(file, name) {
   const content = await impText(file);
   if (content.length > IMP_MAX_TEXT) throw new AiError(tr(`「${name}」内容过长，请按月份拆分后再导入。`, `“${name}” is too long. Split it by month and import again.`));
   return impTextJobs(name, content);
+}
+
+// ---------------------------------------------------------------- PDF 读文字（pdf.js，放在 vendor/pdfjs/，第一次用到时才加载）
+
+const IMP_PDFJS = 'vendor/pdfjs/';
+/** 每段最多多少行文字（和表格账单一样分段，多段同时识别）。 */
+const IMP_PDF_LINES = 40;
+/** 有的 PDF 把汉字映射成长得一样的"康熙部首"（⾏ ⼈ ⺠），换回普通汉字，免得搜不到。 */
+const IMP_RADICALS = {'⺠':'民','⻓':'长','⻔':'门','⻢':'马','⻜':'飞','⻛':'风','⻅':'见','⻆':'角','⻋':'车','⻉':'贝','⻝':'食','⻚':'页','⻥':'鱼','⺟':'母','⻄':'西','⻘':'青','⻨':'麦','⻩':'黄','⻬':'齐','⻰':'龙','⻳':'龟','⻮':'齿','⻈':'讠','⻊':'足','⻦':'鸟','⺁':'厂','⻌':'辶','⻍':'辶','⺮':'竹','⻂':'衤','⺨':'犭','⺩':'王','⺼':'月','⺾':'艹','⻖':'阝','⻗':'雨','⺪':'疋','⻣':'骨','⻤':'鬼','⻡':'鼎','⺧':'牛','⺝':'月','⻟':'食'};
+const impPdfChars = (t) => t.replace(/[\u2E80-\u2FDF]/g, (c) => IMP_RADICALS[c] ?? c.normalize('NFKC'));
+let impPdfLib = null;
+function impLoadPdfJs() {
+  impPdfLib ??= new Promise((ok, bad) => {
+    const fail = () => { impPdfLib = null; bad(new AiError(tr('无法加载 PDF 读取组件，请检查网络后重试。', "Couldn't load the PDF reader. Check your network and try again."))); };
+    const el = document.createElement('script');
+    el.src = IMP_PDFJS + 'pdf.min.js';
+    el.onload = () => {
+      const lib = window.pdfjsLib;
+      if (!lib) { fail(); return; }
+      lib.GlobalWorkerOptions.workerSrc = IMP_PDFJS + 'pdf.worker.min.js';
+      ok(lib);
+    };
+    el.onerror = fail;
+    document.head.appendChild(el);
+  });
+  return impPdfLib;
+}
+
+/**
+ * 读出 PDF 每一页的文字：y 坐标相近的算同一行，行内按 x 排好；隔得远的两栏之间用 " | " 隔开，像表格一样。
+ * 中文银行账单常用不嵌入的宋体（UniGB 编码），要 cmaps 才能还原成文字。
+ */
+async function impPdfRead(bytes, name) {
+  const lib = await impLoadPdfJs();
+  let doc;
+  try {
+    doc = await lib.getDocument({ data: bytes, cMapUrl: IMP_PDFJS + 'cmaps/', cMapPacked: true, isEvalSupported: false }).promise;
+  } catch (e) {
+    if (e?.name === 'PasswordException') throw new AiError(tr(`「${name}」设有密码，请先去除密码后再导入。`, `“${name}” is password-protected. Remove the password and import again.`));
+    throw new AiError(tr(`无法读取 PDF 文件「${name}」。`, `Couldn't read the PDF “${name}”.`));
+  }
+  const pages = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p), tc = await page.getTextContent(), rows = [];
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      const [, , , d, x, y] = it.transform, hgt = Math.abs(d) || it.height || 10;
+      let r = rows.find((q) => Math.abs(q.y - y) < Math.min(q.h, hgt) * 0.5);
+      if (!r) rows.push(r = { y, h: hgt, cells: [] });
+      r.cells.push({ x, w: it.width || 0, s: it.str });
+    }
+    rows.sort((a, b) => b.y - a.y);
+    const lines = rows.map((r) => {
+      r.cells.sort((a, b) => a.x - b.x);
+      let out = '', end = null;
+      for (const c of r.cells) {
+        if (end != null) { const gap = c.x - end; out += gap > r.h * 1.5 ? ' | ' : gap > r.h * 0.2 ? ' ' : ''; }
+        out += c.s; end = c.x + c.w;
+      }
+      return impPdfChars(out).replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
+    pages.push({ page, lines });
+  }
+  return { doc, pages };
+}
+
+/** PDF 的一段文字（第 from–to 页）。和表格一样交给 AI；装不下时按行对半拆（impSplit）。 */
+const impPdfTextJob = (name, from, to, textLines) => ({
+  blocks: [impTextBlock(`以下是 PDF 账单「${name}」${from === to ? `第 ${from} 页` : `第 ${from}–${to} 页`}的文字（已在本机按行读出，同一行里相隔较远的栏用 " | " 隔开）：\n\n${textLines.join('\n')}`)],
+  name, header: '', lines: [], fallback: null, textLines, pfrom: from, pto: to,
+});
+
+/** PDF → 一段一段的文字（每段一到几页、不超过 IMP_PDF_LINES 行）。扫描件（几乎没有文字）每页转成图片，交给能看图的模型。 */
+async function impPdfJobs(bytes, name) {
+  const { doc, pages } = await impPdfRead(bytes, name);
+  try {
+    const chars = pages.reduce((a, p) => a + p.lines.join('').length, 0);
+    if (chars < 30 * Math.max(1, pages.length)) {
+      aiCheckFiles('image');
+      const blocks = [];
+      for (const [i, { page }] of pages.entries()) {
+        const vp = page.getViewport({ scale: 1 }), v = page.getViewport({ scale: Math.min(2.5, 1800 / Math.max(vp.width, vp.height)) });
+        const c = document.createElement('canvas');
+        c.width = Math.floor(v.width); c.height = Math.floor(v.height);
+        await page.render({ canvasContext: c.getContext('2d'), viewport: v }).promise;
+        const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.88));
+        blocks.push(...await impImageBlocks(new File([blob], `${name}-${i + 1}.jpg`, { type: 'image/jpeg' })));
+      }
+      const jobs = [];
+      for (let i = 0; i < blocks.length; i += 4) jobs.push({ blocks: blocks.slice(i, i + 4), name: '', header: '', lines: [], fallback: null });
+      return jobs;
+    }
+    // 按行切段，每段不超过 IMP_PDF_LINES 行，记下是第几页到第几页
+    const groups = [];
+    pages.forEach(({ lines }, i) => {
+      for (const line of lines) {
+        let g = groups[groups.length - 1];
+        if (!g || g.lines.length >= IMP_PDF_LINES) groups.push(g = { from: i + 1, to: i + 1, lines: [] });
+        g.to = i + 1; g.lines.push(line);
+      }
+    });
+    return groups.map((g) => impPdfTextJob(name, g.from, g.to, g.lines));
+  } finally { doc.destroy(); }
 }
 
 /** PDF 有几页（数 /Type /Page；压缩过的读 /Count）。数不出来是 0。 */
@@ -789,6 +894,10 @@ function impAsk(job) {
  * 多张截图按张对半。已经拆到一页 / 一张 / 一行还装不下，返回空（这一段跳过，最后提醒）。
  */
 function impSplit(job) {
+  if (job.textLines?.length >= 2) {
+    const half = Math.floor(job.textLines.length / 2);
+    return [impPdfTextJob(job.name, job.pfrom, job.pto, job.textLines.slice(0, half)), impPdfTextJob(job.name, job.pfrom, job.pto, job.textLines.slice(half))];
+  }
   if (job.lines.length >= 2) {
     const half = Math.floor(job.lines.length / 2);
     return [impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half))];
@@ -942,7 +1051,9 @@ async function impRunJobs(run, onProgress) {
       wave.forEach((j, k) => {
         if (live[k] < 0) return;
         running += Math.max(live[k], j.fallback?.length ?? 0);
-        if (j.lines.length) part += Math.min(0.95, live[k] / j.lines.length);
+        // 表格按数据行数算；PDF 文字按读出的行数估（里面还有表头、合计等几行，所以打九折）
+        const rows = j.lines.length || Math.floor((j.textLines?.length ?? 0) * 0.9);
+        if (rows) part += Math.min(0.95, live[k] / rows);
       });
       onProgress(run.done, run.done + jobs.length + again.length + failed.length + inflight, run.found.length + fb(jobs) + fb(again) + running, part, liveOnly);
     };
@@ -1402,8 +1513,25 @@ function impLoadingView() {
   const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('即将为您列出', 'Opening the list…') : IMP.total > 1 ? tr(`已完成 ${Math.min(IMP.done, IMP.total)} / ${IMP.total} 段`, `${Math.min(IMP.done, IMP.total)} of ${IMP.total} parts done`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
   setTimeout(impRingTick, 0);
   return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
-    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr('识别完成，共 ', 'Done: ') : tr('已识别 ', 'Read ')}<span class="num imp-n">${IMP.shown ?? IMP.found}</span>${tr(' 笔', ' records')}</b><div class="muted small">${seg}</div></div>`;
+    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr('识别完成，共 ', 'Done: ') : tr('已识别 ', 'Read ')}<span class="num imp-n">${impOdoHtml(IMP.shown ?? IMP.found)}</span>${tr(' 笔', ' records')}</b><div class="muted small">${seg}</div></div>`;
 }
+/** 里程表式的数字：每一位是一个只露一格的窗口。 */
+const impOdoHtml = (v) => [...String(v)].map((d) => `<span class="odo-d"><span class="odo-s"><i>${d}</i></span></span>`).join('');
+/**
+ * 从 from 变成 to：变了的位往上滚一格（1→2；19→20 时十位 1→2、个位 9→0 同时滚），没变的不动；多出来的最高位从空白滚出来。
+ * ms 是滚动用时（比下一次变化的间隔短一点，滚完再变）。
+ */
+function impOdoSet(el, from, to, ms) {
+  const a = String(from), b = String(to), n = Math.max(a.length, b.length), pa = a.padStart(n, ' '), pb = b.padStart(n, ' ');
+  el.style.setProperty('--odo-t', `${ms}ms`);
+  el.innerHTML = [...pb].map((d, i) => {
+    if (d === ' ') return '';
+    const o = pa[i];
+    return o === d ? `<span class="odo-d"><span class="odo-s"><i>${d}</i></span></span>`
+      : `<span class="odo-d"><span class="odo-s roll"><i>${o === ' ' ? '&nbsp;' : o}</i><i>${d}</i></span></span>`;
+  }).join('');
+}
+
 /** 断网停下了：已经识别出几条、完成几段，点"继续识别"接着跑剩下的。 */
 function impPausedView() {
   const run = IMP.run, n = run?.found.length ?? 0, done = run?.done ?? 0, total = done + (run?.jobs.length ?? 0);
@@ -1434,13 +1562,13 @@ function impRingTick() {
     const a = (-90 + 360 * p) * Math.PI / 180, tip = ring.querySelector('.tip');
     tip.setAttribute('cx', (60 + 52 * Math.cos(a)).toFixed(2)); tip.setAttribute('cy', (60 + 52 * Math.sin(a)).toFixed(2));
     const pct = document.querySelector('.imp-pct'); if (pct) pct.textContent = `${Math.floor(p * 100)}%`;
-    // "已识别 n 笔"：一格一格往上跳（差得多时跳得快些），每跳一下放大再弹回
-    const shown = IMP.shown ?? IMP.found, gap = IMP.found - shown;
-    if (gap && now - (IMP.bumpAt ?? 0) > (Math.abs(gap) > 12 ? 40 : 90)) {
-      IMP.shown = shown + (gap > 0 ? Math.max(1, Math.floor(gap / 6)) : gap);
+    // "已识别 n 笔"：一笔一笔往上加，变了的那几位各自往上滚（差得多时加得快些）
+    const shown = IMP.shown ?? IMP.found, gap = IMP.found - shown, wait = Math.abs(gap) > 12 ? 80 : 190;
+    if (gap && now - (IMP.bumpAt ?? 0) > wait) {
+      IMP.shown = shown + (gap > 0 ? Math.max(1, Math.floor(gap / 8)) : gap);
       IMP.bumpAt = now;
       const el = document.querySelector('.imp-n');
-      if (el) { el.textContent = IMP.shown; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+      if (el) impOdoSet(el, shown, IMP.shown, wait - 20);
     }
     impRingRaf = requestAnimationFrame(step);
   };

@@ -916,6 +916,11 @@ async function aiReadStatements(files, target, onProgress) {
   for (const f of files) {
     const name = f.name || 'file', type = f.type || '';
     if (/\.pdf$/i.test(name) || type === 'application/pdf') {
+      // DeepSeek 不收 PDF 文件：和导入一样，先在本机读成文字（扫描件转成图片），见 modules/import.js impPdfJobs
+      if (aiProvider() === 'deepseek' && typeof impPdfJobs === 'function') {
+        for (const j of await impPdfJobs(new Uint8Array(await f.arrayBuffer()), name)) jobs.push({ name, content: [...j.blocks, { type: 'text', text: '读出这份账单里的全部交易。' }] });
+        continue;
+      }
       aiCheckFiles();
       if (f.size > 30 * 1024 * 1024) throw new AiError(tr(`「${name}」超过 30 MB，请拆分后重试。`, `"${name}" is over 30 MB. Split it and retry.`));
       jobs.push({ name, content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await aiBase64(f) } }, { type: 'text', text: '读出这份账单里的全部交易。' }] });

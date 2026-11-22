@@ -5,12 +5,13 @@
 
 const AK = { p: 'deepseek', key: '', busy: false, err: '', warn: '', ok: false, from: 'me', shown: false };
 
-/** 等着识别的账单是 PDF 或截图：DeepSeek 读不了，只能用 Claude；表格类的 DeepSeek 就够用（国内可直接开通）。 */
+/**
+ * 等着识别的账单只能用 Claude 吗：已经按 Claude 的方式准备好、PDF 原文件发过去的那种（换成 DeepSeek 要重新读）。
+ * 新的账单两家都行：PDF 会先在本机读成文字交给 DeepSeek，截图 deepseek-flash 能看。
+ */
 function akNeedsClaude() {
   if (typeof IMP === 'undefined') return false;
-  const f = IMP.incoming, name = (f?.name ?? '').toLowerCase(), type = f?.type ?? '';
-  if (f && (name.endsWith('.pdf') || type === 'application/pdf' || type.startsWith('image/'))) return true;
-  return !!IMP.run?.jobs?.some((j) => j.pdf || j.blocks?.some((b) => b?.type === 'image' || b?.type === 'document'));
+  return !!IMP.run?.jobs?.some((j) => j.blocks?.some((b) => b?.type === 'document'));
 }
 /** 有没有一把能用的密钥（PDF、截图要 Claude 的）。 */
 const akReady = () => (akNeedsClaude() ? !!aiKey('claude') : !!aiKey());
@@ -86,10 +87,10 @@ function akView() {
     <div class="grid ak-page">
       <div class="card ak-hero">${iconTile('sparkle')}<div><b>${tr('识别账单需要您自己的 AI 密钥', 'Reading statements needs your own AI key')}</b>
         <span class="muted small">${pending ? tr(`已收到「${h(pending)}」，保存密钥后将自动开始识别。`, `“${h(pending)}” is waiting. Reading starts once the key is saved.`) : tr('费用按实际用量从您的 AI 账户扣除。', 'Usage is billed to your own AI account.')}</span></div></div>
-      ${needClaude ? `<div class="ak-warn">${tr('该账单为 PDF 或截图，需使用 Claude 识别（DeepSeek 暂不支持）。', 'This is a PDF or screenshot, which needs Claude (DeepSeek cannot read it).')}</div>` : ''}
+      ${needClaude ? `<div class="ak-warn">${tr('该账单已按 Claude 的方式准备，请继续使用 Claude，或放弃后重新导入。', 'This statement was prepared for Claude. Use Claude, or discard it and import again.')}</div>` : ''}
       <div class="ak-provs">
-        ${card('deepseek', 'DeepSeek', [tr('国内可直接开通', 'Easy to open in China'), tr('支付宝 / 微信充值', 'Alipay / WeChat Pay'), tr('支持 Excel、CSV 账单', 'Excel and CSV statements')], needClaude ? '' : tr('推荐', 'Recommended'))}
-        ${card('claude', 'Claude', [tr('可识别 PDF 与截图', 'Reads PDFs and screenshots'), tr('需境外信用卡', 'International card'), tr('中国大陆不可用', 'Not in mainland China')], needClaude ? tr('推荐', 'Recommended') : '')}
+        ${card('deepseek', 'DeepSeek', [tr('国内可直接开通', 'Easy to open in China'), tr('支付宝 / 微信充值', 'Alipay / WeChat Pay'), tr('支持 PDF、Excel、CSV 与截图', 'PDF, Excel, CSV and screenshots')], needClaude ? '' : tr('推荐', 'Recommended'))}
+        ${card('claude', 'Claude', [tr('复杂版式识别更稳定', 'Steadier on complex layouts'), tr('需境外信用卡', 'International card'), tr('中国大陆不可用', 'Not in mainland China')], needClaude ? tr('推荐', 'Recommended') : '')}
       </div>
       <ol class="ak-steps">${akSteps(p)}
         <li class="card ak-step ak-last"><div class="ak-sh"><i>4</i><b>${tr('回到这里粘贴并保存', 'Paste it here')}</b></div>${form}</li></ol>
