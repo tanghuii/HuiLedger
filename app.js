@@ -637,7 +637,7 @@ function hmBudgetPage(t) {
   const total = typeof BUD !== 'undefined' ? BUD.total() : 0;
   const { y, m } = state.month, now = new Date(), current = now.getFullYear() === y && now.getMonth() + 1 === m;
   const label = `<div class="muted hm-lbl">${current ? tr('本月预算', 'Budget this month') : tr(`${m}月预算`, `${MONTH_EN[m - 1]} budget`)}</div>`;
-  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget">${label}<div class="hm-nob">${tr('暂未设置预算', 'No budget yet')}</div><div class="muted hm-lbl">${tr('请前往 我的 → 预算 设置', 'Set it in Me → Budget')}</div></section>`;
+  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget">${label}<div class="hm-nob">${tr('暂未设置预算', 'No budget yet')}</div><div class="muted hm-lbl">${tr('点击设置预算', 'Tap to set a budget')}</div></section>`;
   const spent = t.expense, left = total - spent, over = left < 0, ratio = Math.min(1, Math.max(0, spent / total));
   const daysLeft = current ? new Date(y, m, 0).getDate() - now.getDate() + 1 : 0;
   const bar = over ? 'var(--on-card-out)' : ratio > 0.8 ? '#FFE3A3' : '#fff';
