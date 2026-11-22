@@ -83,13 +83,13 @@ function impTaskSaveSoon() {
 const impBusy = () => !!(IMP.incoming || IMP.hold || (IMP.phase && IMP.phase !== 'idle'));
 
 // ---------------------------------------------------------------- 快捷指令直传
-// iPhone 的快捷指令"行星记账导入"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
+// iPhone 的快捷指令"导入行星记账"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
 // # 后面的内容不会发到服务器；这里读出来就把地址栏抹掉（要在 app.js 处理登录回跳之前，所以放在这个文件的顶层）。
 /**
  * 快捷指令的 iCloud 分享链接：iPhone 上点开直接进「快捷指令」App 添加（不用下载文件）。
  * 快捷指令本身是 tools/make_shortcut.py 生成、签过名的那个（web/shortcuts/ 里留了一份）。为空时不显示"添加快捷指令"。
  */
-const IMP_SHORTCUT_URL = 'https://www.icloud.com/shortcuts/6e104e48e6dc4bf4add6da4f9da337b9';
+const IMP_SHORTCUT_URL = 'https://www.icloud.com/shortcuts/69b107c96fbc430682755dd124cf49a8';
 /** 看文件开头猜类型：pdf / xls / xlsx / zip / csv。 */
 function impSniff(b) {
   const at = (s, o = 0) => [...s].every((c, i) => b[o + i] === c.charCodeAt(0));
@@ -807,10 +807,32 @@ function impSplit(job) {
   return [];
 }
 
-/** 发一次请求。返回 AI 给出的 JSON；输出被截断（装不下）时返回 null。 */
-async function impCall(system, job) {
+/**
+ * 边收 AI 的回答边数：transactions 数组里已经完整写出的交易有几笔（不用等整段写完）。和手机端 LiveCount 一样。
+ * 回答是 {"transactions":[{…},{…}…], …}：数"根对象 → 数组 → 对象"这一层收尾的 }，跳过字符串里的括号。
+ */
+function impLiveCount() {
+  let i = 0, inStr = false, esc = false, stack = '', n = 0;
+  return (t) => {
+    if (t.length < i) { i = 0; inStr = false; esc = false; stack = ''; n = 0; }
+    for (; i < t.length; i++) {
+      const c = t[i];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{' || c === '[') stack += c;
+      else if ((c === '}' || c === ']') && stack) { stack = stack.slice(0, -1); if (c === '}' && stack === '{[') n++; }
+    }
+    return n;
+  };
+}
+
+/** 发一次请求。返回 AI 给出的 JSON；输出被截断（装不下）时返回 null。onLive(n)：AI 每写完一笔调用一次。 */
+async function impCall(system, job, onLive = () => {}) {
+  const count = impLiveCount();
+  let n = 0;
+  onLive(0);
   try {
-    return await aiJson(system, [...job.blocks, impTextBlock(impAsk(job))], IMP_SCHEMA, 16000);
+    return await aiJson(system, [...job.blocks, impTextBlock(impAsk(job))], IMP_SCHEMA, 16000, (t) => { const k = count(t); if (k !== n) { n = k; onLive(n); } });
   } catch (e) {
     if (e instanceof AiError && (e.tooLong || ['内容太长，AI 没写完。', 'Too long; the AI ran out of space.'].includes(e.message))) return null;
     throw e;
@@ -886,9 +908,9 @@ const impWhenVisible = () => (document.hidden ? new Promise((ok) => {
 const IMP_RETRY_WAIT = [2000, 5000, 12000];
 
 /** 发一段；连接断了、服务繁忙就等一会儿再发（切走了就等回到前台再发，不算次数）。 */
-async function impCallRetry(system, job) {
+async function impCallRetry(system, job, onLive) {
   for (let attempt = 0; ; attempt++) {
-    try { return await impCall(system, job); } catch (e) {
+    try { return await impCall(system, job, onLive); } catch (e) {
       if (!aiRetryable(e)) throw e;
       if (document.hidden) { await impWhenVisible(); attempt--; continue; }
       if (attempt >= IMP_RETRY_WAIT.length) throw e;
@@ -904,18 +926,31 @@ async function impCallRetry(system, job) {
  */
 async function impRunJobs(run, onProgress) {
   const jobs = run.jobs;
-  onProgress(run.done, run.done + jobs.length, run.found.length);
+  // 等着重试的段：至少算上次识别出的笔数，数字不往回掉
+  const fb = (list) => list.reduce((a, j) => a + (j.fallback?.length ?? 0), 0);
+  onProgress(run.done, run.done + jobs.length, run.found.length + fb(jobs), 0);
   while (jobs.length) {
     const wave = jobs.splice(0, 3), again = [], failed = [];
     // 正在识别的这几段也要算进存下来的进度里（页面这时被刷新，回来要重新识别它们）
     run.inWave = { pending: [...wave], again, failed };
     let netErr = null, otherErr = null, inflight = wave.length;
-    const prog = () => onProgress(run.done, run.done + jobs.length + again.length + failed.length + inflight, run.found.length);
+    // 每段正在写的回答里已经写完了几笔（-1：这段已经结束）
+    const live = wave.map(() => 0);
+    // liveOnly：只是 AI 又写完了一笔（数字和圆环跟着动，不用整页重画、不用存进度）
+    const prog = (liveOnly = false) => {
+      let running = 0, part = 0;
+      wave.forEach((j, k) => {
+        if (live[k] < 0) return;
+        running += Math.max(live[k], j.fallback?.length ?? 0);
+        if (j.lines.length) part += Math.min(0.95, live[k] / j.lines.length);
+      });
+      onProgress(run.done, run.done + jobs.length + again.length + failed.length + inflight, run.found.length + fb(jobs) + fb(again) + running, part, liveOnly);
+    };
     // 谁先识别完就先报进度、先记下来
-    await Promise.all(wave.map(async (job) => {
+    await Promise.all(wave.map(async (job, k) => {
       let json;
-      const settle = () => { run.inWave.pending = run.inWave.pending.filter((j) => j !== job); };
-      try { json = await impCallRetry(run.system, job); } catch (e) {
+      const settle = () => { run.inWave.pending = run.inWave.pending.filter((j) => j !== job); live[k] = -1; };
+      try { json = await impCallRetry(run.system, job, (n) => { if (live[k] >= 0 && live[k] !== n) { live[k] = n; prog(true); } }); } catch (e) {
         inflight--; settle();
         if (aiRetryable(e)) { failed.push(job); netErr ??= e; return; }
         // 别的错（AI 拒绝、返回看不懂）：放回去，点"继续识别"再试一次；再错就跳过这一段，最后提醒
@@ -1023,7 +1058,7 @@ async function impStart(files) {
     try { files = await impExpandZips(files); } catch (e) { IMP.phase = 'idle'; IMP.error = e instanceof AiError ? e.message : tr('无法解开压缩包。', "Couldn't open the zip file."); render(); return; }
     if (!files) return;
   }
-  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, detail: -1, finished: false, run: null });
+  Object.assign(IMP, { phase: 'loading', error: '', done: 0, total: 0, found: 0, part: 0, shown: 0, detail: -1, finished: false, run: null });
   impRender();
   try {
     if (files.length === 1 && await impTryPatch(files[0])) { IMP.phase = 'idle'; render(); return; }
@@ -1046,11 +1081,14 @@ async function impStart(files) {
 async function impGo() {
   const run = IMP.run;
   if (!run || IMP.phase === 'saving') return;
-  Object.assign(IMP, { phase: 'loading', error: '', finished: false, done: run.done, found: run.found.length });
+  Object.assign(IMP, { phase: 'loading', error: '', finished: false, done: run.done, found: run.found.length, part: 0, shown: run.found.length });
   impRender();
   impWakeOn();
   try {
-    const result = await impRunJobs(run, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); impTaskSaveSoon(); });
+    const result = await impRunJobs(run, (done, total, found, part, liveOnly) => {
+      Object.assign(IMP, { done, total, found, part: part || 0 });
+      if (!liveOnly) { impRender(); impTaskSaveSoon(); }
+    });
     if (!result.transactions.length) throw new AiError(tr('未识别到交易记录。', 'No transactions were found.'));
     // 识别完了：进度圈先走满、报告读出几笔，停一下再进列表（和手机端一样）
     Object.assign(IMP, { finished: true, found: result.transactions.length });
@@ -1361,16 +1399,16 @@ function impReviewView() {
  * 圆环由 impRingTick 每一帧更新（整页重画时接着画，不会从 0 开始）。
  */
 function impLoadingView() {
-  const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('即将为您列出', 'Opening the list…') : IMP.total > 1 ? tr(`第 ${Math.min(IMP.done + 1, IMP.total)} / ${IMP.total} 段`, `Part ${Math.min(IMP.done + 1, IMP.total)} of ${IMP.total}`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
+  const p = IMP.ringP ?? 0, seg = IMP.finished ? tr('即将为您列出', 'Opening the list…') : IMP.total > 1 ? tr(`已完成 ${Math.min(IMP.done, IMP.total)} / ${IMP.total} 段`, `${Math.min(IMP.done, IMP.total)} of ${IMP.total} parts done`) : tr('AI 正在识别账单…', 'AI is reading your bill…');
   setTimeout(impRingTick, 0);
   return `<div class="imp-load"><div class="imp-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100"/><circle class="tip" cx="60" cy="8" r="4"/></svg>${impRingPlanet()}</div>
-    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr(`识别完成，共 ${IMP.found} 条记录`, `Done: ${IMP.found} records`) : tr(`已分析 ${IMP.found} 条记录`, `${IMP.found} records analysed`)}</b><div class="muted small">${seg}</div></div>`;
+    <b class="num imp-pct">${Math.floor(p * 100)}%</b><b class="imp-found">${IMP.finished ? tr('识别完成，共 ', 'Done: ') : tr('已识别 ', 'Read ')}<span class="num imp-n">${IMP.shown ?? IMP.found}</span>${tr(' 笔', ' records')}</b><div class="muted small">${seg}</div></div>`;
 }
 /** 断网停下了：已经识别出几条、完成几段，点"继续识别"接着跑剩下的。 */
 function impPausedView() {
   const run = IMP.run, n = run?.found.length ?? 0, done = run?.done ?? 0, total = done + (run?.jobs.length ?? 0);
   return `<div class="imp-load imp-pause"><div class="imp-pause-pl">${impRingPlanet()}</div>
-    <b class="imp-found">${tr(`已识别 ${n} 条记录`, `${n} records read`)}</b>
+    <b class="imp-found">${tr(`已识别 ${n} 笔`, `${n} records read`)}</b>
     <div class="muted small">${tr(`完成 ${done} / ${total} 段`, `${done} of ${total} parts done`)} · ${h(IMP.error)}</div>
     <button class="btn primary imp-cont" data-act="imp-continue">${tr('继续识别', 'Continue')}</button>
     <button class="btn link" data-act="imp-discard">${tr('放弃', 'Discard')}</button></div>`;
@@ -1389,12 +1427,21 @@ function impRingTick() {
     const now = performance.now();
     if (IMP.ringDone !== IMP.done) { IMP.ringDone = IMP.done; IMP.segAt = now; }
     const segs = Math.max(1, IMP.total), creep = 0.9 * (1 - Math.exp(-(now - (IMP.segAt ?? now)) / 1000 / 18));
-    const target = IMP.finished ? 1 : Math.min(0.99, (Math.min(IMP.done, segs) + creep) / segs);
+    // 正在识别的段：按已写完的行数走（表格账单知道一共几行），不知道行数的按时间慢慢挪
+    const target = IMP.finished ? 1 : Math.min(0.99, (Math.min(IMP.done, segs) + Math.max(creep, IMP.part ?? 0)) / segs);
     const p = IMP.ringP = (IMP.ringP ?? 0) + (target - (IMP.ringP ?? 0)) * (IMP.finished ? 0.16 : 0.08);
     ring.querySelector('.arc').setAttribute('stroke-dasharray', `${(p * 100).toFixed(2)} 100`);
     const a = (-90 + 360 * p) * Math.PI / 180, tip = ring.querySelector('.tip');
     tip.setAttribute('cx', (60 + 52 * Math.cos(a)).toFixed(2)); tip.setAttribute('cy', (60 + 52 * Math.sin(a)).toFixed(2));
     const pct = document.querySelector('.imp-pct'); if (pct) pct.textContent = `${Math.floor(p * 100)}%`;
+    // "已识别 n 笔"：一格一格往上跳（差得多时跳得快些），每跳一下放大再弹回
+    const shown = IMP.shown ?? IMP.found, gap = IMP.found - shown;
+    if (gap && now - (IMP.bumpAt ?? 0) > (Math.abs(gap) > 12 ? 40 : 90)) {
+      IMP.shown = shown + (gap > 0 ? Math.max(1, Math.floor(gap / 6)) : gap);
+      IMP.bumpAt = now;
+      const el = document.querySelector('.imp-n');
+      if (el) { el.textContent = IMP.shown; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+    }
     impRingRaf = requestAnimationFrame(step);
   };
   impRingRaf = requestAnimationFrame(step);
@@ -1431,7 +1478,7 @@ function impGuideView() {
       ${step(3, tr('返回此处选择文件', 'Pick it here'), [tr('记一笔', 'Add'), tr('文件', 'File'), tr('最近使用', 'Recents')])}
       ${step(4, tr('请输入解压密码', 'Enter the password'), [tr('微信支付消息中的 6 位数字', 'From the WeChat Pay message')])}
     </ol>
-    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('安装一次，之后在账单上点击 分享 › 行星记账导入', 'Install once, then Share › Planet Ledger import')}</span></div>
+    ${IMP_SHORTCUT_URL ? `<div class="imp-gd-sc"><div><b>${tr('更快：快捷指令', 'Faster: a Shortcut')}</b><span class="muted small">${tr('安装一次，之后在账单上点击 分享 › 导入行星记账', 'Install once, then Share › Planet Ledger import')}</span></div>
       <button class="btn primary" data-act="imp-sc">${tr('前往设置', 'Set up')}</button></div>` : ''}
   </div></div>`;
 }
@@ -1451,7 +1498,7 @@ const scStep = (n, title, path) => `<li><i>${n}</i><div><b>${title}</b><span>${p
 function scSteps() {
   return `<ol class="imp-steps">
     ${scStep(1, tr('添加快捷指令', 'Add the Shortcut'), [tr('点击下方按钮', 'Tap the button below'), tr('添加快捷指令', 'Add Shortcut')])}
-    ${scStep(2, tr('在账单上点击「分享」', 'Share a statement'), [tr('在微信、邮件或「文件」中打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('行星记账导入', 'Planet Ledger import')])}
+    ${scStep(2, tr('在账单上点击「分享」', 'Share a statement'), [tr('在微信、邮件或「文件」中打开账单', 'Open it in WeChat, Mail or Files'), tr('分享', 'Share'), tr('导入行星记账', 'Planet Ledger import')])}
     ${scStep(3, tr('开始识别', 'Read it'), [tr('自动打开网页版', 'The web app opens'), tr('开始识别', 'Read it')])}
   </ol>`;
 }

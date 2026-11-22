@@ -68,20 +68,41 @@ function aiHttpErr0(status, msg, model) {
 const aiTooLong = () => Object.assign(new AiError(tr('内容过长，AI 未能完整输出。', 'Too long; the AI ran out of space.')), { tooLong: true });
 const aiBadJson = () => new AiError(tr('AI 返回的结果无法解析，请重试。', "Couldn't parse the AI's answer. Try again."));
 
+/** 流式回答（Server-Sent Events）：一行一行交给 onData（只给 "data:" 后面的内容）。中途断了抛网络错误。 */
+async function aiReadSse(res, onData) {
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (line.startsWith('data:')) onData(line.slice(5).trim());
+      }
+    }
+  } catch (e) { if (e instanceof AiError) throw e; throw aiNetErr(); }
+  if (buf.trim().startsWith('data:')) onData(buf.trim().slice(5).trim());
+}
+
 /**
  * 发一次请求，让模型按 schema 返回 JSON。content 可以是字符串，也可以是内容块数组（带 PDF、图片时）。
  * 按 AI 设置里选的服务分开走：Claude 用下面这段，DeepSeek 用 aiDeepseekJson。
  * Claude 被安全策略拒绝时开了服务端的备用模型（fallbacks），仍然被拒就报错。输出被截断时错误带 tooLong，调用方可以拆小再试。
  */
-async function aiJson(system, content, schema, maxTokens = 16000) {
+async function aiJson(system, content, schema, maxTokens = 16000, onText = null) {
   if (!aiKey()) throw new AiError(tr('尚未填写 API 密钥。', 'No API key set.'));
-  if (aiProvider() === 'deepseek') return aiDeepseekJson(system, content, schema, maxTokens);
+  if (aiProvider() === 'deepseek') return aiDeepseekJson(system, content, schema, maxTokens, onText);
   const model = aiModel('claude'), key = aiKey('claude');
   const body = {
     model, max_tokens: maxTokens, system,
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
     fallbacks: 'default',
+    // onText：边写边传，每收到一点就把到目前为止的全部回答交给它（识别账单时实时数出已识别几笔）
+    ...(onText ? { stream: true } : {}),
   };
   const send = (b, beta) => aiFetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -100,6 +121,19 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
       if (/fallback/i.test(text)) { const { fallbacks, ...plain } = body; res = await send(plain, false); }
     }
   } catch { throw aiNetErr(); }
+  if (onText && res.ok) {
+    let text = '', stop = '';
+    await aiReadSse(res, (data) => {
+      let ev; try { ev = JSON.parse(data); } catch { return; }
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') { text += ev.delta.text; onText(text); }
+      else if (ev.type === 'message_delta' && ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+      else if (ev.type === 'error') throw ev.error?.type === 'overloaded_error' ? aiHttpErr(529, ev.error.message, model) : new AiError(ev.error?.message || aiBadJson().message);
+    });
+    if (stop === 'refusal') throw new AiError(tr('AI 拒绝处理该内容。', 'The AI declined this content.'));
+    if (stop === 'max_tokens') throw aiTooLong();
+    if (!stop) throw aiNetErr(); // 没收到结尾：连接中途断了
+    try { return JSON.parse(text); } catch { throw aiBadJson(); }
+  }
   let json = null, cut = false;
   try { json = await res.json(); } catch (e) { cut = e?.name !== 'SyntaxError'; }
   if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
@@ -115,7 +149,7 @@ async function aiJson(system, content, schema, maxTokens = 16000) {
  * DeepSeek（OpenAI 那种 chat/completions 接口）：只收文字。JSON 的格式写进 system，打开 json_object 模式；
  * 模型不认 response_format 就去掉再发一次。图片（只有 deepseek-flash 能看）用 image_url 的 data URL 发。
  */
-async function aiDeepseekJson(system, content, schema, maxTokens) {
+async function aiDeepseekJson(system, content, schema, maxTokens, onText = null) {
   const model = aiModel('deepseek'), key = aiKey('deepseek');
   // 只有文字时 content 是一个字符串；有图片时是 [文字, image_url…] 的列表（data URL）
   let user;
@@ -135,7 +169,7 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
     response_format: { type: 'json_object' },
     // DeepSeek 默认先"思考"再回答，思考的字数也算在 max_tokens 里：多给 32K 给思考用（用多少算多少钱），官方上限 384K
     max_tokens: Math.min(maxTokens + 32000, 393216),
-    stream: false,
+    stream: !!onText,
   };
   const send = (b) => aiFetch('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(b),
@@ -148,6 +182,21 @@ async function aiDeepseekJson(system, content, schema, maxTokens) {
       if (/response_format|json_object/i.test(text)) { const { response_format, ...plain } = body; res = await send(plain); }
     }
   } catch { throw aiNetErr(); }
+  if (onText && res.ok) {
+    // 流式：一行一个 "data: {…}"，choices[0].delta.content 是新写出的字，最后是 "data: [DONE]"
+    let text = '', finish = '', ended = false;
+    await aiReadSse(res, (data) => {
+      if (data === '[DONE]') { ended = true; return; }
+      let ev; try { ev = JSON.parse(data); } catch { return; }
+      const c = ev.choices?.[0];
+      if (c?.delta?.content) { text += c.delta.content; onText(text); }
+      if (c?.finish_reason) finish = c.finish_reason;
+    });
+    if (finish === 'length') throw aiTooLong();
+    if (finish === 'content_filter') throw new AiError(tr('AI 拒绝处理该内容。', 'The AI declined this content.'));
+    if (!finish && !ended) throw aiNetErr();
+    try { return JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch { throw aiBadJson(); }
+  }
   let json = null, cut = false;
   try { json = await res.json(); } catch (e) { cut = e?.name !== 'SyntaxError'; }
   if (!res.ok) throw aiHttpErr(res.status, json?.error?.message ?? `HTTP ${res.status}`, model);
