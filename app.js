@@ -1382,7 +1382,7 @@ app.addEventListener('click', async (ev) => {
     case 'reload': await loadAll(); break;
     case 'tab': if (v === 'ledger' && el.dataset.list) state.calendarMode = false; state.tab = v; scrollTo(0, 0); state.q = ''; state.searching = false; state.accountId = null; state.project = null; state.openKey = null; render(); break;
     case 'month': { const d = new Date(state.month.y, state.month.m - 1 + Number(v), 1); state.month = monthOf(d); state.calDay = null; render(); break; }
-    case 'stats-kind': state.statsIncome = v === '1'; state.openTop = null; render(); break;
+    case 'stats-kind': state.statsNet = v === 'n'; state.statsIncome = v === '1'; state.openTop = null; render(); break;
     case 'open-top': state.openTop = state.openTop === Number(v) ? null : Number(v); render(); break;
     case 'new': state.error = ''; startEdit(null); break;
     case 'edit': state.error = ''; startEdit(state.data.tx.get(Number(v))); break;

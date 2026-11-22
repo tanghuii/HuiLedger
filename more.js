@@ -374,34 +374,78 @@ function donutChart(slices, title, total, grow = false) {
  * 按年看：行星存钱罐 + 每月结余（收入 − 支出）。罐里金币的高度是这一年的储蓄率；一年花超了罐子会哭。
  * 下面每个月一根：存下了往上（绿），花超了往下（红）；点一根看那个月的收入、支出。
  */
+const stSaveKey = () => `${state.period}:${state.month.y}-${state.month.m}`;
 function stSavings(txs, L, grow) {
-  const { y, m } = state.month, now = new Date(), thisYear = now.getFullYear() === y;
-  const months = Array.from({ length: 12 }, () => []);
-  for (const t of txs) months[dayToDate(t.date).getUTCMonth()].push(t);
-  const per = months.map((l) => L.totals(l)), nets = per.map((t) => t.income - t.expense);
+  const { y, m } = state.month, now = new Date(), per = state.period;
+  const thisYear = now.getFullYear() === y, thisMonth = thisYear && now.getMonth() + 1 === m;
+  // 按年：每月一根，柱头坐着那个月的主题行星；按月：每天一根；全部：每年一根
+  let n, bucket, future, long, axis, title, avgName, count, head, hint;
+  if (per === 'y') {
+    n = 12; bucket = (d) => d.getUTCMonth(); future = (i) => thisYear && i > now.getMonth();
+    long = (i) => tr(`${i + 1}月`, MONTH_EN[i]); axis = (i) => i + 1;
+    title = tr(`${y}年储蓄`, `Saved in ${y}`); avgName = tr('月均', 'Per month'); count = thisYear ? now.getMonth() + 1 : 12;
+    head = tr('每月结余', 'Net by month'); hint = tr('点击月份查看明细', 'Tap a month for details');
+  } else if (per === 'm') {
+    n = new Date(y, m, 0).getDate(); bucket = (d) => d.getUTCDate() - 1; future = (i) => thisMonth && i + 1 > now.getDate();
+    long = (i) => tr(`${m}月${i + 1}日`, `${MONTH_EN[m - 1]} ${i + 1}`); axis = (i) => ([0, 9, 19, n - 1].includes(i) ? i + 1 : '');
+    title = tr(`${m}月储蓄`, `Saved in ${MONTH_EN[m - 1]}`); avgName = tr('日均', 'Per day'); count = thisMonth ? now.getDate() : n;
+    head = tr('每日结余', 'Net by day'); hint = tr('点击日期查看明细', 'Tap a day for details');
+  } else {
+    const years = txs.map((t) => dayToDate(t.date).getUTCFullYear()), y0 = years.length ? Math.min(...years) : now.getFullYear();
+    n = Math.max(1, (years.length ? Math.max(...years) : y0) - y0 + 1); bucket = (d) => d.getUTCFullYear() - y0; future = () => false;
+    long = (i) => tr(`${y0 + i}年`, `${y0 + i}`); axis = (i) => (n > 6 ? `'${String(y0 + i).slice(2)}` : y0 + i);
+    title = tr('累计储蓄', 'Saved in total'); avgName = tr('年均', 'Per year'); count = n;
+    head = tr('每年结余', 'Net by year'); hint = tr('点击年份查看明细', 'Tap a year for details');
+  }
+  const groups = Array.from({ length: n }, () => []);
+  for (const t of txs) { const i = bucket(dayToDate(t.date)); if (i >= 0 && i < n) groups[i].push(t); }
+  const parts = groups.map((l) => L.totals(l)), nets = parts.map((t) => t.income - t.expense);
   const all = L.totals(txs), net = all.income - all.expense;
-  const rate = all.income > 0 ? net / all.income : 0;
-  // 月均：今年只算到这个月，往年按 12 个月
-  const span = thisYear ? now.getMonth() + 1 : 12, avg = Math.round(net / Math.max(1, span));
-  // 零线的位置按存下的最多、花超的最多来分（没有花超的月份时零线在最底下）
+  const rate = all.income > 0 ? net / all.income : 0, avg = Math.round(net / Math.max(1, count));
+  // 零线的位置按存下的最多、花超的最多来分（没有花超的时候零线在最底下）
   const up = Math.max(0, ...nets), down = Math.max(0, ...nets.map((c) => -c)), span2 = Math.max(1, up + down), base = up + down ? up / span2 : 0.5;
-  const pick = state.savePick?.y === y ? state.savePick.i : null;
-  const p = typeof plOfMonth === 'function' ? plOfMonth(y, m) : PLANET_BRAND;
-  const pig = typeof plPiggy === 'function' ? plPiggy(p, { px: 118, fill: rate, mood: net < 0 ? -2 : net > 0 ? 1 : 0, grow }) : '';
+  const pick = state.savePick?.k === stSaveKey() ? state.savePick.i : null;
+  const pl = typeof plOfMonth === 'function' ? (per === 'a' ? plOfMonth(now.getFullYear(), now.getMonth() + 1) : plOfMonth(y, m)) : PLANET_BRAND;
+  const pig = typeof plPiggy === 'function' ? plPiggy(pl, { px: 118, fill: rate, mood: net < 0 ? -2 : net > 0 ? 1 : 0, grow }) : '';
+  // 按年看时，每根柱子的头上坐着那个月的主题行星：存下了笑，花超了哭，持平是平嘴（还没到的月份不画）
+  const face = (i, c) => (per === 'y' && typeof planetSvg === 'function' && typeof plOfMonth === 'function'
+    ? planetSvg(plOfMonth(y, i + 1), { px: 18, mood: c > 0 ? 1 : c < 0 ? -2 : 0, spin: false, cls: 'st-np' }) : '');
   const bars = nets.map((c, i) => {
-    const future = thisYear && i > now.getMonth(), hgt = Math.max(c ? 3 : 0, Math.abs(c) * 100 / span2).toFixed(1);
-    return `<button class="${c > 0 ? 'up' : c < 0 ? 'down' : 'z'}${pick === i ? ' on' : ''}${future ? ' fut' : ''}" data-act="save-pick" data-v="${i}" aria-label="${tr(`${i + 1}月`, MONTH_EN[i])} ${money(c)}"><i style="height:${hgt}%"></i></button>`;
+    const fut = future(i), hgt = Math.max(c ? 3 : 0, Math.abs(c) * 100 / span2).toFixed(1);
+    return `<button class="${c > 0 ? 'up' : c < 0 ? 'down' : 'z'}${pick === i ? ' on' : ''}${fut ? ' fut' : ''}" data-act="save-pick" data-v="${i}" style="--h:${hgt}%" aria-label="${long(i)} ${money(c)}"><i></i>${fut ? '' : face(i, c)}</button>`;
   }).join('');
   const info = pick != null
-    ? `<b>${tr(`${pick + 1}月`, MONTH_EN[pick])}</b> ${tr('结余', 'Net')} <span class="num ${nets[pick] < 0 ? 'out' : nets[pick] > 0 ? 'in' : ''}">${money(nets[pick])}</span><span class="muted"> · ${tr('收入', 'In')} ${money(per[pick].income)} · ${tr('支出', 'Out')} ${money(per[pick].expense)}</span>`
-    : `<span class="muted">${tr('点击月份查看明细', 'Tap a month for details')}</span>`;
+    ? `<b>${long(pick)}</b> ${tr('结余', 'Net')} <span class="num ${nets[pick] < 0 ? 'out' : nets[pick] > 0 ? 'in' : ''}">${money(nets[pick])}</span><span class="muted"> · ${tr('收入', 'In')} ${money(parts[pick].income)} · ${tr('支出', 'Out')} ${money(parts[pick].expense)}</span>`
+    : `<span class="muted">${hint}</span>`;
   return `<div class="card st-save"><div class="st-save-top"><div class="st-pig">${pig}</div>
-      <div class="st-save-n"><div class="muted small">${tr(`${y}年储蓄`, `Saved in ${y}`)}</div><div class="num st-save-big ${net < 0 ? 'out' : 'in'}">${money(net)}</div>
-        <div class="small muted">${tr('储蓄率', 'Rate')} ${all.income > 0 ? Math.round(rate * 100) + '%' : '—'}</div><div class="small muted">${tr('月均', 'Per month')} ${money(avg)}</div></div></div>
-    <div class="st-h">${tr('每月结余', 'Net by month')}</div>
+      <div class="st-save-n"><div class="muted small">${title}</div><div class="num st-save-big ${net < 0 ? 'out' : 'in'}">${money(net)}</div>
+        <div class="small muted">${tr('储蓄率', 'Rate')} ${all.income > 0 ? Math.round(rate * 100) + '%' : '—'}</div><div class="small muted">${avgName} ${money(avg)}</div></div></div>
+    <div class="st-h">${head}</div>
     <div class="st-save-info">${info}</div>
-    <div class="st-nets${pick != null ? ' picking' : ''}${grow ? ' pg-gy' : ''}" style="--b:${(base * 100).toFixed(1)}%">${bars}</div>
-    <div class="st-nets-x">${nets.map((_, i) => `<span>${i + 1}</span>`).join('')}</div></div>`;
+    <div class="st-nets${per === 'y' ? ' faces' : ''}${pick != null ? ' picking' : ''}${grow ? ' pg-gy' : ''}${down > 0 ? ' has-down' : ''}" style="--b:${(base * 100).toFixed(1)}%">${bars}</div>
+    <div class="st-nets-x">${nets.map((_, i) => `<span>${axis(i)}</span>`).join('')}</div></div>
+  ${per === 'y' ? stBudgetMonths(parts, y, thisYear, now) : ''}`;
+}
+
+/**
+ * 按年看：每个月的预算情况。预算是"每月总预算"一个数（和手机端一样），每个月的支出拿它来比：
+ * 没超笑脸、超了哭脸、没设预算平脸；还没到的月份淡淡的平脸。点一个月去预算页看那个月。
+ */
+function stBudgetMonths(per, y, thisYear, now) {
+  const total = typeof BUD !== 'undefined' ? BUD.total() : 0;
+  const overN = total > 0 ? per.filter((t, i) => !(thisYear && i > now.getMonth()) && t.expense > total).length : 0;
+  const cells = per.map((t, i) => {
+    const future = thisYear && i > now.getMonth(), over = total > 0 && t.expense > total;
+    const mood = future || total <= 0 ? 0 : over ? -2 : 1;
+    const pl = typeof planetSvg === 'function' && typeof plOfMonth === 'function' ? planetSvg(plOfMonth(y, i + 1), { px: 34, mood, spin: false }) : '';
+    const pct = total > 0 && !future ? Math.round(t.expense * 100 / total) : null;
+    return `<button class="st-bm-c${future ? ' fut' : ''}" data-act="st-bud-month" data-v="${i + 1}" aria-label="${tr(`${i + 1}月`, MONTH_EN[i])}">${pl}<b>${tr(`${i + 1}月`, MONTH_EN[i])}</b>
+      <span class="num ${pct == null ? 'muted' : over ? 'out' : 'in'}">${pct == null ? (future ? '' : '—') : pct + '%'}</span></button>`;
+  }).join('');
+  const head = total > 0
+    ? `<span class="small muted">${tr(`每月 ${money(total)}`, `${money(total)} / month`)}${overN ? ` · <span class="out">${tr(`超支 ${overN} 个月`, `${overN} over`)}</span>` : ''}</span>`
+    : `<button class="btn link" data-act="st-bud-month" data-v="0">${tr('设置预算', 'Set budget')}</button>`;
+  return `<div class="card st-bm"><div class="between"><b class="st-h">${tr('每月预算', 'Budget by month')}</b>${head}</div><div class="st-bm-g">${cells}</div></div>`;
 }
 
 const hasTagPage = () => typeof openTagDetail === 'function';
@@ -415,12 +459,16 @@ function statsView2() {
   const shown = inRange.filter((t) => t.kind === kind && L.counts(t));
   const total = sum(shown, (t) => L.net(t));
   const { y, m } = state.month, step = state.period === 'y' ? 12 : 1, review = state.section === 'review';
+  // 第二行：净收支 / 支出 / 收入。净收支只在总览里有（看储蓄）；分类、标签只分支出、收入（选着净收支时按支出看）
+  const overview = state.section === 'overview', net = overview && state.statsNet !== false;
   // 换内容、时间段、收支、柱状/曲线时才重放动画；点开某一类、点某根柱子不重放
-  const grow = pgGrow(`stats:${state.ledgerId}:${state.section}:${state.period}:${y}-${m}:${state.statsIncome ? 1 : 0}:${state.line ? 1 : 0}`);
+  const grow = pgGrow(`stats:${state.ledgerId}:${state.section}:${state.period}:${y}-${m}:${net ? 'n' : state.statsIncome ? 1 : 0}:${state.line ? 1 : 0}`);
   // 上菜单：标题和看多长时间；下面是支出 / 收入、哪个月；最底下浮着 总览 / 分类 / 标签 / 复盘
   const nav = (dir) => `<button class="round pg-round sm" data-act="month" data-v="${dir * step}" aria-label="${dir < 0 ? tr('上一段', 'Previous') : tr('下一段', 'Next')}">${pgIcon(dir < 0 ? 'back' : 'forward')}</button>`;
   const side = `${pgBar(tr('统计', 'Stats'), { right: `<div class="st-per">${seg('period', [['m', tr('月', 'Month')], ['y', tr('年', 'Year')], ['a', tr('全部', 'All')]], state.period)}</div>` })}
-    ${review ? '' : `<div class="st-kind">${seg('stats-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], state.statsIncome ? 1 : 0)}</div>`}
+    ${review ? '' : `<div class="st-kind">${overview
+      ? seg('stats-kind', [['n', tr('净收支', 'Net')], [0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], net ? 'n' : state.statsIncome ? 1 : 0)
+      : seg('stats-kind', [[0, tr('支出', 'Expense')], [1, tr('收入', 'Income')]], state.statsIncome ? 1 : 0)}</div>`}
     ${state.period === 'a' || (review && state.period === 'm') ? '' : `<div class="st-month">${nav(-1)}<b>${state.period === 'y' ? tr(`${y}年`, `${y}`) : ymLabel(y, m)}</b>${nav(1)}</div>`}
     <nav class="st-sec" aria-label="${tr('统计内容', 'Sections')}">${seg('section', [['overview', tr('总览', 'Overview')], ['category', tr('分类', 'Categories')], ['tag', tr('标签', 'Tags')], ['review', tr('复盘', 'Review')]], state.section)}</nav>`;
   const empty = (text) => pgEmpty('receipt', text);
@@ -430,12 +478,12 @@ function statsView2() {
   else if (state.section === 'overview') {
     const leftOut = inRange.filter((t) => L.isReimburse(t) || L.isRefund(t) || t.excluded);
     const col = (label, cents, cls) => `<div><div class="muted">${label}</div><div class="num ${cls}">${money(cents)}</div></div>`;
-    main = `<div class="card cc st-over"><div class="st-three">${col(tr('支出', 'Expense'), totals.expense, 'out')}${col(tr('收入', 'Income'), totals.income, 'in')}${col(tr('结余', 'Net'), totals.income - totals.expense, '')}</div>
-        <div class="muted st-count">${tr(`共 ${inRange.length} 笔`, nTx(inRange.length))}</div></div>
+    const over = `<div class="card cc st-over"><div class="st-three">${col(tr('支出', 'Expense'), totals.expense, 'out')}${col(tr('收入', 'Income'), totals.income, 'in')}${col(tr('结余', 'Net'), totals.income - totals.expense, '')}</div>
+        <div class="muted st-count">${tr(`共 ${inRange.length} 笔`, nTx(inRange.length))}</div></div>`;
+    main = net ? over + stSavings(inRange, L, grow) : `${over}
       ${leftOut.length ? `<div class="card st-left"><div class="row click" data-act="left-out" style="padding:0"><div class="main"><div class="muted small">${tr('不参与分类统计的部分', 'Not in category stats')} ${state.openLeftOut ? '▴' : '▾'}</div>
         <div class="small amber">${tr('可报销支出', 'Reimbursable')} ${money(totals.reimbursable)} · ${tr('报销收入', 'Reimbursed')} ${money(totals.reimbursed)}</div><div class="small muted">${tr('退款', 'Refunds')} ${money(totals.refund)}${totals.excluded ? ` · ${tr('不计', 'Excluded')} ` + money(totals.excluded) : ''}</div></div></div>
         ${state.openLeftOut ? rowsOf(leftOut, L) : ''}</div>` : ''}
-      ${state.period === 'y' ? stSavings(inRange, L, grow) : ''}
       ${total === 0 ? noData : state.period === 'a' ? '' : trendChart(shown, L, 'var(--primary)', grow)}`;
   } else if (state.section === 'category') {
     const groups = new Map();
@@ -892,7 +940,9 @@ async function moreAction(act, v, el) {
     case 'asset-back':
       if (typeof LOAN !== 'undefined') Object.assign(LOAN, { open: null, loose: false, add: null, assign: null, err: '' });
       state.assetTab = 'accounts'; state.project = null; state.openKey = null; render(); scrollTo(0, state.assetsY ?? 0); return true;
-    case 'save-pick': { const i = Number(v), y = state.month.y; state.savePick = state.savePick?.y === y && state.savePick.i === i ? null : { y, i }; break; }
+    // 每月预算：点一个月去预算页看那个月（0 = 只去预算页设置）
+    case 'st-bud-month': { const mm = Number(v); if (mm) state.month = { y: state.month.y, m: mm }; state.tab = 'budget'; render(); scrollTo(0, 0); return true; }
+    case 'save-pick': { const i = Number(v), k = stSaveKey(); state.savePick = state.savePick?.k === k && state.savePick.i === i ? null : { k, i }; break; }
     case 'trend-pick': { const i = Number(v), k = trendKey(); state.trendPick = state.trendPick?.key === k && state.trendPick.i === i ? null : { key: k, i }; break; }
     case 'close-view-btn': viewBack(); break;
     case 'view-delete': if (!await pgConfirm(tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true })) return true;
