@@ -116,3 +116,9 @@ input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0;
 .imp-accdd > span { display: inline-flex; align-items: center; gap: 5px; }
 .imp-accdd .imp-acctile { width: 18px; height: 18px; border-radius: 5px; font-size: 9px; flex: none; }
 .imp-accdd .imp-acctile svg { width: 12px; height: 12px; }
+
+/* 网页开着时收到快捷指令传来的账单：确认框（借用更新公告的卡片） */
+.imp-cf .wn-in { display: grid; gap: 10px; }
+.imp-cf .wn-lead { margin: 0 0 4px; }
+.imp-cf-b { width: 100%; min-height: 46px; font-size: 16px; }
+.imp-cf-b.link { min-height: 36px; font-size: 14px; }

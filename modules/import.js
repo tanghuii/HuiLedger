@@ -102,10 +102,13 @@ function impSniff(b) {
   }
   return 'csv';
 }
-(() => {
+/**
+ * 地址栏里有快捷指令传来的账单（#imp=…）：读出来、抹掉地址栏，返回文件；没有返回 null。
+ * 网页打开时读一次；网页已经开着时（Safari 停在别的页面，快捷指令只改了 # 后面），hashchange 时再读。
+ */
+function impTakeHash() {
   const m = location.hash.match(/^#imp=([^&]+)(?:&n=([^&]*))?/);
-  // 不是快捷指令打开的：看看本机有没有上次没做完的导入
-  if (!m) { impRestore(); return; }
+  if (!m) return null;
   history.replaceState(null, '', location.pathname + location.search);
   try {
     const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
@@ -115,20 +118,189 @@ function impSniff(b) {
     if (!/\.[a-z0-9]{2,5}$/i.test(name)) name = (name || tr('账单', 'statement')) + '.' + impSniff(bytes);
     const ext = name.split('.').pop().toLowerCase();
     const type = { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' }[ext] ?? '';
-    IMP.incoming = new File([bytes], name, { type });
-    // 马上存到本机：这之后页面刷新、Safari 被关掉都不会丢（存好之前先不让页面自动刷新）
-    IMP.hold = true;
-    impTaskClear();
-    impTaskSave({ file: { name, type, buf: bytes.buffer }, run: null, review: null }).finally(() => { IMP.hold = false; });
-  } catch { /* 数据不完整：当没收到 */ }
+    return new File([bytes], name, { type });
+  } catch { return null; /* 数据不完整：当没收到 */ }
+}
+
+/** 收下一份账单作为当前任务：马上存到本机（之后页面刷新、Safari 被关掉都不会丢；存好之前先不让页面自动刷新）。 */
+function impKeep(file) {
+  IMP.incoming = file; IMP.autoStarted = false;
+  IMP.hold = true;
+  return file.arrayBuffer().then((buf) => impTaskIo('readwrite', (st) => st.put({ file: { name: file.name, type: file.type, buf }, run: null, review: null, at: Date.now() }, 'cur')))
+    .catch(() => {}).finally(() => { IMP.hold = false; });
+}
+
+(() => {
+  const f = impTakeHash();
+  // 不是快捷指令打开的：看看本机有没有上次没做完的导入
+  if (!f) { impRestore(); return; }
+  impKeep(f);
 })();
+
+// ---------------------------------------------------------------- 网页开着时收到账单
+
+/** 一个小确认框：标题、说明、几个按钮（第一个是主按钮）。返回点了第几个；点背景不关（必须选一个）。 */
+function impConfirm(title, text, buttons) {
+  return new Promise((done) => {
+    const box = document.createElement('div');
+    box.className = 'wn imp-cf';
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', title);
+    box.innerHTML = `<div class="wn-card"><div class="wn-in"><b class="wn-title">${h(title)}</b>${text ? `<p class="wn-lead">${h(text)}</p>` : ''}
+      ${buttons.map((b, i) => `<button class="btn ${i === 0 ? 'primary' : i === 1 ? '' : 'link'} imp-cf-b" type="button" data-i="${i}">${h(b)}</button>`).join('')}</div></div>`;
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('.imp-cf-b');
+      if (!b) return;
+      box.classList.add('out'); setTimeout(() => box.remove(), 200);
+      done(Number(b.dataset.i));
+    });
+    document.body.appendChild(box);
+    box.querySelector('.imp-cf-b')?.focus();
+  });
+}
+
+/** 打开着的弹窗里有没有改过的输入框（和刚打开时不一样）。 */
+function impModalDirty() {
+  return [...document.querySelectorAll('.modal input, .modal textarea, .modal select')].some((el) =>
+    (el.type === 'checkbox' || el.type === 'radio') ? el.checked !== el.defaultChecked : el.tagName === 'SELECT' ? [...el.options].some((o) => o.selected !== o.defaultSelected) : el.value !== el.defaultValue);
+}
+
+/** 记账页（state.editing）里有没有没存的改动。 */
+function impEditDirty() {
+  const e = state.editing;
+  if (!e) return false;
+  try { if (typeof collect === 'function') collect(); } catch { /* 读不了输入框就按当前状态比 */ }
+  const v = (x) => String(x ?? '').trim();
+  if (e._isNew) return !!(v(e._amount) || v(e.note) || v(e.tags));
+  const t = state.data.tx.get(e.id);
+  if (!t) return true;
+  const amount = typeof edInput === 'function' ? edInput(typeof edForeign === 'function' && edForeign(t) ? t.origCents : t.amountCents) : e._amount;
+  return v(e._amount) !== v(amount) || ['kind', 'categoryId', 'accountId', 'toAccountId', 'date', 'note', 'tags', 'reimburse', 'ledgerId', 'project', 'fund', 'currency', 'excluded'].some((k) => v(e[k]) !== v(t[k]));
+}
+
+/** 不管现在在哪一页：关掉记账页、账单详情、搜索、弹窗、更新公告，切到导入页。 */
+function impShowPage() {
+  // 弹窗：点它的背景关掉（和用户点空白处一样，各自的状态也跟着清掉）
+  for (let i = 0; i < 4; i++) {
+    const m = document.querySelector('.modal');
+    if (!m) break;
+    m.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }
+  document.querySelectorAll('.wn:not(.imp-cf)').forEach((x) => x.remove());
+  Object.assign(state, { editing: null, view: null, searching: false, q: '', error: '', aiSettings: false, aiDraft: null });
+  state.tab = 'import';
+  scrollTo(0, 0);
+  render();
+}
+
+/** 收下账单、切到导入页、开始识别（没登录、数据没读完时先留着，读完后 impAutoStart 接着做）。 */
+function impBegin(file, toast = true) {
+  impKeep(file);
+  if (toast && typeof edToast === 'function') edToast(tr(`已收到「${file.name}」，正在为您导入`, `Got “${file.name}”. Importing…`));
+  if (!state.session) { render(); return; }
+  impShowPage();
+  if (state.data.category.size) impAutoStart();
+}
+
+/** 等着的账单：记账页、弹窗、初始设置还开着（用户选了先继续编辑），关掉后自动开始。 */
+let impWaiting = null;
+function impWaitCheck() {
+  if (!impWaiting) return;
+  const busyUi = state.editing || document.querySelector('.modal') || (typeof ob !== 'undefined' && ob.open);
+  if (busyUi) return;
+  const f = impWaiting; impWaiting = null;
+  impBegin(f);
+}
+setInterval(impWaitCheck, 700);
+
+/**
+ * 网页开着时快捷指令又传来一份账单。按当前在做什么分情况：
+ * 1. 正在导入（识别中、核对中、断网停着）：问改为导入新的，还是先做完当前的（新的排在后面，做完自动开始）；
+ * 2. 记账页有没存的改动：问保存并导入、不保存直接导入，或继续编辑（存好或关掉后自动导入）；
+ * 3. 弹窗里改过东西：问放弃修改并导入，或继续编辑（关掉后自动导入）；
+ * 4. 正在做初始设置：设置完自动导入；
+ * 5. 别的情况（看详情、翻统计、没改过的弹窗…）：提示一句，直接去导入。
+ */
+async function impArrive(file) {
+  const name = file.name;
+  // 应用锁着：解锁后再问
+  while (typeof lk !== 'undefined' && lk.locked) await new Promise((r) => setTimeout(r, 500));
+  // 1
+  if (IMP.phase === 'saving') { impQueue(file); return; }
+  if (IMP.phase && IMP.phase !== 'idle') {
+    const i = await impConfirm(tr(`已收到新账单「${name}」`, `New statement: “${name}”`), tr('当前导入尚未完成，请选择：', 'The current import is not finished yet.'),
+      [tr('先完成当前导入', 'Finish the current one first'), tr('放弃当前导入，改为导入新账单', 'Discard it and import the new one')]);
+    if (i === 0) { impQueue(file); return; }
+    IMP.next = null; impTaskIo('readwrite', (st) => st.delete('next')).catch(() => {});
+    impReset();
+    impBegin(file, false);
+    return;
+  }
+  // 2
+  if (state.editing && impEditDirty()) {
+    const i = await impConfirm(tr(`已收到账单「${name}」`, `Got “${name}”`), tr('当前记账尚未保存，是否保存？', 'This entry is not saved yet. Save it?'),
+      [tr('保存并导入', 'Save and import'), tr('不保存，直接导入', 'Import without saving'), tr('继续编辑，稍后导入', 'Keep editing, import after')]);
+    if (i === 0) {
+      await saveEditing();
+      // 没存成（比如金额没填）：留在记账页显示原因，存好或关掉后自动导入
+      if (state.editing) { impWaiting = file; impKeep(file); edToast(tr('请先完成本笔记账，保存后将自动导入', 'Finish this entry; importing right after')); return; }
+      impBegin(file);
+      return;
+    }
+    if (i === 1) { state.editing = null; impBegin(file); return; }
+    impWaiting = file; impKeep(file);
+    return;
+  }
+  // 3
+  if (document.querySelector('.modal') && impModalDirty()) {
+    const i = await impConfirm(tr(`已收到账单「${name}」`, `Got “${name}”`), tr('当前窗口中的修改尚未保存。', 'Changes in this window are not saved.'),
+      [tr('放弃修改并导入', 'Discard and import'), tr('继续编辑，稍后导入', 'Keep editing, import after')]);
+    if (i === 0) { impBegin(file); return; }
+    impWaiting = file; impKeep(file);
+    return;
+  }
+  // 4
+  if (typeof ob !== 'undefined' && ob.open) {
+    impWaiting = file; impKeep(file);
+    edToast(tr('已收到账单，完成初始设置后将自动导入', 'Got it. Importing after setup.'));
+    return;
+  }
+  // 5
+  impBegin(file);
+}
+
+/** 先做完当前的：新的排在后面（也存到本机），当前的做完或放弃后自动开始。 */
+function impQueue(file) {
+  IMP.next = file;
+  file.arrayBuffer().then((buf) => impTaskIo('readwrite', (st) => st.put({ name: file.name, type: file.type, buf, at: Date.now() }, 'next'))).catch(() => {});
+  edToast(tr(`「${file.name}」将在当前导入完成后自动开始`, `“${file.name}” will start after this one`));
+}
+/** 当前导入做完或放弃了：有排着的就开始。 */
+async function impNext() {
+  let f = IMP.next;
+  if (!f) {
+    try {
+      const n = await impTaskIo('readonly', (st) => st.get('next'));
+      if (n?.buf && Date.now() - (n.at ?? 0) < IMP_TASK_TTL) f = new File([n.buf], n.name, { type: n.type ?? '' });
+    } catch { /* 没有 */ }
+  }
+  if (!f || (IMP.phase && IMP.phase !== 'idle') || IMP.incoming) return;
+  IMP.next = null;
+  impTaskIo('readwrite', (st) => st.delete('next')).catch(() => {});
+  setTimeout(() => impBegin(f), 400);
+}
+
+window.addEventListener('hashchange', () => {
+  const f = impTakeHash();
+  if (f) impArrive(f);
+});
 
 /** 打开网页时读回上次没做完的导入：核对中的回到核对页，识别到一半的接着识别，还没开始的自动开始。 */
 async function impRestore() {
   IMP.hold = true;
   try {
     const t = await impTaskLoad();
-    if (!t || IMP.phase !== 'idle' || IMP.incoming) return;
+    if (!t) { impNext(); return; }
+    if (IMP.phase !== 'idle' || IMP.incoming) return;
     if (t.review?.drafts?.length) {
       Object.assign(IMP, { phase: 'review', drafts: t.review.drafts, skipped: t.review.skipped ?? 0, missed: t.review.missed ?? 0, dropped: t.review.dropped ?? 0, account: t.review.account ?? 0, rates: t.review.rates ?? {}, detail: -1 });
     } else if (t.run?.jobs) {
@@ -145,7 +317,8 @@ async function impRestore() {
  * 读完云端数据（登录后的第一次也算）再做，识别要用到分类和账户。
  */
 function impAutoStart() {
-  if (!impBusy() || !state.session) return;
+  // 用户选了"继续编辑，稍后导入"：等记账页、弹窗关掉（impWaitCheck）
+  if (impWaiting || !impBusy() || !state.session) return;
   if (state.tab !== 'import') { state.tab = 'import'; setTimeout(render, 0); }
   if (IMP.autoStarted) return;
   // 没有能用的密钥（或账单是 PDF / 截图却只有 DeepSeek 的）：直接打开图文向导，保存后回到这里自动开始
@@ -1216,7 +1389,7 @@ async function impGo() {
     }
   } finally { impWakeOff(); }
   if (IMP.phase === 'paused') impTaskSaveSoon();
-  if (IMP.phase === 'idle' && !IMP.run) impTaskClear();
+  if (IMP.phase === 'idle' && !IMP.run) { impTaskClear(); impNext(); }
   render();
 }
 
@@ -1411,6 +1584,8 @@ async function impLinkSubsidies() {
 function impReset() {
   impTaskClear(); IMP.autoStarted = false;
   Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, dropped: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
+  // 排着的下一份账单（导入进行中又收到的）：接着开始
+  impNext();
 }
 
 // ---------------------------------------------------------------- 页面
@@ -1682,7 +1857,7 @@ MOD.actions.push(async (act, v, el) => {
     case 'imp-guide-x': IMP.guide = false; break;
     case 'imp-sc': IMP.guide = false; state.tab = 'shortcut'; scrollTo(0, 0); break;
     case 'imp-noop': return true;
-    case 'imp-inc-x': IMP.incoming = null; IMP.autoStarted = false; impTaskClear(); break;
+    case 'imp-inc-x': IMP.incoming = null; IMP.autoStarted = false; impTaskClear(); impNext(); break;
     case 'imp-inc-go': { if (IMP.incoming) await impStart([IMP.incoming]); return true; }
     default: return true;
   }

@@ -160,6 +160,7 @@ function detailView() {
     tags.length ? cell(tr('标签', 'Tags'), tags.map((x) => (typeof tagLogo === 'function' ? `<span class="dt-tag">${tagLogo(x, 20)}${h(x)}</span>` : `<span class="badge gray" style="margin:0">#${h(x)}</span>`)).join('')) : '',
     t.project ? cell(tr('项目', 'Project'), h(t.project)) : '', t.fund ? cell(tr('资金来源', 'Funding'), h(t.fund)) : '',
     t.loanPerson ? cell(t.loanSide === 1 ? tr('借出给', 'Lent to') : tr('借自', 'Borrowed from'), h(t.loanPerson)) : '',
+    transfer && t.toCents > 0 && to ? cell(tr(`到账（${h(acctCur(to))}）`, `Received (${h(acctCur(to))})`), `<span class="num">${money(t.toCents, acctCur(to))}</span>`) : '',
     cell(tr('账本', 'Ledger'), h(state.data.ledger.get(t.ledgerId)?.name ?? '')),
   ].filter(Boolean).join('');
   // 和 App 一样是一整页（不是弹窗）：顶上返回栏，中间可以滚，底下三个按钮贴着底边

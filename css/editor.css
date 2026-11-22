@@ -79,3 +79,10 @@
 .ed-imp-h { flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--primary); white-space: nowrap; }
 .ed-imp-h svg, .ed-imp-b svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ed-imp-b { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+
+/* 换钱：转账框里"到账多少"那一行 */
+.ed-recv { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; padding: 8px 12px; border-radius: 12px; border: 1px dashed var(--line); background: transparent; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.ed-recv b { font-size: 16px; }
+.ed-recv .small { margin-left: auto; }
+.ed-recv svg { width: 14px; height: 14px; opacity: .6; }
+.ed-recv.bad { border-color: var(--red, #e5484d); }

@@ -1130,6 +1130,8 @@ function effect(account, t) {
     : t.kind === KIND.TRANSFER && t.toAccountId === account.id ? 1 : t.kind === KIND.TRANSFER && t.accountId === account.id ? -1 : 0;
   if (!sign) return 0;
   const cur = acctCur(account);
+  // 换钱的转入方：用实际到账的金额（toCents，转入账户的币种）
+  if (t.kind === KIND.TRANSFER && t.toAccountId === account.id && t.toCents > 0) return t.toCents;
   const amount = cur === HOME ? t.amountCents : t.currency === cur && t.origCents > 0 ? t.origCents : convert(t.amountCents, HOME, cur) ?? t.amountCents;
   return sign * amount;
 }

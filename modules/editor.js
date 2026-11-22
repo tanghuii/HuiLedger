@@ -202,6 +202,19 @@ function edTo(e) {
   const t = state.data.account.get(e.toAccountId);
   return t && t.id !== e.accountId ? t : edAccounts().find((a) => a.id !== e.accountId) ?? null;
 }
+/**
+ * 换钱（两个账户币种不同的转账）：到账金额，按转入账户的币种。
+ * 自己填过的用填的（e._recv）；否则按账单那天的汇率把转出金额折过去。不是换钱、或没有汇率时返回 null。
+ */
+function edRecv(e) {
+  if (e.kind !== KIND.TRANSFER) return null;
+  // 到账按转入账户记余额用的币种算（账户上设的币种，没设就是主货币；和 effect() 一致）
+  const to = edTo(e), toCur = to ? acctCur(to) : HOME, cur = edCur(e);
+  if (!to || toCur === cur) return null;
+  if (String(e._recv ?? '').trim()) return { cur: toCur, cents: parseCents(e._recv), user: true };
+  const cents = edCalc(e._amount), table = edRatesOn(e.date), a = edRate(cur, table), b = edRate(toCur, table);
+  return { cur: toCur, cents: cents != null && a && b ? Math.round(cents * a / b) : null, user: false, rate: a && b ? a / b : null };
+}
 /** 分类：选中的可能是子分类；换了收支类型后原来的不适用，退回这一类的第一个。 */
 function edCats(e) {
   const cats = [...state.data.category.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
@@ -242,6 +255,8 @@ function edInit(e) {
   if (e._equiv == null) e._equiv = '';
   if (e._keep == null) e._keep = !e._isNew && edForeign(e);
   if (e._origKind == null) e._origKind = e._isNew ? -1 : e.kind;
+  // 换钱的到账金额：存过的当作自己填的（不跟着汇率变）
+  if (e._recv == null) e._recv = e.toCents > 0 ? edInput(e.toCents) : '';
 }
 
 function startEdit(t, quiet = false) {
@@ -385,7 +400,7 @@ function editorView() {
   const from = acc.get(e.accountId), to = edTo(e), tags = edTags(e);
   const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? tr('选择账户', 'Choose account'))}</span></button>`;
   const head = transfer
-    ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('需至少两个账户', 'Needs two accounts')}</div>` : ''}</div>`
+    ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('需至少两个账户', 'Needs two accounts')}</div>` : ''}${edRecvLine(e)}</div>`
     : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('暂无分类', 'No categories yet')}</div>`}
       ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(edCatName(s))}</button>`).join('')}</div>` : ''}</div>`;
   // 可报销的支出、报销收入才问项目和资金来源（已经填了的照样显示）
@@ -425,6 +440,14 @@ function editorView() {
     <div class="ed-keys">${keys.map(key).join('')}</div>
     ${edPop(e)}
   </div></div>`;
+}
+
+/** 换钱时转账框里的一行：到账多少（点开可以改成实际到账的金额）。 */
+function edRecvLine(e) {
+  const r = edRecv(e);
+  if (!r) return '';
+  const amt = r.cents != null ? money(r.cents, r.cur) : tr('暂无汇率', 'No rate');
+  return `<button class="ed-recv ${r.cents == null ? 'bad' : ''}" data-act="ed-pick" data-v="recv"><span class="muted">${tr('到账', 'Received')}</span><b class="num">${amt}</b><span class="muted small">${r.user ? tr('已修改', 'Edited') : tr('按汇率', 'By rate')}</span>${edSvg('pencil')}</button>`;
 }
 
 /** 选项多的面板（账户、币种、抵扣哪笔支出）：一条搜索框，下面的列表随打字筛选。 */
@@ -473,6 +496,13 @@ function edPop(e) {
     body = `<label class="ed-eqfield"><span>${h(edSym(HOME))}</span><input id="ed-equiv" value="${h(now)}" data-was="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${auto != null ? edInput(auto) : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
       <div class="muted small">${r ? `1 ${h(cur)} = ${r.toFixed(4)} ${HOME} · ${dayISO(e.date)}` : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}</div>
       <div class="ed-eqbtns"><button class="btn" data-act="ed-eq-reset">${tr('按汇率计算', 'Use the rate')}</button><button class="btn primary" data-act="ed-eq-ok">${tr('好', 'OK')}</button></div>`;
+  } else if (p === 'recv') {
+    // 换钱的到账金额：默认按汇率折算，实际到账不一样时改成实际的
+    const r = edRecv({ ...e, _recv: '' }) ?? { cur: HOME, cents: null }, now = String(e._recv ?? '').trim();
+    title = tr(`到账金额（${r.cur}）`, `Received (${r.cur})`);
+    body = `<label class="ed-eqfield"><span>${h(edSym(r.cur))}</span><input id="ed-recv" value="${h(now)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${r.cents != null ? edInput(r.cents) : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}"></label>
+      <div class="muted small">${r.rate ? `1 ${h(edCur(e))} = ${r.rate.toFixed(4)} ${h(r.cur)} · ${dayISO(e.date)}` : tr('暂无汇率，请手动填写', 'No rate available, enter it yourself')}</div>
+      <div class="ed-eqbtns"><button class="btn" data-act="ed-recv-reset">${tr('按汇率计算', 'Use the rate')}</button><button class="btn primary" data-act="ed-recv-ok">${tr('好', 'OK')}</button></div>`;
   } else if (p === 'mood') {
     title = tr('这笔花得值吗？', 'Worth it?');
     body = `<div class="mood-ed">${moodRater(e._score || 0, 'ed')}</div>` + (moodPercent() ? `<button class="btn primary mood-ok" data-act="ed-pick-x">${tr('完成', 'Done')}</button>` : '') + opt('_score', 0, tr('不打分', 'No rating'), !e._score);
@@ -597,6 +627,9 @@ async function saveEditing(again = false) {
   t.origCents = foreign ? c.cents : 0;
   if (transfer) { t.toAccountId = to.id; t.categoryId = 0; t.project = ''; t.fund = ''; }
   else { t.toAccountId = 0; t.categoryId = edCats(e).leafId; }
+  // 换钱：记下实际到账多少（转入账户的币种）；到账的就是主货币时，折合主货币的金额也用它
+  const recv = edRecv(e);
+  if (recv?.cents > 0) { t.toCents = recv.cents; if (recv.cur === HOME) t.amountCents = recv.cents; } else delete t.toCents;
   t.excluded = !!e.excluded && !transfer;
   if (t.kind !== KIND.EXPENSE) t.reimburse = 0;
   // 抵扣（和手机端 build() 一样）：只抵扣一笔而且是全额时用 offsetOf；分摊时逐笔记在 offsetParts；
@@ -669,7 +702,7 @@ function txRow(t, L, showDate = false, viewAccount = null) {
   const net = L.net(t);
   const over = offset > 0 && net < 0;
   const sign = over || t.kind === KIND.INCOME || incoming ? '+' : t.kind === KIND.EXPENSE || outgoing ? '-' : '';
-  const amount = offset > 0 && !foreign && !inAcc ? money(Math.abs(net)) : foreign ? money(t.origCents, t.currency) : inAcc ? money(Math.abs(effect(view, t)), vcur) : money(t.amountCents);
+  const amount = offset > 0 && !foreign && !inAcc ? money(Math.abs(net)) : incoming && t.toCents > 0 ? money(t.toCents, vcur) : foreign ? money(t.origCents, t.currency) : inAcc ? money(Math.abs(effect(view, t)), vcur) : money(t.amountCents);
   const cls = over || t.kind === KIND.INCOME || incoming ? 'in' : t.kind === KIND.EXPENSE || outgoing ? 'out' : '';
   const tagHtml = (t.tags ? String(t.tags).split(' ').filter(Boolean) : []).map((x) => { const logo = edTagLogo(x, 14); return logo ? `<span class="ed-rtag">${logo}${h(x)}</span>` : '#' + h(x); });
   const details = [...[showDate ? dayISO(t.date) : '', t.loanPerson, t.note].filter(Boolean).map(h), ...tagHtml].join('  ');
@@ -681,7 +714,7 @@ function txRow(t, L, showDate = false, viewAccount = null) {
   const extra = [
     offset > 0 ? tr(`原 ${money(t.amountCents)} · 抵 ${money(offset)}`, `${money(t.amountCents)} − ${money(offset)}`) : '',
     linked ? (L.claim?.(t) ? tr(`关联 ${h(linkedName)}`, `For ${h(linkedName)}`) : tr(`抵扣 ${h(linkedName)}`, `Offsets ${h(linkedName)}`)) : '',
-    foreign || inAcc ? `≈ ${money(t.amountCents)}` : '',
+    (foreign || inAcc) && !(incoming && t.toCents > 0) ? `≈ ${money(t.amountCents)}` : '',
   ].filter(Boolean).map((x) => `<div class="small muted ed-rx">${x}</div>`).join('');
   // 多选时前面多一个勾；"row click" 和 data-act="view" 这两段别处（txRowStatic）会替换，不要改写法
   return `<div class="row click ed-tx${state.sel?.has(t.id) ? ' sel-on' : ''}" data-act="view" data-v="${t.id}">
@@ -1051,7 +1084,7 @@ document.addEventListener('input', (ev) => {
     if (e._offs?.[i]) e._offs[i][1] = el.value;
     el.closest('.ed-offamt')?.classList.toggle('bad', el.value.trim() !== '' && parseCents(el.value) == null);
     edPaintAmount();
-  } else if (el.id === 'ed-equiv') {
+  } else if (el.id === 'ed-equiv' || el.id === 'ed-recv') {
     el.closest('.ed-eqfield')?.classList.toggle('bad', el.value.trim() !== '' && parseCents(el.value) == null);
   }
 });
@@ -1065,8 +1098,8 @@ document.addEventListener('click', (ev) => { if (ev.target.id === 'e-date') { tr
 document.addEventListener('keydown', (ev) => {
   const e = state.editing;
   if (!e || ev.isComposing || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-  if (ev.key === 'Enter' && ['ed-newname', 'ed-newtag', 'ed-equiv'].includes(ev.target.id)) {
-    ev.preventDefault(); document.querySelector({ 'ed-newname': '[data-act="ed-newname"]', 'ed-newtag': '[data-act="ed-tags-done"]', 'ed-equiv': '[data-act="ed-eq-ok"]' }[ev.target.id])?.click(); return;
+  if (ev.key === 'Enter' && ['ed-newname', 'ed-newtag', 'ed-equiv', 'ed-recv'].includes(ev.target.id)) {
+    ev.preventDefault(); document.querySelector({ 'ed-newname': '[data-act="ed-newname"]', 'ed-newtag': '[data-act="ed-tags-done"]', 'ed-equiv': '[data-act="ed-eq-ok"]', 'ed-recv': '[data-act="ed-recv-ok"]' }[ev.target.id])?.click(); return;
   }
   if (ev.key === 'Enter' && (ev.target.id === 'ed-q' || ev.target.classList.contains('ed-offin'))) { ev.preventDefault(); ev.target.blur(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(ev.target.tagName)) return;
@@ -1159,6 +1192,8 @@ MOD.actions.push(async (act, v, el) => {
         e[k] = k === 'excluded' ? v === '1' : k === 'project' || k === 'fund' ? v : Number(v);
         // 新记的一笔换了账户：币种跟着新账户走
         if (k === 'accountId') e._curUser = false;
+        // 换了转出或转入账户：到账金额重新按汇率算
+        if (k === 'accountId' || k === 'toAccountId') e._recv = '';
         if (k === 'accountId' && e._isNew) { e._curPicked = false; e._equiv = ''; }
       }
       e._pick = null; break;
@@ -1170,6 +1205,12 @@ MOD.actions.push(async (act, v, el) => {
       e._pick = null; state.error = ''; break;
     }
     case 'ed-eq-reset': e._equiv = ''; e._keep = false; e._pick = null; state.error = ''; break;
+    case 'ed-recv-ok': {
+      const inp = document.getElementById('ed-recv'), val = inp?.value.trim() ?? '';
+      if (val && !(parseCents(val) > 0)) { inp.closest('.ed-eqfield')?.classList.add('bad'); return true; }
+      e._recv = val; e._pick = null; state.error = ''; break;
+    }
+    case 'ed-recv-reset': e._recv = ''; e._pick = null; state.error = ''; break;
     case 'ed-off-rm': e._offs.splice(Number(v), 1); break;
     case 'ed-off-add': edAddOffset(e, Number(v)); e._pick = null; break;
     case 'ed-offset': { const t = state.data.tx.get(e.id); if (t) await startOffset(t, v); return true; }
