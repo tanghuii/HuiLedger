@@ -276,3 +276,39 @@ function plNowPlanet(px, mood = 1, cls = '') {
 function plSpinner(px = 22) {
   return `<span class="pl-spinner" style="width:${px}px;height:${px}px" aria-hidden="true">${plNowPlanet(Math.round(px * 0.62), 1)}<i></i></span>`;
 }
+
+// ---------------------------------------------------------------- 统计：行星存钱罐
+
+/**
+ * 行星做的存钱罐（统计 → 年 → 总览）：这个月的行星当罐身，加上猪耳朵、猪鼻子、四条小腿、卷尾巴和顶上的投币口。
+ * fill 0..1：罐里金币的高度（这一年的储蓄率）；mood：1 存下了钱（顶上掉一枚硬币进去）、-2 这一年花超了（哭）。
+ * 坐标同行星：罐身半径 1，圆心 (0, 0)。
+ */
+function plPiggy(p, { px = 120, fill = 0, mood = 1, grow = false } = {}) {
+  if (typeof p === 'string') p = planetByKey(p) ?? PLANET_BRAND;
+  const id = 'pp' + (++planetUid), C = 'M-1,0 A1,1 0 1,0 1,0 A1,1 0 1,0 -1,0 Z', ink = p.face.eye, blush = p.face.blush;
+  const path = (d, f, a = 1) => `<path d="${d}" fill="${f}"${a < 1 ? ` fill-opacity="${a}"` : ''}/>`;
+  const ear = (s) => `<path d="M${-0.8 * s},-0.42 L${-0.74 * s},-1.06 L${-0.26 * s},-0.84 Z" fill="${p.body}" stroke="${p.body}" stroke-width=".14" stroke-linejoin="round"/>
+    <path d="M${-0.68 * s},-0.6 L${-0.66 * s},-0.9 L${-0.42 * s},-0.8 Z" fill="${blush}" fill-opacity=".55" stroke="${blush}" stroke-opacity=".55" stroke-width=".06" stroke-linejoin="round"/>`;
+  const leg = (x, back) => `<rect x="${x}" y=".62" width=".3" height=".5" rx=".13" fill="${p.body}"/><rect x="${x}" y=".62" width=".3" height=".5" rx=".13" fill="${p.shade}" fill-opacity="${back ? 0.55 : 0.25}"/>`;
+  // 罐里的金币：波浪形的顶，高度 = fill；长出来时从底下升上来
+  const f = Math.min(1, Math.max(0, fill)), lvl = (1 - 2 * f).toFixed(3);
+  const wave = f > 0 ? `<g${grow ? ' class="pp-rise"' : ''}><path d="M-1.3,${lvl} q.15,-.07 .3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 V1.2 H-1.3 Z" fill="#FFC93C" fill-opacity=".62"/>
+    <path d="M-1.3,${lvl} q.15,-.07 .3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0 t.3,0" fill="none" stroke="#FFE7A0" stroke-width=".05"/></g>` : '';
+  const tears = mood <= -2 ? PLANET_EYES.map(([x, y]) => `<path transform="translate(${x + 0.06 * Math.sign(x)} ${y + 0.1})" d="${PLANET_TEAR}" fill="#3FA2F5" fill-opacity=".95"/>`).join('') : '';
+  // 存下了钱：一枚硬币从上面掉进投币口（系统要求少动画时不掉）
+  const coin = mood > 0 ? `<g class="pp-coin"><ellipse cx="0" cy="-1.3" rx=".2" ry=".2" fill="#FFC93C" stroke="#E0A21B" stroke-width=".05"/><path d="M-.05,-1.38 L.05,-1.38 M0,-1.42 L0,-1.18" stroke="#E0A21B" stroke-width=".05" stroke-linecap="round"/></g>` : '';
+  return `<svg class="pp" viewBox="-1.45 -1.6 2.9 2.85" width="${px}" height="${Math.round(px * 2.85 / 2.9)}" aria-hidden="true">
+<defs><clipPath id="${id}c"><path d="${C}"/></clipPath>
+<radialGradient id="${id}s" gradientUnits="userSpaceOnUse" cx="-.3" cy="-.35" r="1.5"><stop offset=".55" stop-color="${p.shade}" stop-opacity="0"/><stop offset="1" stop-color="${p.shade}" stop-opacity=".55"/></radialGradient>
+<radialGradient id="${id}h" gradientUnits="userSpaceOnUse" cx="-.38" cy="-.42" r="1.25"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+${ear(1)}${ear(-1)}${leg(-0.72, true)}${leg(0.42, true)}
+<path d="M.97,.12 c.2,-.08 .3,.1 .18,.2 c-.1,.08 -.2,-.02 -.1,-.1 c.1,-.07 .22,-.02 .26,.08" fill="none" stroke="${p.shade}" stroke-width=".07" stroke-linecap="round"/>
+<g clip-path="url(#${id}c)">${path(C, p.body)}${p.spin.map(([d, c, a]) => path(d, c, a)).join('')}${p.fixed.map(([d, c, a]) => path(d, c, a)).join('')}${wave}${path(C, `url(#${id}s)`)}${path(C, `url(#${id}h)`)}</g>
+${leg(-0.48, false)}${leg(0.18, false)}
+<rect x="-.28" y="-.93" width=".56" height=".1" rx=".05" fill="${ink}" fill-opacity=".72"/>${coin}
+${PLANET_EYES.map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx=".075" ry=".1" fill="${ink}"/>${ink !== '#FFFFFF' ? `<circle cx="${x + 0.025}" cy="${y - 0.035}" r=".025" fill="#fff" fill-opacity=".9"/>` : ''}`).join('')}
+${[-0.55, 0.55].map((x) => `<circle cx="${x}" cy=".22" r=".12" fill="${blush}" fill-opacity="${p.face.blushA}"/>`).join('')}
+<ellipse cx="0" cy=".3" rx=".24" ry=".16" fill="#FFB8C8" stroke="${ink}" stroke-opacity=".25" stroke-width=".03"/><ellipse cx="-.08" cy=".3" rx=".035" ry=".055" fill="${ink}" fill-opacity=".65"/><ellipse cx=".08" cy=".3" rx=".035" ry=".055" fill="${ink}" fill-opacity=".65"/>
+${tears}</svg>`;
+}

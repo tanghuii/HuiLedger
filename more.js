@@ -370,6 +370,40 @@ function donutChart(slices, title, total, grow = false) {
   return `<div class="st-donut"><svg viewBox="0 0 ${S} ${S}" role="img" aria-label="${h(title)}">${arcs}${grow ? `<g class="pg-fade">${labels}</g>` : labels}</svg><div class="mid"><div class="muted">${title}</div><div class="num">${money(total)}</div></div></div>`;
 }
 
+/**
+ * 按年看：行星存钱罐 + 每月结余（收入 − 支出）。罐里金币的高度是这一年的储蓄率；一年花超了罐子会哭。
+ * 下面每个月一根：存下了往上（绿），花超了往下（红）；点一根看那个月的收入、支出。
+ */
+function stSavings(txs, L, grow) {
+  const { y, m } = state.month, now = new Date(), thisYear = now.getFullYear() === y;
+  const months = Array.from({ length: 12 }, () => []);
+  for (const t of txs) months[dayToDate(t.date).getUTCMonth()].push(t);
+  const per = months.map((l) => L.totals(l)), nets = per.map((t) => t.income - t.expense);
+  const all = L.totals(txs), net = all.income - all.expense;
+  const rate = all.income > 0 ? net / all.income : 0;
+  // 月均：今年只算到这个月，往年按 12 个月
+  const span = thisYear ? now.getMonth() + 1 : 12, avg = Math.round(net / Math.max(1, span));
+  // 零线的位置按存下的最多、花超的最多来分（没有花超的月份时零线在最底下）
+  const up = Math.max(0, ...nets), down = Math.max(0, ...nets.map((c) => -c)), span2 = Math.max(1, up + down), base = up + down ? up / span2 : 0.5;
+  const pick = state.savePick?.y === y ? state.savePick.i : null;
+  const p = typeof plOfMonth === 'function' ? plOfMonth(y, m) : PLANET_BRAND;
+  const pig = typeof plPiggy === 'function' ? plPiggy(p, { px: 118, fill: rate, mood: net < 0 ? -2 : net > 0 ? 1 : 0, grow }) : '';
+  const bars = nets.map((c, i) => {
+    const future = thisYear && i > now.getMonth(), hgt = Math.max(c ? 3 : 0, Math.abs(c) * 100 / span2).toFixed(1);
+    return `<button class="${c > 0 ? 'up' : c < 0 ? 'down' : 'z'}${pick === i ? ' on' : ''}${future ? ' fut' : ''}" data-act="save-pick" data-v="${i}" aria-label="${tr(`${i + 1}月`, MONTH_EN[i])} ${money(c)}"><i style="height:${hgt}%"></i></button>`;
+  }).join('');
+  const info = pick != null
+    ? `<b>${tr(`${pick + 1}月`, MONTH_EN[pick])}</b> ${tr('结余', 'Net')} <span class="num ${nets[pick] < 0 ? 'out' : nets[pick] > 0 ? 'in' : ''}">${money(nets[pick])}</span><span class="muted"> · ${tr('收入', 'In')} ${money(per[pick].income)} · ${tr('支出', 'Out')} ${money(per[pick].expense)}</span>`
+    : `<span class="muted">${tr('点击月份查看明细', 'Tap a month for details')}</span>`;
+  return `<div class="card st-save"><div class="st-save-top"><div class="st-pig">${pig}</div>
+      <div class="st-save-n"><div class="muted small">${tr(`${y}年储蓄`, `Saved in ${y}`)}</div><div class="num st-save-big ${net < 0 ? 'out' : 'in'}">${money(net)}</div>
+        <div class="small muted">${tr('储蓄率', 'Rate')} ${all.income > 0 ? Math.round(rate * 100) + '%' : '—'}</div><div class="small muted">${tr('月均', 'Per month')} ${money(avg)}</div></div></div>
+    <div class="st-h">${tr('每月结余', 'Net by month')}</div>
+    <div class="st-save-info">${info}</div>
+    <div class="st-nets${pick != null ? ' picking' : ''}${grow ? ' pg-gy' : ''}" style="--b:${(base * 100).toFixed(1)}%">${bars}</div>
+    <div class="st-nets-x">${nets.map((_, i) => `<span>${i + 1}</span>`).join('')}</div></div>`;
+}
+
 const hasTagPage = () => typeof openTagDetail === 'function';
 /** 标签的颜色和缩写用 tags.js 的（和手机端同一套）；它还没加载时退回主题色和前两个字。 */
 const stTagColor = (tag) => (typeof tagColor === 'function' ? tagColor(tag) : 'var(--primary)');
@@ -401,6 +435,7 @@ function statsView2() {
       ${leftOut.length ? `<div class="card st-left"><div class="row click" data-act="left-out" style="padding:0"><div class="main"><div class="muted small">${tr('不参与分类统计的部分', 'Not in category stats')} ${state.openLeftOut ? '▴' : '▾'}</div>
         <div class="small amber">${tr('可报销支出', 'Reimbursable')} ${money(totals.reimbursable)} · ${tr('报销收入', 'Reimbursed')} ${money(totals.reimbursed)}</div><div class="small muted">${tr('退款', 'Refunds')} ${money(totals.refund)}${totals.excluded ? ` · ${tr('不计', 'Excluded')} ` + money(totals.excluded) : ''}</div></div></div>
         ${state.openLeftOut ? rowsOf(leftOut, L) : ''}</div>` : ''}
+      ${state.period === 'y' ? stSavings(inRange, L, grow) : ''}
       ${total === 0 ? noData : state.period === 'a' ? '' : trendChart(shown, L, 'var(--primary)', grow)}`;
   } else if (state.section === 'category') {
     const groups = new Map();
@@ -857,6 +892,7 @@ async function moreAction(act, v, el) {
     case 'asset-back':
       if (typeof LOAN !== 'undefined') Object.assign(LOAN, { open: null, loose: false, add: null, assign: null, err: '' });
       state.assetTab = 'accounts'; state.project = null; state.openKey = null; render(); scrollTo(0, state.assetsY ?? 0); return true;
+    case 'save-pick': { const i = Number(v), y = state.month.y; state.savePick = state.savePick?.y === y && state.savePick.i === i ? null : { y, i }; break; }
     case 'trend-pick': { const i = Number(v), k = trendKey(); state.trendPick = state.trendPick?.key === k && state.trendPick.i === i ? null : { key: k, i }; break; }
     case 'close-view-btn': viewBack(); break;
     case 'view-delete': if (!await pgConfirm(tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true })) return true;

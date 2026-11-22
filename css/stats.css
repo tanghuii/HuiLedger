@@ -219,3 +219,33 @@ button.as-gh { width: 100%; border: 0; background: none; padding: 4px 0; font: i
 /* 周期性收支里的自动记账卡 */
 .sc-card { padding: 14px; }
 .sc-card .between .btn.link { padding: 2px 0; font-weight: 600; }
+
+/* 统计 → 年：行星存钱罐 + 每月结余 */
+.st-save { padding: 16px 18px; display: grid; gap: 8px; }
+.st-save-top { display: flex; align-items: center; gap: 14px; }
+.st-pig { flex: none; display: grid; place-items: center; }
+.st-save-n { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.st-save-big { font-size: 26px; font-weight: 700; }
+.st-save .st-h { font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 4px; }
+.st-save-info { font-size: 13px; min-height: 18px; }
+.st-nets { position: relative; display: flex; height: 110px; margin-top: 4px; }
+.st-nets::after { content: ""; position: absolute; left: 0; right: 0; top: var(--b); border-top: 1px dashed color-mix(in srgb, var(--muted) 45%, transparent); pointer-events: none; }
+.st-nets button { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: none; cursor: pointer; position: relative; -webkit-tap-highlight-color: transparent; }
+.st-nets i { position: absolute; left: 50%; width: 62%; max-width: 22px; transform: translateX(-50%); border-radius: 999px; transition: opacity .2s; }
+.st-nets .up i { bottom: calc(100% - var(--b)); background: linear-gradient(var(--income), color-mix(in srgb, var(--income) 45%, transparent)); }
+.st-nets .down i { top: var(--b); background: linear-gradient(color-mix(in srgb, var(--expense) 45%, transparent), var(--expense)); }
+.st-nets .z i { top: calc(var(--b) - 1.5px); width: 3px; height: 3px !important; border-radius: 50%; background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.st-nets .fut i { opacity: .25; }
+.st-nets.picking button:not(.on) i { opacity: .38; }
+.st-nets.pg-gy .up i { transform-origin: center bottom; animation-name: pg-gy-c; }
+.st-nets.pg-gy .down i { transform-origin: center top; animation-name: pg-gy-c; }
+@keyframes pg-gy-c { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
+.st-nets-x { display: flex; font-size: 11px; color: var(--muted); }
+.st-nets-x span { flex: 1; text-align: center; }
+/* 存钱罐：金币从底下升上来；存下了钱时一枚硬币掉进投币口 */
+.pp-rise { animation: pp-rise 1s cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes pp-rise { from { transform: translateY(2.4px); } }
+.pp-coin { animation: pp-coin 2.6s ease-in infinite; }
+@keyframes pp-coin { 0%, 35% { transform: translateY(-0.3px); opacity: 0; } 45% { opacity: 1; } 75% { transform: translateY(0.42px); opacity: 1; } 85%, 100% { transform: translateY(0.55px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pp-rise, .pp-coin, .st-nets.pg-gy i { animation: none; } }
+.st-nets.pg-gy .z i { animation: none; }
