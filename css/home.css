@@ -281,3 +281,50 @@ div.hm-li { cursor: default; }
   border: 1.5px solid color-mix(in srgb, var(--primary) 55%, transparent); background: color-mix(in srgb, var(--primary) 10%, var(--card)); }
 .hm-sc-card .tile { width: 40px; height: 40px; border-radius: 12px; }
 .hm-sc-card .hm-grow { display: grid; gap: 2px; } .hm-sc-card b { font-size: 16px; }
+
+/* ---------------------------------------------------------------- 更新公告（刷新成新版后弹一次） */
+.wn {
+  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: color-mix(in srgb, #0b0d24 42%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: wn-fade .22s ease-out;
+}
+.wn.out { animation: wn-fade .2s ease-in reverse forwards; }
+.wn-card {
+  width: 100%; max-width: 380px; max-height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 28px; background: var(--bg); color: var(--text);
+  box-shadow: 0 30px 70px -20px rgba(20, 16, 60, .55), 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+  animation: wn-pop .38s cubic-bezier(.2, .9, .3, 1.25);
+}
+/* 顶部：主题色的渐变夜空，一道斜着的轨道，这个月的行星 */
+.wn-hero {
+  position: relative; flex: none; height: 118px; overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 30%, rgba(255, 255, 255, .55) 0 1.2px, transparent 2px),
+    radial-gradient(circle at 78% 22%, rgba(255, 255, 255, .45) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 62% 70%, rgba(255, 255, 255, .35) 0 1px, transparent 1.8px),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 78%, #ff9ec7) 0%, var(--primary) 55%, color-mix(in srgb, var(--primary) 70%, #1b1446) 100%);
+}
+.wn-orbit { position: absolute; left: 50%; top: 58%; width: 230px; height: 64px; margin: -32px 0 0 -115px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .45); transform: rotate(-12deg); }
+.wn-pl { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); filter: drop-shadow(0 8px 16px rgba(10, 8, 40, .35)); animation: wn-float 4s ease-in-out infinite; }
+.wn-pl svg { display: block; }
+.wn-in { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 18px 20px 20px; }
+.wn-title { font-size: 20px; font-weight: 800; text-align: center; letter-spacing: .01em; }
+.wn-scroll { min-height: 0; overflow-y: auto; display: grid; gap: 14px; margin: 0 -4px; padding: 0 4px; }
+.wn-sec { display: grid; gap: 8px; }
+.wn-sec + .wn-sec { border-top: 1px solid var(--line); padding-top: 12px; }
+.wn-date { font-size: 13px; color: var(--muted); text-align: center; }
+.wn-sec + .wn-sec .wn-date { text-align: left; font-weight: 600; }
+.wn-lead { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.wn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; counter-reset: wn; }
+.wn-list li { position: relative; padding-left: 32px; font-size: 15px; line-height: 1.55; counter-increment: wn; }
+.wn-list li::before {
+  content: counter(wn); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary);
+}
+.wn-ok { width: 100%; height: 48px; margin-top: 6px; font-size: 16px; }
+@keyframes wn-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wn-pop { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes wn-float { 0%, 100% { transform: translate(-50%, -50%); } 50% { transform: translate(-50%, -56%); } }
+@media (prefers-reduced-motion: reduce) { .wn, .wn-card, .wn-pl { animation: none; } }

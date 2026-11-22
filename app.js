@@ -738,7 +738,7 @@ function settingsView() {
     ${status ? `<div class="muted hm-sub2">${status}</div>` : ''}
     <div class="hm-delrow"><button class="btn link hm-outl hm-del" data-act="hm-delete">${tr('注销账户', 'Delete account')}</button></div></div>`;
 
-  // 版本（App 的"软件更新"）：网页是打开时自动拿最新的，有新版本时顶上会弹一条"点击刷新"
+  // 版本（App 的"软件更新"）：网页是打开时自动拿最新的；有新版本时空闲下来就自动刷新，刷新后弹更新公告
   const canCheck = !!navigator.serviceWorker?.controller;
   const install = STANDALONE ? '' : `<div class="hm-sub2 muted">${IS_IOS ? tr('在 Safari 中点击 分享 → 添加到主屏幕', 'In Safari: Share → Add to Home Screen') : tr('浏览器菜单 → 添加到主屏幕', 'Browser menu → Add to Home Screen')}</div>`;
   const version = `<div class="card hm-sc">
@@ -877,7 +877,7 @@ MOD.actions.push(async (act, v) => {
       let found = false;
       try { const reg = await navigator.serviceWorker.getRegistration(); await reg?.update(); found = !!(reg?.installing || reg?.waiting); } catch { /* 查不了就当没有 */ }
       state.hmSwBusy = false;
-      if (found) hmShowUpdate(true); else state.hmSwMsg = { msg: navigator.onLine ? tr('已是最新版本', 'You\'re up to date') : tr('离线中，请联网后再检查', 'Offline. Try again online.') };
+      if (found) hmShowUpdate(); else state.hmSwMsg = { msg: navigator.onLine ? tr('已是最新版本', 'You\'re up to date') : tr('离线中，请联网后再检查', 'Offline. Try again online.') };
       break;
     }
     // 列表 ⇄ 日历（同一个"明细"页的两种看法）
@@ -1445,25 +1445,63 @@ refreshRates();
 if (state.session) loadAll();
 
 // ---- 新版本提示（代替 App 的软件更新）：离线缓存（sw.js）换成新版本时，顶上弹一条"有新版本 · 点击刷新"
-function hmShowUpdate(force = false) {
-  // 先弹窗问一声（"稍后更新"后 12 小时内不再弹，只留右下角的小按钮）
-  const snoozed = Date.now() - (Number(store.get('hl.updSnooze')) || 0) < 12 * 3600e3;
-  if ((force || (!snoozed && !hm.updAsked)) && typeof uiConfirm === 'function') {
-    hm.updAsked = true;
-    uiConfirm(tr('检测到您当前应用版本号低，请您更新', 'A newer version is available. Please update.'), { ok: tr('确认更新', 'Update'), cancel: tr('稍后更新', 'Later') })
-      .then((yes) => { if (yes) location.reload(); else { store.set('hl.updSnooze', Date.now()); hmUpdButton(); } });
-    return;
-  }
-  hmUpdButton();
+/**
+ * 有新版本：不问用户，空闲时直接刷新成新版（刷新后弹更新公告，见 hmWhatsNew）。
+ * 正在记账、导入、填写内容或开着弹窗时先不刷，每两秒看一次，空下来再刷，免得填了一半的东西丢掉。
+ */
+function hmShowUpdate() {
+  if (hm.updWait) return;
+  const tryReload = () => {
+    const f = document.activeElement;
+    const busy = state.editing || (typeof IMP !== 'undefined' && IMP.phase && IMP.phase !== 'idle') || (typeof ob !== 'undefined' && ob.open)
+      || (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)) || document.querySelector('.modal, .wn');
+    if (busy) return false;
+    location.reload();
+    return true;
+  };
+  if (!tryReload()) hm.updWait = setInterval(() => { if (tryReload()) clearInterval(hm.updWait); }, 2000);
 }
-function hmUpdButton() {
-  if (document.querySelector('.hm-upd')) return;
-  const b = document.createElement('button');
-  b.className = 'hm-upd'; b.type = 'button';
-  b.textContent = tr('有新版本 · 点击刷新', 'New version · Tap to reload');
-  b.addEventListener('click', () => location.reload());
-  document.body.appendChild(b);
+
+/**
+ * 更新公告：刷新成新版后，弹一张卡片说这次改了什么（读 changelog.json，发布脚本写的）。
+ * 第一次打开（以前没用过）不弹；隔了好几版才打开的，最近三次的都列出来。
+ */
+async function hmWhatsNew() {
+  let log;
+  try { log = await (await fetch('changelog.json', { cache: 'no-store' })).json(); } catch { return; }
+  const latest = Array.isArray(log) ? log[0]?.v : '';
+  if (!latest) return;
+  const seen = String(store.get('hl.webSeen', '') ?? '');
+  store.set('hl.webSeen', latest);
+  // 没记过看到哪一版：新装的（没登录过）不弹；已经在用的（公告功能上线前的老用户）只看最新这一次
+  if (!seen && !state.session) return;
+  if (seen && seen >= latest) return;
+  const items = (seen ? log.filter((e) => e.v > seen) : log.slice(0, 1)).filter((e) => String(e.notes ?? '').trim()).slice(0, 3);
+  if (!items.length) return;
+  const day = (d) => { const [y, m, dd] = String(d).split('-').map(Number); return y ? tr(`${y}年${m}月${dd}日`, `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`) : ''; };
+  const body = (notes) => {
+    const lines = String(notes).split(/\n+/).map((x) => x.trim()).filter(Boolean);
+    const lead = lines.filter((x) => !/^\d+[.、．]\s*/.test(x)), list = lines.filter((x) => /^\d+[.、．]\s*/.test(x));
+    return `${lead.map((x) => `<p class="wn-lead">${h(x)}</p>`).join('')}${list.length ? `<ol class="wn-list">${list.map((x) => `<li>${h(x.replace(/^\d+[.、．]\s*/, ''))}</li>`).join('')}</ol>` : ''}`;
+  };
+  const d = new Date(), pl = typeof plOfMonth === 'function' && typeof planetSvg === 'function' ? planetSvg(plOfMonth(d.getFullYear(), d.getMonth() + 1), { px: 76, mood: 1 }) : '';
+  const box = document.createElement('div');
+  box.className = 'wn';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', tr('更新公告', "What's new"));
+  box.innerHTML = `<div class="wn-card">
+    <div class="wn-hero"><span class="wn-orbit"></span><span class="wn-pl">${pl}</span></div>
+    <div class="wn-in">
+      <b class="wn-title">${tr('行星记账已更新', 'Planet Ledger was updated')}</b>
+      <div class="wn-scroll">${items.map((e, i) => `<section class="wn-sec">${items.length > 1 || i ? `<div class="wn-date">${day(e.date)}</div>` : `<div class="wn-date">${tr(`${day(e.date)}更新`, `Updated ${day(e.date)}`)}</div>`}${body(e.notes)}</section>`).join('')}</div>
+      <button class="btn primary wn-ok" type="button">${tr('知道了', 'Got it')}</button>
+    </div></div>`;
+  const close = () => { box.classList.add('out'); setTimeout(() => box.remove(), 220); };
+  box.querySelector('.wn-ok').addEventListener('click', close);
+  box.addEventListener('click', (e) => { if (e.target === box) close(); });
+  document.body.appendChild(box);
+  box.querySelector('.wn-ok').focus();
 }
+setTimeout(hmWhatsNew, 900);
 if ('serviceWorker' in navigator) {
   const sw = navigator.serviceWorker, hadController = !!sw.controller;
   // sw.js 装好就接管页面：本来就有旧版本在管的话，接管 = 有新版本了（第一次装不算）
