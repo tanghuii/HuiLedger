@@ -381,7 +381,7 @@ liveStart();
 function liveFullRefresh() {
   if (!state.session || hm.syncing) return;
   if (Date.now() - (loadAll.at ?? 0) < 3000) return;
-  const busy = state.editing || (typeof IMP !== 'undefined' && IMP.phase && IMP.phase !== 'idle') || (typeof ob !== 'undefined' && ob.open);
+  const busy = state.editing || (typeof impBusy === 'function' && impBusy()) || (typeof ob !== 'undefined' && ob.open);
   if (busy || !live.cursor) { livePull(); return; }
   loadAll.at = Date.now();
   loadAll();
@@ -1470,7 +1470,8 @@ function hmShowUpdate() {
   if (hm.updWait) return;
   const tryReload = () => {
     const f = document.activeElement;
-    const busy = state.editing || (typeof IMP !== 'undefined' && IMP.phase && IMP.phase !== 'idle') || (typeof ob !== 'undefined' && ob.open)
+    // 有导入任务（快捷指令刚传来、识别中、核对中）时绝不刷新：导入优先
+    const busy = state.editing || (typeof impBusy === 'function' && impBusy()) || (typeof ob !== 'undefined' && ob.open)
       || (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)) || document.querySelector('.modal, .wn');
     if (busy) return false;
     location.reload();
@@ -1484,6 +1485,8 @@ function hmShowUpdate() {
  * 第一次打开（以前没用过）不弹；隔了好几版才打开的，最近三次的都列出来。
  */
 async function hmWhatsNew() {
+  // 正在导入（包括快捷指令刚传来文件）：先不弹，导入做完再弹
+  if (typeof impBusy === 'function' && impBusy()) { setTimeout(hmWhatsNew, 3000); return; }
   let log;
   try { log = await (await fetch('changelog.json', { cache: 'no-store' })).json(); } catch { return; }
   const latest = Array.isArray(log) ? log[0]?.v : '';

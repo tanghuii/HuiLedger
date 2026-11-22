@@ -21,7 +21,66 @@ const IMP = {
   guide: false,
   /** 快捷指令传进来的账单文件（还没开始识别） */
   incoming: null,
+  /** 正在从本机读回上次没做完的导入（读完之前不自动刷新页面） */
+  hold: false,
+  /** 这个导入任务已经自动开始过（读完云端数据会触发好几次，只自动开始一次） */
+  autoStarted: false,
 };
+
+// ---------------------------------------------------------------- 导入任务存在本机
+// 快捷指令传来的文件、识别到一半的进度、核对页的草稿，都存在浏览器的本地数据库（IndexedDB）里：
+// 页面刷新（包括自动更新）、Safari 被关掉、手机锁屏，回来都能接着做；导入完成或点"放弃"才删掉。超过一天的不要了。
+const IMP_TASK_TTL = 24 * 3600 * 1000;
+function impDb() {
+  return new Promise((ok, no) => {
+    try {
+      const req = indexedDB.open('hl-import', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('task');
+      req.onsuccess = () => ok(req.result);
+      req.onerror = () => no(req.error);
+    } catch (e) { no(e); }
+  });
+}
+async function impTaskIo(mode, fn) {
+  const db = await impDb();
+  try {
+    return await new Promise((ok, no) => {
+      const tx = db.transaction('task', mode), st = tx.objectStore('task');
+      const req = fn(st);
+      tx.oncomplete = () => ok(req?.result);
+      tx.onerror = () => no(tx.error);
+    });
+  } finally { db.close(); }
+}
+/** 读上次存下的任务；没有或太旧返回 null。 */
+async function impTaskLoad() {
+  try {
+    const t = await impTaskIo('readonly', (st) => st.get('cur'));
+    return t && Date.now() - (t.at ?? 0) < IMP_TASK_TTL ? t : null;
+  } catch { return null; }
+}
+/** 合并写入（file / run / review）。 */
+async function impTaskSave(patch) {
+  try {
+    const cur = (await impTaskIo('readonly', (st) => st.get('cur'))) ?? {};
+    await impTaskIo('readwrite', (st) => st.put({ ...cur, ...patch, at: Date.now() }, 'cur'));
+  } catch { /* 存不了（隐私模式等）：只在内存里 */ }
+}
+function impTaskClear() { impTaskIo('readwrite', (st) => st.delete('cur')).catch(() => {}); }
+/** 识别中、核对中频繁变化：停一下再存。 */
+function impTaskSaveSoon() {
+  clearTimeout(impTaskSaveSoon.t);
+  impTaskSaveSoon.t = setTimeout(() => {
+    if (IMP.phase === 'review' || IMP.phase === 'saving') impTaskSave({ run: null, review: { drafts: IMP.drafts, skipped: IMP.skipped, missed: IMP.missed, dropped: IMP.dropped, account: IMP.account, rates: IMP.rates } });
+    else if (IMP.run) {
+      // 存的时候把正在识别的、等着重试的段放回待识别里
+      const r = IMP.run, w = r.inWave;
+      impTaskSave({ run: { ...r, inWave: null, jobs: w ? [...w.pending, ...w.again, ...w.failed, ...r.jobs] : r.jobs }, review: null });
+    }
+  }, 800);
+}
+/** 有导入任务在等、在识别或在核对：这时不自动刷新页面，也先不弹更新公告。 */
+const impBusy = () => !!(IMP.incoming || IMP.hold || (IMP.phase && IMP.phase !== 'idle'));
 
 // ---------------------------------------------------------------- 快捷指令直传
 // iPhone 的快捷指令"行星记账导入"在分享菜单里：把文件转成 base64，打开 …/#imp=<base64>&n=<文件名>。
@@ -45,7 +104,8 @@ function impSniff(b) {
 }
 (() => {
   const m = location.hash.match(/^#imp=([^&]+)(?:&n=([^&]*))?/);
-  if (!m) return;
+  // 不是快捷指令打开的：看看本机有没有上次没做完的导入
+  if (!m) { impRestore(); return; }
   history.replaceState(null, '', location.pathname + location.search);
   try {
     const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
@@ -54,11 +114,44 @@ function impSniff(b) {
     // 快捷指令给的名字常常不带扩展名：按内容猜。xlsx 也是 PK 开头，要看里面有没有 xl/ 目录
     if (!/\.[a-z0-9]{2,5}$/i.test(name)) name = (name || tr('账单', 'statement')) + '.' + impSniff(bytes);
     const ext = name.split('.').pop().toLowerCase();
-    IMP.incoming = new File([bytes], name, { type: { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' }[ext] ?? '' });
+    const type = { zip: 'application/zip', csv: 'text/csv', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' }[ext] ?? '';
+    IMP.incoming = new File([bytes], name, { type });
+    // 马上存到本机：这之后页面刷新、Safari 被关掉都不会丢（存好之前先不让页面自动刷新）
+    IMP.hold = true;
+    impTaskClear();
+    impTaskSave({ file: { name, type, buf: bytes.buffer }, run: null, review: null }).finally(() => { IMP.hold = false; });
   } catch { /* 数据不完整：当没收到 */ }
 })();
-// 读完云端数据（登录后的第一次也算）再切到导入页，免得被启动流程切回首页
-MOD.onLoad.push(async () => { if (IMP.incoming && state.tab !== 'import' && IMP.phase === 'idle') { state.tab = 'import'; setTimeout(render, 0); } });
+
+/** 打开网页时读回上次没做完的导入：核对中的回到核对页，识别到一半的接着识别，还没开始的自动开始。 */
+async function impRestore() {
+  IMP.hold = true;
+  try {
+    const t = await impTaskLoad();
+    if (!t || IMP.phase !== 'idle' || IMP.incoming) return;
+    if (t.review?.drafts?.length) {
+      Object.assign(IMP, { phase: 'review', drafts: t.review.drafts, skipped: t.review.skipped ?? 0, missed: t.review.missed ?? 0, dropped: t.review.dropped ?? 0, account: t.review.account ?? 0, rates: t.review.rates ?? {}, detail: -1 });
+    } else if (t.run?.jobs) {
+      Object.assign(IMP, { phase: 'paused', run: t.run, error: tr('已恢复上次未完成的识别', 'Picked up where you left off') });
+    } else if (t.file?.buf) {
+      IMP.incoming = new File([t.file.buf], t.file.name, { type: t.file.type ?? '' });
+    } else return;
+    if (state.session && state.data.category.size) impAutoStart();
+  } finally { IMP.hold = false; }
+}
+
+/**
+ * 有导入任务时：切到导入页，并自动开始（登录了、有 API 密钥才自动；没有密钥就停在导入页提示去设置，任务留着）。
+ * 读完云端数据（登录后的第一次也算）再做，识别要用到分类和账户。
+ */
+function impAutoStart() {
+  if (!impBusy() || !state.session) return;
+  if (state.tab !== 'import') { state.tab = 'import'; setTimeout(render, 0); }
+  if (IMP.autoStarted || !aiKey()) return;
+  if (IMP.incoming && IMP.phase === 'idle') { IMP.autoStarted = true; impStart([IMP.incoming]); }
+  else if (IMP.phase === 'paused' && IMP.run) { IMP.autoStarted = true; impGo(); }
+}
+MOD.onLoad.push(async () => { impAutoStart(); });
 
 const IMP_MAX_TEXT = 400000, IMP_MAX_PDF = 20 * 1024 * 1024;
 const IMP_SLICE_W = 1200, IMP_SLICE_H = 1600, IMP_OVERLAP = 160;
@@ -807,20 +900,23 @@ async function impRunJobs(run, onProgress) {
   onProgress(run.done, run.done + jobs.length, run.found.length);
   while (jobs.length) {
     const wave = jobs.splice(0, 3), again = [], failed = [];
+    // 正在识别的这几段也要算进存下来的进度里（页面这时被刷新，回来要重新识别它们）
+    run.inWave = { pending: [...wave], again, failed };
     let netErr = null, otherErr = null, inflight = wave.length;
     const prog = () => onProgress(run.done, run.done + jobs.length + again.length + failed.length + inflight, run.found.length);
     // 谁先识别完就先报进度、先记下来
     await Promise.all(wave.map(async (job) => {
       let json;
+      const settle = () => { run.inWave.pending = run.inWave.pending.filter((j) => j !== job); };
       try { json = await impCallRetry(run.system, job); } catch (e) {
-        inflight--;
+        inflight--; settle();
         if (aiRetryable(e)) { failed.push(job); netErr ??= e; return; }
         // 别的错（AI 拒绝、返回看不懂）：放回去，点"继续识别"再试一次；再错就跳过这一段，最后提醒
         if (job.errored) { run.dropped++; run.done++; prog(); return; }
         failed.push({ ...job, errored: true }); otherErr ??= e;
         return;
       }
-      inflight--;
+      inflight--; settle();
       try {
         if (json == null) {
           const parts = impSplit(job);
@@ -842,6 +938,7 @@ async function impRunJobs(run, onProgress) {
       } catch (e) { otherErr ??= e; }
     }));
     jobs.unshift(...again, ...failed);
+    run.inWave = null;
     if (otherErr) throw otherErr;
     if (netErr) throw netErr;
   }
@@ -924,6 +1021,9 @@ async function impStart(files) {
   try {
     if (files.length === 1 && await impTryPatch(files[0])) { IMP.phase = 'idle'; render(); return; }
     IMP.run = await impPrepare(files);
+    // 文件已经读成一段一段的了：任务里存进度，不再存原文件；准备失败时文件还留着，可以再点"开始识别"
+    IMP.incoming = null;
+    impTaskSave({ file: null, run: IMP.run, review: null });
   } catch (e) {
     IMP.phase = 'idle';
     IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
@@ -943,7 +1043,7 @@ async function impGo() {
   impRender();
   impWakeOn();
   try {
-    const result = await impRunJobs(run, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); });
+    const result = await impRunJobs(run, (done, total, found) => { Object.assign(IMP, { done, total, found }); impRender(); impTaskSaveSoon(); });
     if (!result.transactions.length) throw new AiError(tr('未识别到交易记录。', 'No transactions were found.'));
     // 识别完了：进度圈先走满、报告读出几笔，停一下再进列表（和手机端一样）
     Object.assign(IMP, { finished: true, found: result.transactions.length });
@@ -951,13 +1051,16 @@ async function impGo() {
     await new Promise((r) => setTimeout(r, 1100));
     IMP.finished = false; IMP.run = null;
     Object.assign(IMP, { phase: 'review', drafts: impSortDrafts(impToDrafts(result)), skipped: result.skipped, missed: result.missed, dropped: result.dropped, rates: {}, account: 0, detail: -1 });
+    impTaskSaveSoon();
   } catch (e) {
-    const progress = IMP.run && (IMP.run.done > 0 || IMP.run.found.length > 0);
-    if (IMP.run && (aiRetryable(e) || progress)) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络已断开', 'Connection lost') : e.message; } else {
+    // 还有没识别的段：停在"继续识别"（任务留着，可以重试或放弃）；全部跑完却出错（例如一笔都没认出）才结束
+    if (IMP.run && IMP.run.jobs.length) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络已断开', 'Connection lost') : e.message; } else {
       IMP.phase = 'idle'; IMP.run = null;
       IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
     }
   } finally { impWakeOff(); }
+  if (IMP.phase === 'paused') impTaskSaveSoon();
+  if (IMP.phase === 'idle' && !IMP.run) impTaskClear();
   render();
 }
 
@@ -1150,6 +1253,7 @@ async function impLinkSubsidies() {
 }
 
 function impReset() {
+  impTaskClear(); IMP.autoStarted = false;
   Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, dropped: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
 }
 
@@ -1224,6 +1328,7 @@ function impDetailView() {
 }
 
 function impReviewView() {
+  impTaskSaveSoon();
   const st = impStatus(), accounts = impAccounts(), tops = impCats().filter((c) => !c.parentId);
   const saving = IMP.phase === 'saving', all = IMP.drafts.every((d) => d.selected);
   const summary = tr(`识别到 ${IMP.drafts.length} 笔，已选 ${st.selected.length} 笔`, `${IMP.drafts.length} found, ${st.selected.length} selected`)
@@ -1395,8 +1500,8 @@ MOD.actions.push(async (act, v, el) => {
     case 'imp-guide-x': IMP.guide = false; break;
     case 'imp-sc': IMP.guide = false; state.tab = 'shortcut'; scrollTo(0, 0); break;
     case 'imp-noop': return true;
-    case 'imp-inc-x': IMP.incoming = null; break;
-    case 'imp-inc-go': { const f = IMP.incoming; IMP.incoming = null; if (f) await impStart([f]); return true; }
+    case 'imp-inc-x': IMP.incoming = null; IMP.autoStarted = false; impTaskClear(); break;
+    case 'imp-inc-go': { if (IMP.incoming) await impStart([IMP.incoming]); return true; }
     default: return true;
   }
   render();
