@@ -305,9 +305,10 @@ async function deleteRecord(kind, id) { await putRow({ kind, id, data: {}, delet
 addEventListener('online', () => outbox.flush());
 
 // ---------------------------------------------------------------- 实时同步
-// 主屏幕 App 和 Safari 各存各的数据，别的设备也会改：页面开着时每隔几秒问一次云端"上次之后改过什么"，
-// 有就马上换上、重画；切回来、联网、自己刚写完也立刻问一次。只取改过的那几行，很快。
-const LIVE_EVERY = 4000;
+// 主屏幕 App 和 Safari 各存各的数据，别的设备也会改。什么时候问云端"上次之后改过什么"：
+//   每做一个操作（点按钮、切页面）、自己刚保存完、切回这个页面、联网时，都马上问一次；
+//   另外页面开着时每 30 秒问一次兜底（两台设备并排开着时也能跟上）。只取改过的那几行，很快。
+const LIVE_EVERY = 30000;
 const live = { cursor: '', wrote: new Map(), busy: false, timer: 0, soon: 0, waiting: false, okAt: 0 };
 /** 读云端期间本机改过的行：fresh 里换成本机现在的样子（started 是开始读的时间）。 */
 function liveKeepLocal(fresh, started) {
@@ -356,6 +357,12 @@ function liveRender() {
   render();
 }
 function livePullSoon() { clearTimeout(live.soon); live.soon = setTimeout(livePull, 800); }
+/** 用户的每个操作都问一次，但两秒内只问一次（连着点几下不会重复问）。 */
+function livePullOnAction() {
+  if (Date.now() - (live.actAt ?? 0) < 2000) return;
+  live.actAt = Date.now();
+  livePull();
+}
 function liveStart() {
   clearInterval(live.timer);
   live.timer = setInterval(() => { livePull(); if (live.waiting) liveRender(); }, LIVE_EVERY);
@@ -1264,6 +1271,7 @@ async function applyPatch() {
 // ---------------------------------------------------------------- 事件
 
 app.addEventListener('click', async (ev) => {
+  livePullOnAction();
   const el = ev.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act, v = el.dataset.v;
