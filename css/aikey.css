@@ -1,0 +1,65 @@
+/* AI 密钥设置向导（modules/aikey.js） */
+.ak-page { gap: 12px; padding-bottom: 24px; }
+.ak-hero { display: flex; align-items: center; gap: 12px; }
+.ak-hero > div { display: grid; gap: 3px; min-width: 0; }
+.ak-hero b { font-size: 16px; }
+.ak-warn { padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+
+/* 选哪家 */
+.ak-provs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ak-prov { display: grid; gap: 8px; align-content: start; text-align: left; padding: 12px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+.ak-prov.on { border: 2px solid var(--primary); padding: 11.5px; background: color-mix(in srgb, var(--primary) 10%, var(--card)); }
+.ak-ph { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ak-ph b { font-size: 16px; }
+.ak-ph em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--on-primary); }
+.ak-pros { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.ak-pros span::before { content: "· "; }
+
+/* 步骤 */
+.ak-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ak-step { display: grid; gap: 8px; }
+.ak-sh { display: flex; align-items: center; gap: 10px; }
+.ak-sh i { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 700; background: var(--primary); color: var(--on-primary); }
+.ak-sh b { font-size: 15px; }
+.ak-step p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.ak-open { justify-self: start; text-decoration: none; }
+
+/* 示意图：一个简化的浏览器窗口 */
+.ak-shot { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #fbfbfe; color: #23263a; font-size: 11px; line-height: 1.3; user-select: none; }
+.ak-bar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #eceef6; border-bottom: 1px solid #dfe2ee; }
+.ak-bar i { width: 7px; height: 7px; border-radius: 50%; background: #c9cddc; }
+.ak-bar span { flex: 1; margin-left: 6px; padding: 2px 8px; border-radius: 6px; background: #fff; color: #6b7088; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ak-page .ak-page, .ak-shot .ak-page { display: flex; min-height: 104px; padding: 10px; gap: 10px; }
+.ak-side { flex: none; width: 34%; display: grid; align-content: start; gap: 6px; padding-right: 8px; border-right: 1px solid #e6e8f1; color: #6b7088; }
+.ak-side b { color: #23263a; }
+.ak-main { flex: 1; display: grid; align-content: start; gap: 8px; min-width: 0; }
+.ak-main > b { font-size: 12px; }
+.ak-login { flex: 1; display: grid; justify-items: center; align-content: center; gap: 6px; }
+.ak-brand { font-size: 12px; }
+.ak-in { width: 72%; padding: 4px 8px; border-radius: 6px; border: 1px solid #dfe2ee; background: #fff; color: #9aa0b8; }
+.ak-btn { display: inline-block; padding: 4px 10px; border-radius: 7px; background: #4d6bfe; color: #fff; font-weight: 600; }
+.ak-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ak-chip { padding: 3px 9px; border-radius: 7px; border: 1px solid #dfe2ee; background: #fff; font-weight: 600; }
+.ak-pay { color: #6b7088; }
+.ak-keyrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ak-keyrow code { flex: 1; min-width: 0; padding: 3px 6px; border-radius: 6px; background: #eef0f7; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; }
+.ak-copy { padding: 3px 8px; border-radius: 6px; background: #23263a; color: #fff; }
+/* 要点的地方：一圈闪动的描边，旁边一个小标注 */
+.ak-hl { position: relative; display: inline-block; border-radius: 8px; box-shadow: 0 0 0 2px #ff7a45; animation: ak-pulse 1.6s ease-in-out infinite; }
+.ak-tip { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); z-index: 1; white-space: nowrap; font-style: normal; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #ff7a45; color: #fff; }
+.ak-tip::before { content: ""; position: absolute; left: 50%; top: -4px; margin-left: -4px; border: 4px solid transparent; border-top: 0; border-bottom-color: #ff7a45; }
+.ak-chips .ak-hl, .ak-keyrow .ak-hl { margin-bottom: 18px; }
+.ak-login .ak-hl { margin-bottom: 18px; }
+@keyframes ak-pulse { 0%, 100% { box-shadow: 0 0 0 2px #ff7a45; } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #ff7a45 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .ak-hl { animation: none; } }
+
+/* 第 4 步：粘贴保存 */
+.ak-inrow { display: flex; gap: 8px; }
+.ak-inrow input { flex: 1; min-width: 0; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ak-save { width: 100%; height: 48px; font-size: 16px; }
+.ak-priv { margin: 0; }
+.ak-done { display: grid; justify-items: center; gap: 6px; padding: 10px 0; }
+.ak-done svg { width: 34px; height: 34px; fill: none; stroke: var(--income); stroke-width: 2.2; }
+.ak-done b { font-size: 16px; }
+.ak-main > .ak-hl, .ak-side > .ak-hl { justify-self: start; }
+.ak-side > .ak-hl { padding: 0 4px; margin-left: -4px; }

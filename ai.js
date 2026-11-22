@@ -213,7 +213,7 @@ function aiSettingsView() {
         <button type="button" class="btn" data-act="ai-refresh" ${d.busy ? 'disabled' : ''}>${d.busy ? `<span class="ai-spin" role="status" aria-label="${tr('正在刷新', 'Refreshing')}"></span>` : tr('刷新', 'Refresh')}</button></div>
       ${d.open ? `<div class="ai-mlist" role="listbox">${list.map((m) => `<button type="button" role="option" aria-selected="${m.id === chosen}" class="${m.id === chosen ? 'on' : ''}" data-act="ai-mpick" data-v="${h(m.id)}">${label(m)}</button>`).join('')}</div>` : ''}
       ${d.status ? `<div class="err small">${h(d.status)}</div>` : ''}</div>
-    <p class="muted small" style="margin:0">${tr('密钥仅保存在本设备', 'The key stays on this device')}</p>
+    <p class="muted small" style="margin:0">${tr('密钥仅保存在本设备', 'The key stays on this device')} · <button class="btn link" style="padding:0" data-act="ak-open">${tr('如何获取密钥？', 'How do I get a key?')}</button></p>
     <div class="between"><span>${saved ? `<button class="btn danger" data-act="ai-clear">${tr('清除密钥', 'Remove key')}</button>` : ''}</span><span><button class="btn" data-act="ai-close-btn">${tr('取消', 'Cancel')}</button> <button class="btn primary" data-act="ai-save">${tr('保存', 'Save')}</button></span></div>
   </div></div>`;
 }

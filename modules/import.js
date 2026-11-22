@@ -147,7 +147,14 @@ async function impRestore() {
 function impAutoStart() {
   if (!impBusy() || !state.session) return;
   if (state.tab !== 'import') { state.tab = 'import'; setTimeout(render, 0); }
-  if (IMP.autoStarted || !aiKey()) return;
+  if (IMP.autoStarted) return;
+  // 没有能用的密钥（或账单是 PDF / 截图却只有 DeepSeek 的）：直接打开图文向导，保存后回到这里自动开始
+  if (typeof akReady === 'function' ? !akReady() : !aiKey()) {
+    if (typeof akOpen === 'function' && !AK.shown) { AK.shown = true; akOpen('import'); setTimeout(render, 0); }
+    return;
+  }
+  // PDF、截图要用 Claude：有 Claude 的密钥就切过去
+  if (typeof akNeedsClaude === 'function' && akNeedsClaude() && aiKey('claude') && aiProvider() !== 'claude') store.set('hl.aiProvider', 'claude');
   if (IMP.incoming && IMP.phase === 'idle') { IMP.autoStarted = true; impStart([IMP.incoming]); }
   else if (IMP.phase === 'paused' && IMP.run) { IMP.autoStarted = true; impGo(); }
 }
@@ -1401,7 +1408,7 @@ function impPickView() {
       <button class="btn primary" data-act="imp-inc-go">${tr('开始识别', 'Read it')}</button><button class="ed-x" data-act="imp-inc-x" aria-label="${tr('放弃', 'Discard')}">✕</button></div>` : ''}
     <div class="card">
       <div class="imp-head">${iconTile('sparkle', 'imp-tile38')}<span>${tr('截图和银行账单', 'Screenshots and bank statements')}</span></div>
-      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，当前尚未填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ai-settings">${tr('前往设置密钥', 'Set the key')}</button></div>`}
+      ${aiKey() ? '' : `<div class="imp-key"><span class="err" style="font-size:14px">${tr('需要 API 密钥，当前尚未填写。', 'This needs an API key, and none is set yet.')}</span><button class="btn link" data-act="ak-open" data-v="import">${tr('前往设置密钥', 'Set the key')}</button></div>`}
       <label class="btn primary imp-pick">${tr('选择截图（可多选）', 'Choose screenshots')}<input type="file" data-imp="pick" accept="image/*" multiple hidden></label>
       ${canPaste ? `<button class="btn imp-pick" data-act="imp-paste">${tr('粘贴截图', 'Paste screenshot')}</button>` : ''}
       <div class="muted small imp-note">${tr(`文件将发送至 ${AI_PROVIDERS[aiProvider()].name} 识别。`, `Files are sent to ${AI_PROVIDERS[aiProvider()].name}.`)}</div>
