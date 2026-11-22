@@ -250,16 +250,20 @@ async function loadAll() {
   try {
     await outbox.flush();
     const fresh = { tx: new Map(), category: new Map(), account: new Map(), ledger: new Map(), setting: new Map() };
-    let from = 0;
+    const started = Date.now();
+    let from = 0, cursor = '';
     for (;;) {
-      const rows = await api('GET', `/rest/v1/records?select=kind,id,data&deleted=is.false&order=kind.asc,id.asc&offset=${from}&limit=1000`);
-      for (const r of rows) fresh[r.kind]?.set(Number(r.id), r.data);
+      const rows = await api('GET', `/rest/v1/records?select=kind,id,data,updated_at&deleted=is.false&order=kind.asc,id.asc&offset=${from}&limit=1000`);
+      for (const r of rows) { fresh[r.kind]?.set(Number(r.id), r.data); if (r.updated_at > cursor) cursor = r.updated_at; }
       if (rows.length < 1000) break;
       from += 1000;
     }
     // 还没传上去的修改盖在云端数据上面
     for (const r of outbox.list()) { if (!fresh[r.kind]) continue; if (r.deleted) fresh[r.kind].delete(r.id); else fresh[r.kind].set(r.id, r.data); }
+    // 读云端的这段时间里本机又改过的（记了一笔、删了一笔）：以本机为准，不被这次读到的旧数据盖掉
+    liveKeepLocal(fresh, started);
     state.data = fresh;
+    live.cursor = cursor || live.cursor; live.okAt = Date.now();
     // 全新的账号：先放好默认账本、账户和分类，打开就能记账
     if (!fresh.category.size && !fresh.ledger.size && !fresh.account.size && !fresh.tx.size) await seedDefaults();
     // 主货币跟着云端走（手机上改了，这边也跟着变），自动记账等模块用到金额之前先更新
@@ -281,16 +285,83 @@ function pickLedger() {
 }
 
 // 写云端；断网时先改本地、排进队列，联网后自动补传
+// 先改本地（界面马上变），再写云端；云端拒绝（不是断网）就退回原样
 async function putRow(row) {
+  const map = state.data[row.kind], before = map.get(row.id);
+  live.wrote.set(`${row.kind}:${row.id}`, Date.now());
+  if (row.deleted) map.delete(row.id); else map.set(row.id, row.data);
   try {
     await api('POST', '/rest/v1/records?on_conflict=user_id,kind,id', [{ user_id: state.session.user, ...row }], { prefer: 'resolution=merge-duplicates,return=minimal' });
-  } catch (e) { if (!isNetworkError(e)) throw e; outbox.add(row); }
-  if (row.deleted) state.data[row.kind].delete(row.id); else state.data[row.kind].set(row.id, row.data);
+  } catch (e) {
+    if (!isNetworkError(e)) { if (before === undefined) map.delete(row.id); else map.set(row.id, before); throw e; }
+    outbox.add(row);
+  }
+  live.wrote.set(`${row.kind}:${row.id}`, Date.now());
   clearTimeout(putRow.t); putRow.t = setTimeout(saveSnapshot, 1500);
+  livePullSoon();
 }
 async function saveRecord(kind, obj) { await putRow({ kind, id: obj.id, data: obj, deleted: false }); }
 async function deleteRecord(kind, id) { await putRow({ kind, id, data: {}, deleted: true }); }
 addEventListener('online', () => outbox.flush());
+
+// ---------------------------------------------------------------- 实时同步
+// 主屏幕 App 和 Safari 各存各的数据，别的设备也会改：页面开着时每隔几秒问一次云端"上次之后改过什么"，
+// 有就马上换上、重画；切回来、联网、自己刚写完也立刻问一次。只取改过的那几行，很快。
+const LIVE_EVERY = 4000;
+const live = { cursor: '', wrote: new Map(), busy: false, timer: 0, soon: 0, waiting: false, okAt: 0 };
+/** 读云端期间本机改过的行：fresh 里换成本机现在的样子（started 是开始读的时间）。 */
+function liveKeepLocal(fresh, started) {
+  for (const [key, at] of live.wrote) {
+    if (at < started) continue;
+    const [kind, id] = [key.slice(0, key.indexOf(':')), Number(key.slice(key.indexOf(':') + 1))];
+    if (!fresh[kind]) continue;
+    const mine = state.data[kind]?.get(id);
+    if (mine === undefined) fresh[kind].delete(id); else fresh[kind].set(id, mine);
+  }
+}
+/** 问一次云端：上次之后改过（含删除）的行，换进来；有变化就重画。 */
+async function livePull() {
+  if (!state.session || !live.cursor || live.busy || state.loading || document.hidden) return;
+  live.busy = true;
+  const started = Date.now();
+  try {
+    // 往前多取 3 秒：几乎同时提交的两条，后提交的时间可能更早，免得漏掉（重复取到的照样覆盖，没有影响）
+    const since = new Date(new Date(live.cursor).getTime() - 3000).toISOString();
+    const rows = await api('GET', `/rest/v1/records?select=kind,id,data,deleted,updated_at&updated_at=gt.${encodeURIComponent(since)}&order=updated_at.asc&limit=1000`);
+    live.okAt = Date.now();
+    let changed = false;
+    for (const r of rows) {
+      if (r.updated_at > live.cursor) live.cursor = r.updated_at;
+      const map = state.data[r.kind], id = Number(r.id);
+      if (!map) continue;
+      // 本机在这次请求之后又改过它：以本机为准
+      if ((live.wrote.get(`${r.kind}:${id}`) ?? 0) >= started) continue;
+      if (r.deleted) { if (map.has(id)) { map.delete(id); changed = true; } } else if (JSON.stringify(map.get(id)) !== JSON.stringify(r.data)) { map.set(id, r.data); changed = true; }
+    }
+    if (changed) {
+      if (rows.some((r) => r.kind === 'setting')) hmSyncHome();
+      hm.syncedAt = Date.now();
+      saveSnapshot();
+      liveRender();
+    }
+    // 记着的"本机改过"只留一分钟
+    for (const [k, at] of live.wrote) if (Date.now() - at > 60000) live.wrote.delete(k);
+  } catch { /* 断网等：下次再问 */ } finally { live.busy = false; }
+}
+/** 重画；正在记账、改账单时先不打断，关上后再画。 */
+function liveRender() {
+  const f = document.activeElement;
+  if (state.editing || (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName) && document.getElementById('app')?.contains(f))) { live.waiting = true; return; }
+  live.waiting = false;
+  render();
+}
+function livePullSoon() { clearTimeout(live.soon); live.soon = setTimeout(livePull, 800); }
+function liveStart() {
+  clearInterval(live.timer);
+  live.timer = setInterval(() => { livePull(); if (live.waiting) liveRender(); }, LIVE_EVERY);
+}
+liveStart();
+for (const ev of ['focus', 'pageshow', 'online']) addEventListener(ev, () => livePull());
 
 // ---------------------------------------------------------------- 统计口径（和手机端的 Lookup 一致）
 
@@ -1403,4 +1474,8 @@ if ('serviceWorker' in navigator) {
   addEventListener('online', () => hm.swReg?.update().catch(() => {}));
 }
 // 从后台切回来时顺手刷新一次（手机上改的账这边也能看到）
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.session && !state.editing && Date.now() - (loadAll.at ?? 0) > 60000) { loadAll.at = Date.now(); loadAll(); } });
+// 切回来：马上问一次云端改了什么（很久没打开过的，整个重新读一遍）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !state.session) return;
+  if (!live.cursor || Date.now() - live.okAt > 6 * 3600 * 1000) { if (!state.editing) { loadAll.at = Date.now(); loadAll(); } } else livePull();
+});

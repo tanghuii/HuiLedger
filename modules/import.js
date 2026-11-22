@@ -9,7 +9,7 @@ const IMP = {
   phase: 'idle', error: '', done: 0, total: 0, found: 0,
   /** 正在识别的这一批（impPrepare 准备的）：断网暂停（phase 'paused'）后点"继续识别"接着跑剩下的段 */
   run: null,
-  drafts: [], skipped: 0, missed: 0,
+  drafts: [], skipped: 0, missed: 0, dropped: 0,
   /** 正在看原文、改详情的那一条（下标），-1 表示没打开 */
   detail: -1, detailErr: '', detailForm: null,
   /** 手动填的汇率（币种 → 文字），没填就用汇率表里的 */
@@ -656,8 +656,8 @@ async function impJobsFor(file, name) {
   if (mime === 'application/pdf' || lower.endsWith('.pdf')) {
     aiCheckFiles();
     if (file.size > IMP_MAX_PDF) throw new AiError(tr(`「${name}」超过 20 MB，请拆分后再导入。`, `“${name}” is over 20 MB. Split it and import again.`));
-    const data = impB64(new Uint8Array(await file.arrayBuffer()));
-    return [{ blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, title: name }], name: '', header: '', lines: [], fallback: null }];
+    const bytes = new Uint8Array(await file.arrayBuffer()), data = impB64(bytes);
+    return [{ blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, title: name }], name: '', header: '', lines: [], fallback: null, pdf: true, pages: impPdfPages(bytes) }];
   }
   if (lower.endsWith('.xls') || mime.includes('excel')) {
     throw new AiError(tr(`暂不支持旧版 Excel 文件「${name}」（.xls），请另存为 .xlsx 或导出为 PDF、CSV。`, `Old Excel files like “${name}” (.xls) aren't supported. Save as .xlsx, or export a PDF or CSV.`));
@@ -667,10 +667,50 @@ async function impJobsFor(file, name) {
   return impTextJobs(name, content);
 }
 
+/** PDF 有几页（数 /Type /Page；压缩过的读 /Count）。数不出来是 0。 */
+function impPdfPages(bytes) {
+  try {
+    const s = new TextDecoder('latin1').decode(bytes);
+    const n = (s.match(/\/Type\s*\/Page(?![a-zA-Z])/g) ?? []).length;
+    if (n) return n;
+    const counts = [...s.matchAll(/\/Type\s*\/Pages[^>]*?\/Count\s+(\d+)/g)].map((m) => Number(m[1]));
+    return counts.length ? Math.max(...counts) : 0;
+  } catch { return 0; }
+}
+/** 这一段要 AI 提取什么：整份，或 PDF 的某几页。 */
+function impAsk(job) {
+  if (!job.pdf || !job.from) return '请提取以上账单中的全部交易记录。';
+  if (job.to < 0) return `请只提取 PDF 第 ${job.from} 页及之后各页中的交易记录，之前的页不要输出。`;
+  if (job.to === job.from) return `请只提取 PDF 第 ${job.from} 页中的交易记录，其他页不要输出。`;
+  return `请只提取 PDF 第 ${job.from}–${job.to} 页中的交易记录，其他页不要输出。`;
+}
+/**
+ * 一段的结果太长、AI 没写完：拆小再识别。表格按行对半；PDF 按页对半（页数不知道就两页两页往后）；
+ * 多张截图按张对半。已经拆到一页 / 一张 / 一行还装不下，返回空（这一段跳过，最后提醒）。
+ */
+function impSplit(job) {
+  if (job.lines.length >= 2) {
+    const half = Math.floor(job.lines.length / 2);
+    return [impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half))];
+  }
+  if (job.pdf) {
+    const a = job.from || 1, b = job.from ? job.to : (job.pages || -1);
+    const part = (from, to) => ({ ...job, fallback: null, from, to });
+    if (b < 0) return [part(a, a + 1), part(a + 2, -1)];
+    if (b > a) { const mid = Math.floor((a + b) / 2); return [part(a, mid), part(mid + 1, b)]; }
+    return [];
+  }
+  if (job.blocks.length > 1) {
+    const half = Math.floor(job.blocks.length / 2);
+    return [{ ...job, blocks: job.blocks.slice(0, half), fallback: null }, { ...job, blocks: job.blocks.slice(half), fallback: null }];
+  }
+  return [];
+}
+
 /** 发一次请求。返回 AI 给出的 JSON；输出被截断（装不下）时返回 null。 */
 async function impCall(system, job) {
   try {
-    return await aiJson(system, [...job.blocks, impTextBlock('请提取以上账单中的全部交易记录。')], IMP_SCHEMA, 16000);
+    return await aiJson(system, [...job.blocks, impTextBlock(impAsk(job))], IMP_SCHEMA, 16000);
   } catch (e) {
     if (e instanceof AiError && (e.tooLong || ['内容太长，AI 没写完。', 'Too long; the AI ran out of space.'].includes(e.message))) return null;
     throw e;
@@ -728,7 +768,7 @@ async function impPrepare(files) {
       }
     } else jobs.push(...await impJobsFor(f, name));
   }
-  const run = { jobs, found: [...local], skipped, holder: '', statementIban: '', done: 0, missed: 0, system: '' };
+  const run = { jobs, found: [...local], skipped, holder: '', statementIban: '', done: 0, missed: 0, dropped: 0, system: '' };
   if (!jobs.length) return run;
   if (!aiKey()) throw new AiError(tr('识别截图与银行账单需先设置 Claude / DeepSeek API 密钥，请先至「我的」页面设置。', 'Reading screenshots and statements needs an API key. Set one on the Me tab first.'));
   const cats = impCats(), tops = cats.filter((c) => !c.parentId);
@@ -773,16 +813,18 @@ async function impRunJobs(run, onProgress) {
     await Promise.all(wave.map(async (job) => {
       let json;
       try { json = await impCallRetry(run.system, job); } catch (e) {
-        inflight--; failed.push(job);
-        if (aiRetryable(e)) netErr ??= e; else otherErr ??= e;
+        inflight--;
+        if (aiRetryable(e)) { failed.push(job); netErr ??= e; return; }
+        // 别的错（AI 拒绝、返回看不懂）：放回去，点"继续识别"再试一次；再错就跳过这一段，最后提醒
+        if (job.errored) { run.dropped++; run.done++; prog(); return; }
+        failed.push({ ...job, errored: true }); otherErr ??= e;
         return;
       }
       inflight--;
       try {
         if (json == null) {
-          if (job.lines.length < 2) throw new AiError(tr('该账单交易过多，请分批导入。', 'Too many transactions. Import in several batches.'));
-          const half = Math.floor(job.lines.length / 2);
-          again.push(impTextJob(job.name, job.header, job.lines.slice(0, half)), impTextJob(job.name, job.header, job.lines.slice(half)));
+          const parts = impSplit(job);
+          if (parts.length) again.push(...parts); else { run.dropped++; run.done++; }
         } else {
           let list = impParseJson(json, job);
           // 核对行数：这一段有几行数据，识别出来的却更少，就再识别一次，取多的那次；还是少就记下来提醒
@@ -803,7 +845,7 @@ async function impRunJobs(run, onProgress) {
     if (otherErr) throw otherErr;
     if (netErr) throw netErr;
   }
-  return { transactions: run.found, skipped: run.skipped, holder: run.holder, statementIban: run.statementIban, missed: run.missed };
+  return { transactions: run.found, skipped: run.skipped, holder: run.holder, statementIban: run.statementIban, missed: run.missed, dropped: run.dropped };
 }
 
 /** 识别结果 → 核对页的草稿：补准账户和转账、只认已有的分类和账户、和已有账单查重（LedgerViewModel.parseBills）。 */
@@ -908,9 +950,10 @@ async function impGo() {
     impRender();
     await new Promise((r) => setTimeout(r, 1100));
     IMP.finished = false; IMP.run = null;
-    Object.assign(IMP, { phase: 'review', drafts: impToDrafts(result), skipped: result.skipped, missed: result.missed, rates: {}, account: 0, detail: -1 });
+    Object.assign(IMP, { phase: 'review', drafts: impSortDrafts(impToDrafts(result)), skipped: result.skipped, missed: result.missed, dropped: result.dropped, rates: {}, account: 0, detail: -1 });
   } catch (e) {
-    if (aiRetryable(e) && IMP.run) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络已断开', 'Connection lost') : e.message; } else {
+    const progress = IMP.run && (IMP.run.done > 0 || IMP.run.found.length > 0);
+    if (IMP.run && (aiRetryable(e) || progress)) { IMP.phase = 'paused'; IMP.error = e.net ? tr('网络已断开', 'Connection lost') : e.message; } else {
       IMP.phase = 'idle'; IMP.run = null;
       IMP.error = e instanceof AiError ? e.message : tr('识别失败：', 'Reading failed: ') + (e?.message || e?.name || '');
     }
@@ -1107,7 +1150,7 @@ async function impLinkSubsidies() {
 }
 
 function impReset() {
-  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
+  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, dropped: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
 }
 
 // ---------------------------------------------------------------- 页面
@@ -1126,6 +1169,12 @@ function impIcon(p) {
   return k !== 'tag' ? k : iconKey(p.category || '');
 }
 
+/** 核对列表的顺序：还不知道是哪个账户的排最上面，先让用户选；其余保持原来的顺序。 */
+function impSortDrafts(drafts) {
+  const lacks = (d) => !d.duplicate && (!d.tx.account || (d.tx.kind === KIND.TRANSFER && !d.tx.toAccount));
+  return [...drafts.filter(lacks), ...drafts.filter((d) => !lacks(d))];
+}
+
 function impRow(d, i, accounts, tops) {
   const p = d.tx, transfer = p.kind === KIND.TRANSFER, income = p.kind === KIND.INCOME;
   const accountOptions = accounts.map((a) => `<option value="${h(a.name)}">${h(a.name)}</option>`).join('');
@@ -1139,7 +1188,11 @@ function impRow(d, i, accounts, tops) {
     title = impDropdown(h(name) + ' ▾', `data-imp="cat" data-i="${i}" aria-label="${tr('分类', 'Category')}"`,
       tops.filter((c) => !!c.isIncome === income).map((c) => `<option value="${h(c.name)}">${h(c.name)}</option>`).join(''));
   }
-  const detail = [dayISO(p.date), p.note, transfer ? '' : p.account, (p.tags ?? '').split(' ').filter(Boolean).map((x) => '#' + x).join(' ')].filter(Boolean).map(h).join('  ');
+  const detail = [dayISO(p.date), p.note, (p.tags ?? '').split(' ').filter(Boolean).map((x) => '#' + x).join(' ')].filter(Boolean).map(h).join('  ');
+  // 记到哪个账户：银行标志 + 名字，点开可以换；认不出来的显示"选择账户"
+  const acc = transfer ? null : accounts.find((a) => a.name === p.account);
+  const accChip = transfer ? '' : impDropdown(acc ? `${accountTile(acc, 'imp-acctile')}<span>${h(acc.name)}</span> ▾` : `<i class="imp-need">${tr('选择账户', 'Choose account')} ▾</i>`,
+    `data-imp="acc" data-i="${i}" aria-label="${tr('账户', 'Account')}"`, accountOptions, 'imp-accdd');
   let dup = '';
   if (d.duplicate) {
     // 对上了已有账单：点一下在"合并进去"和"另存为新的一笔"之间切换
@@ -1150,7 +1203,7 @@ function impRow(d, i, accounts, tops) {
   return `<div class="card imp-row${d.selected ? '' : ' off'}">
     <input type="checkbox" class="imp-ck" data-imp="sel" data-i="${i}" ${d.selected ? 'checked' : ''} aria-label="${tr('选择', 'Select')}">
     ${iconTile(impIcon(p), 'imp-tile')}
-    <div class="imp-main">${title}<div class="imp-sub" data-act="imp-detail" data-v="${i}" role="button" tabindex="0">${detail}</div>${dup}</div>
+    <div class="imp-main">${title}${accChip}<div class="imp-sub" data-act="imp-detail" data-v="${i}" role="button" tabindex="0">${detail}</div>${dup}</div>
     <button class="imp-amt num ${income ? 'in' : p.kind === KIND.EXPENSE ? 'out' : ''}" data-act="imp-flip" data-v="${i}" ${transfer ? 'disabled' : ''}>${sign}${money(p.amountCents, p.currency)}</button>
   </div>`;
 }
@@ -1175,7 +1228,8 @@ function impReviewView() {
   const saving = IMP.phase === 'saving', all = IMP.drafts.every((d) => d.selected);
   const summary = tr(`识别到 ${IMP.drafts.length} 笔，已选 ${st.selected.length} 笔`, `${IMP.drafts.length} found, ${st.selected.length} selected`)
     + (IMP.skipped > 0 ? tr(`，另有 ${IMP.skipped} 行因信息不全跳过`, `, ${IMP.skipped} incomplete rows skipped`) : '')
-    + (IMP.missed > 0 ? tr(`，账单中还有 ${IMP.missed} 行未被识别，请您对照原文件`, `, ${IMP.missed} statement rows were not read — check the file`) : '');
+    + (IMP.missed > 0 ? tr(`，账单中还有 ${IMP.missed} 行未被识别，请您对照原文件`, `, ${IMP.missed} statement rows were not read — check the file`) : '')
+    + (IMP.dropped > 0 ? tr(`，另有 ${IMP.dropped} 部分内容无法识别，已跳过，请您对照原文件`, `, ${IMP.dropped} part(s) couldn't be read and were skipped — check the file`) : '');
   const def = state.data.account.get(IMP.account);
   const accPick = st.missing ? `<div class="imp-acc"><span>${tr(`${st.missing} 笔缺少账户信息，记入`, `${st.missing} without an account, put in`)}</span>
     ${accounts.length ? impDropdown(`${def ? accountTile(def, 'sm') : ''}<b>${h(def?.name ?? tr('选择账户', 'Choose account'))}</b> ▾`, `data-imp="acct" aria-label="${tr('选择账户', 'Choose account')}"`,
@@ -1366,7 +1420,7 @@ MOD.changes.push(async (ev) => {
   if (!d || IMP.phase !== 'review') return true;
   if (k === 'sel') d.selected = t.checked;
   else if (k === 'cat' && t.value) d.tx = { ...d.tx, category: t.value, sub: '' };
-  else if (k === 'from' && t.value) d.tx = { ...d.tx, account: t.value };
+  else if ((k === 'from' || k === 'acc') && t.value) d.tx = { ...d.tx, account: t.value };
   else if (k === 'to' && t.value) d.tx = { ...d.tx, toAccount: t.value };
   render();
   return true;

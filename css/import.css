@@ -103,3 +103,8 @@ input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0;
 .imp-pause { gap: 8px; }
 .imp-pause-pl { width: 96px; height: 96px; display: grid; place-items: center; margin-bottom: 6px; }
 .imp-pause .imp-cont { min-width: 220px; height: 48px; margin-top: 12px; font-size: 16px; }
+/* 每笔记到哪个账户：小标志 + 名字，点开换 */
+.imp-accdd { display: flex; width: fit-content; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--muted); }
+.imp-accdd > span { display: inline-flex; align-items: center; gap: 5px; }
+.imp-accdd .imp-acctile { width: 18px; height: 18px; border-radius: 5px; font-size: 9px; flex: none; }
+.imp-accdd .imp-acctile svg { width: 12px; height: 12px; }
