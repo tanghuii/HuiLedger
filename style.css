@@ -447,6 +447,18 @@ body.ed-selecting .row.click.sel-on { background: color-mix(in srgb, var(--prima
 .ed-selbar .chip { color: var(--text); }
 .ed-selbtns { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .ed-selbtns .btn { height: 42px; }
+.ed-selbtns.three { grid-template-columns: 1fr 1fr 2fr; }
+/* 合并：选以哪一笔为准 */
+.ed-merge { max-height: 86vh; overflow-y: auto; grid-template-columns: minmax(0, 1fr); }
+.ed-mgs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.ed-mg { display: flex; align-items: center; gap: 10px; cursor: pointer; border-radius: 16px; padding: 2px 2px 2px 8px; border: 1.5px solid transparent; }
+.ed-mg.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.ed-mg .ed-cfrow { flex: 1; min-width: 0; pointer-events: none; }
+.ed-mg-r { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; }
+.ed-mg.on .ed-mg-r { border: 6px solid var(--primary); }
+.ed-mg-note { display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer; }
+.ed-mg-note input { width: 18px; height: 18px; margin: 0; pointer-events: none; accent-color: var(--primary); }
+.ed-mg-prev { word-break: break-word; }
 body.ed-selecting .wrap { padding-bottom: 260px; }
 body.ed-selecting .fab { display: none; }
 .ed-toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: 24px; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 9px 10px 9px 18px; border-radius: 999px;

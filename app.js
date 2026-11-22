@@ -353,7 +353,9 @@ async function livePull() {
 /** 重画；正在记账、改账单时先不打断，关上后再画。 */
 function liveRender() {
   const f = document.activeElement;
-  if (state.editing || (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName) && document.getElementById('app')?.contains(f))) { live.waiting = true; return; }
+  // 选文件 / 选图的选择器开着时也先不画（见下面 fileTwin）
+  const picking = Date.now() - (hm.pickAt ?? 0) < 120000;
+  if (state.editing || picking || (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName) && document.getElementById('app')?.contains(f))) { live.waiting = true; return; }
   live.waiting = false;
   render();
 }
@@ -380,6 +382,8 @@ liveStart();
  */
 function liveFullRefresh() {
   if (!state.session || hm.syncing) return;
+  // 刚打开选文件 / 选图（iPhone 从选择器回来会先触发 focus）：这时整页重画会把选好的文件弄丢，先不刷新
+  if (Date.now() - (hm.pickAt ?? 0) < 120000) return;
   if (Date.now() - (loadAll.at ?? 0) < 3000) return;
   const busy = state.editing || (typeof impBusy === 'function' && impBusy()) || (typeof ob !== 'undefined' && ob.open);
   if (busy || !live.cursor) { livePull(); return; }
@@ -1418,6 +1422,32 @@ app.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter') { rememberSearch(ev.target.value); ev.preventDefault(); }
   else if (ev.key === 'Escape') { state.searching = false; state.q = ''; render(); }
 });
+// 选文件 / 选图的按钮（<input type=file>）：iPhone 上要切到系统的选择器，这期间页面若重画了（同步到新数据、计时刷新等），
+// 原来那个按钮已被换掉，选好的文件落在旧按钮上，change 传不到这里，看起来就是"选了没反应"。
+// 所以：点开选择器时记下时间（这段时间不整页刷新）；选好时旧按钮若已不在页面上，就把它放回新页面的同一位置，再发一次 change。
+function fileTwin(el) {
+  const keys = [...el.attributes].filter((a) => a.name === 'id' || a.name.startsWith('data-'));
+  return document.querySelector('input[type="file"]' + keys.map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join(''));
+}
+const fileWatched = new WeakSet();
+document.addEventListener('click', (ev) => {
+  const el = ev.target;
+  if (!(el instanceof HTMLInputElement) || el.type !== 'file') return;
+  hm.pickAt = Date.now();
+  if (fileWatched.has(el)) return;
+  fileWatched.add(el);
+  el.addEventListener('cancel', () => { hm.pickAt = 0; });
+  el.addEventListener('change', () => {
+    hm.pickAt = 0;
+    if (el.isConnected) return;
+    const twin = fileTwin(el);
+    if (!twin) return;
+    twin.replaceWith(el);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}, true);
+// 没选就关了选择器（不会有 change）：回到页面一会儿后照常刷新
+addEventListener('focus', () => { if (hm.pickAt) setTimeout(() => { if (Date.now() - hm.pickAt > 20000) hm.pickAt = 0; }, 21000); });
 app.addEventListener('change', async (ev) => {
   if (await aiChange(ev) || await moreChange(ev)) return;
   for (const f of MOD.changes) if (await f(ev)) return;

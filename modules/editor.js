@@ -756,7 +756,7 @@ function edLayerEl() {
 }
 function edPaintLayer() {
   document.body.classList.toggle('ed-selecting', !!state.sel);
-  edLayerEl().querySelector('.ed-ui').innerHTML = (state.sel ? edSelBar() : '') + (ed.bulkPick ? edBulkPop() : '') + (ed.confirm ? edConfirmView() : '');
+  edLayerEl().querySelector('.ed-ui').innerHTML = (state.sel ? edSelBar() : '') + (ed.bulkPick ? edBulkPop() : '') + (ed.merge && state.sel ? edMergeView() : '') + (ed.confirm ? edConfirmView() : '');
 }
 function edPaintToast() {
   const t = ed.toast;
@@ -797,7 +797,7 @@ function edSelect(set) {
   state.sel = set; ed.bulk = { project: null, fund: null, categoryId: null, reimburse: null, accountId: null }; ed.bulkPick = null;
   edPaintLayer(); edPaintRows();
 }
-function edExitSelect() { state.sel = null; ed.bulk = null; ed.bulkPick = null; ed.busy = ''; edPaintLayer(); edPaintRows(); }
+function edExitSelect() { state.sel = null; ed.bulk = null; ed.bulkPick = null; ed.merge = null; ed.busy = ''; edPaintLayer(); edPaintRows(); }
 function edToggleSel(id) {
   if (state.sel.has(id)) state.sel.delete(id); else state.sel.add(id);
   edPaintRows(); edPaintLayer();
@@ -838,7 +838,8 @@ function edSelBar() {
       <button class="chip ${b.accountId != null ? 'on' : ''}" data-ed="pick" data-v="accountId">${edSvg('wallet')}${b.accountId != null ? tr('账户 · ', 'Account · ') + h(state.data.account.get(b.accountId)?.name ?? '') : tr('账户', 'Account')}</button>
       <button class="chip ${b.reimburse != null ? 'on' : ''}" data-ed="pick" data-v="reimburse">${edSvg('receipt')}${b.reimburse != null ? tr('报销 · ', 'Reimburse · ') + edReimburse()[b.reimburse] : tr('报销', 'Reimburse')}</button>
     </div>
-    <div class="ed-selbtns"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>${tr('删除', 'Delete')}</button>
+    <div class="ed-selbtns three"><button class="btn danger" data-ed="del" ${n && !ed.busy ? '' : 'disabled'}>${tr('删除', 'Delete')}</button>
+      <button class="btn" data-ed="merge" ${n >= 2 && !ed.busy ? '' : 'disabled'}>${tr('合并', 'Merge')}</button>
       <button class="btn primary" data-ed="apply" ${plan && !ed.busy ? '' : 'disabled'}>${ed.busy || (plan ? tr(`应用 ${plan} 笔`, `Apply to ${plan}`) : tr('应用多笔', 'Apply'))}</button></div>
   </div>`;
 }
@@ -896,6 +897,94 @@ async function edBulkDelete() {
   edToast(tr(`已删除 ${list.length} 笔`, `Deleted ${list.length}`), async () => { for (const t of list) await saveRecord('tx', t); });
 }
 
+// ---- 合并：选中的几笔其实是同一笔（比如手动记过，银行账单又导入一次）。选一笔为准，其余删掉；备注可取并集。
+
+/** 默认以哪一笔为准：转账优先，其次有分类（不是"其他"）的，再其次备注长的。 */
+function edMergeDefault(list) {
+  const score = (t) => {
+    const c = state.data.category.get(t.categoryId);
+    return (t.kind === KIND.TRANSFER ? 4 : 0) + (c && !/^(其他|Other)$/i.test(c.name) ? 2 : 0) + Math.min((t.note ?? '').trim().length, 60) / 100;
+  };
+  return [...list].sort((a, b) => score(b) - score(a) || a.createdAt - b.createdAt)[0];
+}
+/** 备注并集：以为准那笔的在前，相同或被包含的只留一份。 */
+function edMergeNote(base, list) {
+  const out = [];
+  for (const t of [base, ...list.filter((x) => x.id !== base.id)]) {
+    const n = String(t.note ?? '').trim();
+    if (!n || out.some((o) => o.includes(n))) continue;
+    for (let i = out.length - 1; i >= 0; i--) if (n.includes(out[i])) out.splice(i, 1);
+    out.push(n);
+  }
+  return out.join('；');
+}
+function edMergeOpen() {
+  const list = [...state.sel].map((id) => state.data.tx.get(id)).filter(Boolean);
+  if (list.length < 2) return;
+  ed.merge = { ids: list.map((t) => t.id), base: edMergeDefault(list).id, notes: true };
+}
+function edMergeView() {
+  const m = ed.merge, L = computeLookup();
+  const list = m.ids.map((id) => state.data.tx.get(id)).filter(Boolean);
+  const base = list.find((t) => t.id === m.base) ?? list[0];
+  const diff = new Set(list.map((t) => t.amountCents)).size > 1;
+  const notes = new Set(list.map((t) => String(t.note ?? '').trim()).filter(Boolean)).size > 1;
+  const merged = notes && m.notes ? edMergeNote(base, list) : String(base?.note ?? '').trim();
+  const rows = list.map((t) => `<div class="ed-mg ${t.id === base.id ? 'on' : ''}" role="radio" aria-checked="${t.id === base.id}" tabindex="0" data-ed="mg-base" data-v="${t.id}">
+      <span class="ed-mg-r"></span><div class="ed-cfrow">${txRow(t, L).replace('data-act="view"', '').replace('row click', 'row')}</div></div>`).join('');
+  return `<div class="modal ed-lmodal" data-ed="mg-bg"><div class="card ed-bcard ed-merge" data-ed="noop">
+    <b style="font-size:17px">${tr('合并为一笔', 'Merge into one')}</b>
+    <div class="small muted">${tr('请选择以哪一笔为准', 'Keep the details of')}</div>
+    <div class="ed-mgs" role="radiogroup">${rows}</div>
+    ${diff ? `<div class="small" style="color:var(--amber)">${tr('金额不一致，以所选一笔为准', 'Amounts differ; the chosen one is kept')}</div>` : ''}
+    ${notes ? `<label class="ed-mg-note" data-ed="mg-notes"><input type="checkbox" ${m.notes ? 'checked' : ''} tabindex="-1"><span>${tr('合并备注', 'Combine notes')}</span></label>` : ''}
+    ${merged ? `<div class="small muted ed-mg-prev">${tr('备注：', 'Note: ')}${h(merged)}</div>` : ''}
+    <div class="ed-selbtns"><button class="btn" data-ed="mg-no">${tr('取消', 'Cancel')}</button><button class="btn primary" data-ed="mg-yes" ${ed.busy ? 'disabled' : ''}>${ed.busy || tr(`合并 ${list.length} 笔`, `Merge ${list.length}`)}</button></div>
+  </div></div>`;
+}
+async function edMergeApply() {
+  const m = ed.merge;
+  if (!m || ed.busy) return;
+  const list = m.ids.map((id) => state.data.tx.get(id)).filter(Boolean);
+  const base = list.find((t) => t.id === m.base);
+  if (!base || list.length < 2) { ed.merge = null; edPaintLayer(); return; }
+  const rest = list.filter((t) => t.id !== base.id), gone = new Set(rest.map((t) => t.id));
+  const now = { ...base };
+  if (m.notes) now.note = edMergeNote(base, list);
+  // 标签也取并集（以为准那笔的在前）
+  now.tags = [...new Set([base, ...rest].flatMap((t) => String(t.tags ?? '').split(' ').filter(Boolean)))].join(' ');
+  // 别的收入抵扣了被合并掉的那几笔支出：改为抵扣留下的这笔
+  const relinks = [];
+  if (base.kind === KIND.EXPENSE) {
+    for (const t of state.data.tx.values()) {
+      if (gone.has(t.id) || t.id === base.id) continue;
+      const n = { ...t };
+      if (gone.has(t.offsetOf)) n.offsetOf = base.id;
+      if (t.offsetParts) {
+        // 分摊里两笔都在时，合到一起
+        const parts = new Map();
+        for (const p of t.offsetParts.split(',')) { const [id, c] = p.split(':').map(Number); const k = gone.has(id) ? base.id : id; parts.set(k, (parts.get(k) ?? 0) + (c || 0)); }
+        n.offsetParts = [...parts].map(([id, c]) => `${id}:${c}`).join(',');
+      }
+      if (n.offsetOf !== t.offsetOf || n.offsetParts !== t.offsetParts) relinks.push({ old: t, now: n });
+    }
+  }
+  ed.busy = tr('合并中…', 'Merging…'); edPaintLayer();
+  try {
+    await saveRecord('tx', now);
+    for (const r of relinks) await saveRecord('tx', r.now);
+    for (const t of rest) await deleteRecord('tx', t.id);
+  } catch (e) { ed.busy = ''; edPaintLayer(); render(); edToast(tr('未能合并：', 'Merge failed: ') + e.message); return; }
+  if (gone.has(state.view)) state.view = null;
+  ed.merge = null;
+  edExitSelect(); render();
+  edToast(tr(`已合并为一笔`, 'Merged into one'), async () => {
+    await saveRecord('tx', base);
+    for (const r of relinks) await saveRecord('tx', r.old);
+    for (const t of rest) await saveRecord('tx', t);
+  });
+}
+
 async function edLayerClick(ev) {
   const el = ev.target.closest('[data-ed]');
   if (!el) return;
@@ -921,6 +1010,12 @@ async function edLayerClick(ev) {
     case 'bnew': { const name = ed.layer.querySelector('#ed-bnew')?.value.trim(); if (!name) return; ed.bulk[v] = name; ed.bulkPick = null; break; }
     case 'apply': edBulkApply(); return;
     case 'del': edBulkDelete(); return;
+    case 'merge': edMergeOpen(); break;
+    case 'mg-base': if (ed.busy) return; ed.merge.base = Number(v); break;
+    case 'mg-notes': ev.preventDefault(); ed.merge.notes = !ed.merge.notes; break;
+    case 'mg-bg': if (ev.target !== el || ed.busy) return; ed.merge = null; break;
+    case 'mg-no': if (ed.busy) return; ed.merge = null; break;
+    case 'mg-yes': edMergeApply(); return;
     case 'cf-no-bg': if (ev.target !== el) return; ed.confirm = null; break;
     case 'cf-no': ed.confirm = null; break;
     case 'cf-yes': { const t = ed.confirm, copy = ed.confirmCopy; ed.confirm = null; edPaintLayer(); if (t) await (copy ? edCopy(t) : edRemove(t)); return; }
