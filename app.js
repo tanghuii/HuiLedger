@@ -306,7 +306,7 @@ addEventListener('online', () => outbox.flush());
 
 // ---------------------------------------------------------------- 实时同步
 // 主屏幕 App 和 Safari 各存各的数据，别的设备也会改。什么时候问云端"上次之后改过什么"：
-//   每做一个操作（点按钮、切页面）、自己刚保存完、切回这个页面、联网时，都马上问一次；
+//   任何操作（点、滑、滚动、打字）、自己刚保存完、切回这个页面、联网时，都马上补传没传上去的、再问一次；
 //   另外页面开着时每 30 秒问一次兜底（两台设备并排开着时也能跟上）。只取改过的那几行，很快。
 const LIVE_EVERY = 30000;
 const live = { cursor: '', wrote: new Map(), busy: false, timer: 0, soon: 0, waiting: false, okAt: 0 };
@@ -357,12 +357,16 @@ function liveRender() {
   render();
 }
 function livePullSoon() { clearTimeout(live.soon); live.soon = setTimeout(livePull, 800); }
-/** 用户的每个操作都问一次，但两秒内只问一次（连着点几下不会重复问）。 */
+/**
+ * 用户的任何操作（点、滑、滚动、打字）：还没传上去的修改马上补传，再问一次云端有没有别处的新改动。
+ * 两秒内只做一次（滑动、滚动会连着触发很多次）。
+ */
 function livePullOnAction() {
   if (Date.now() - (live.actAt ?? 0) < 2000) return;
   live.actAt = Date.now();
-  livePull();
+  if (outbox.list().length && navigator.onLine !== false) outbox.flush().then(() => livePull()).catch(() => {}); else livePull();
 }
+for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel', 'scroll']) document.addEventListener(ev, livePullOnAction, { capture: true, passive: true });
 function liveStart() {
   clearInterval(live.timer);
   live.timer = setInterval(() => { livePull(); if (live.waiting) liveRender(); }, LIVE_EVERY);
@@ -1271,7 +1275,6 @@ async function applyPatch() {
 // ---------------------------------------------------------------- 事件
 
 app.addEventListener('click', async (ev) => {
-  livePullOnAction();
   const el = ev.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act, v = el.dataset.v;
