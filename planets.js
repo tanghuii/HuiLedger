@@ -10,11 +10,12 @@ const PLANET_BRAND = PLANETS[9];
 const planetByKey = (k) => PLANETS.find((p) => p.key === k) ?? null;
 const planetName = (p) => (typeof tr === 'function' ? tr(p.zh, p.en) : p.zh);
 const PLANET_EYES = [[-0.3, -0.02], [0.3, -0.02]];
+const PLANET_TEAR = 'M0,0 C0.08,0.11,0.1,0.18,0.1,0.23 A0.1,0.1,0,0,1,-0.1,0.23 C-0.1,0.18,-0.08,0.11,0,0 Z';
 const PLANET_MOUTH = { 1: 'M-0.17,0.2 Q0,0.4,0.17,0.2', 0: 'M-0.14,0.27 L0.14,0.27', '-1': 'M-0.17,0.33 Q0,0.15,0.17,0.33' };
 let planetUid = 0;
 
 /**
- * 一颗星的 SVG。px = 宽高；mood：1 笑、0 平、-1 撇嘴；spin = 花纹跟着自转慢慢走（系统要求少动画时不转）。
+ * 一颗星的 SVG。px = 宽高；mood：1 笑、0 平、-1 撇嘴、-2 哭；spin = 花纹跟着自转慢慢走（系统要求少动画时不转）。
  * 画布按"连环在内的最大半径"缩放，带环的土星看起来会小一点（和 App 一样）。
  */
 function planetSvg(p, { px = 48, mood = 1, spin = true, face = true, cls = '', label = '' } = {}) {
@@ -30,7 +31,9 @@ function planetSvg(p, { px = 48, mood = 1, spin = true, face = true, cls = '', l
   const C = 'M-1,0 A1,1 0 1,0 1,0 A1,1 0 1,0 -1,0 Z';
   const faceSvg = !face ? '' : PLANET_EYES.map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx=".075" ry=".1" fill="${p.face.eye}"/>${p.face.eye !== '#FFFFFF' ? `<circle cx="${x + 0.025}" cy="${y - 0.035}" r=".025" fill="#fff" fill-opacity=".9"/>` : ''}`).join('')
     + [-0.5, 0.5].map((x) => `<circle cx="${x}" cy=".2" r=".12" fill="${p.face.blush}" fill-opacity="${p.face.blushA}"/>`).join('')
-    + `<path d="${PLANET_MOUTH[mood > 0 ? 1 : mood < 0 ? -1 : 0]}" fill="none" stroke="${p.face.mouth}" stroke-width=".07" stroke-linecap="round"/>`;
+    + `<path d="${PLANET_MOUTH[mood > 0 ? 1 : mood < 0 ? -1 : 0]}" fill="none" stroke="${p.face.mouth}" stroke-width=".07" stroke-linecap="round"/>`
+    // mood = -2：哭（撇嘴，眼下各挂一滴泪，和 App 一样）
+    + (mood <= -2 ? PLANET_EYES.map(([x, y]) => `<path transform="translate(${x + 0.06 * Math.sign(x)} ${y + 0.1})" d="${PLANET_TEAR}" fill="#3FA2F5" fill-opacity=".95"/>`).join('') : '');
   return `<svg class="planet${cls ? ' ' + cls : ''}" style="overflow:visible" viewBox="${-E} ${-E} ${2 * E} ${2 * E}" width="${px}" height="${px}" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>
 <defs><clipPath id="${id}c"><path d="${C}"/></clipPath>
 <radialGradient id="${id}s" gradientUnits="userSpaceOnUse" cx="-.3" cy="-.35" r="1.5"><stop offset=".55" stop-color="${p.shade}" stop-opacity="0"/><stop offset="1" stop-color="${p.shade}" stop-opacity=".55"/></radialGradient>

@@ -637,7 +637,9 @@ function hmBudgetPage(t) {
   const total = typeof BUD !== 'undefined' ? BUD.total() : 0;
   const { y, m } = state.month, now = new Date(), current = now.getFullYear() === y && now.getMonth() + 1 === m;
   const label = `<div class="muted hm-lbl">${current ? tr('本月预算', 'Budget this month') : tr(`${m}月预算`, `${MONTH_EN[m - 1]} budget`)}</div>`;
-  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget">${label}<div class="hm-nob">${tr('暂未设置预算', 'No budget yet')}</div><div class="muted hm-lbl">${tr('点击设置预算', 'Tap to set a budget')}</div></section>`;
+  // 右边也是这个月的行星：没设预算是平嘴，预算内笑，超支就哭（和 App 一样）
+  const face = (mood) => (typeof planetSvg === 'function' && typeof plOfMonth === 'function' ? planetSvg(plOfMonth(y, m), { px: 58, mood, cls: 'hm-face pl-face' }) : '');
+  if (total <= 0) return `<section class="hm-page" data-act="tab" data-v="budget"><div class="hm-top1"><div class="hm-grow">${label}<div class="hm-nob">${tr('暂未设置预算', 'No budget yet')}</div></div>${face(0)}</div><div class="muted hm-lbl">${tr('点击设置预算', 'Tap to set a budget')}</div></section>`;
   const spent = t.expense, left = total - spent, over = left < 0, ratio = Math.min(1, Math.max(0, spent / total));
   const daysLeft = current ? new Date(y, m, 0).getDate() - now.getDate() + 1 : 0;
   const bar = over ? 'var(--on-card-out)' : ratio > 0.8 ? '#FFE3A3' : '#fff';
@@ -645,8 +647,8 @@ function hmBudgetPage(t) {
   const L = computeLookup(), cb = BUD.cats(), byTop = new Map();
   for (const x of monthTxs()) if (x.kind === KIND.EXPENSE && L.counts(x)) { const k = L.top(x.categoryId)?.id ?? -1; byTop.set(k, (byTop.get(k) ?? 0) + L.net(x)); }
   const overCats = [...byTop.entries()].filter(([id, c]) => { const b = Number(cb[String(id)]) || 0; return b > 0 && b < c; }).map(([id]) => state.data.category.get(id)?.name).filter(Boolean);
-  return `<section class="hm-page" data-act="tab" data-v="budget">${label}
-    <div class="hm-big num${over ? ' out' : ''}" style="font-size:30px">${over ? tr('超支 ' + money(-left), 'Over by ' + money(-left)) : tr('剩余 ' + money(left), money(left) + ' left')}</div>
+  return `<section class="hm-page" data-act="tab" data-v="budget"><div class="hm-top1"><div class="hm-grow">${label}
+    <div class="hm-big num${over ? ' out' : ''}" style="font-size:30px">${over ? tr('超支 ' + money(-left), 'Over by ' + money(-left)) : tr('剩余 ' + money(left), money(left) + ' left')}</div></div>${face(over ? -2 : 1)}</div>
     <div class="hm-barw"><div class="hm-bar"><i style="width:${(ratio * 100).toFixed(1)}%;background:linear-gradient(90deg, color-mix(in srgb, ${bar} 70%, transparent), ${bar})"></i></div><b class="pl-bmoon" style="left:${(ratio * 100).toFixed(1)}%" aria-hidden="true"></b></div>
     <div class="hm-bl muted"><span>${tr(`花费 ${money(spent)} / ${money(total)}`, `${money(spent)} of ${money(total)}`)}</span>${daysLeft > 0 && !over ? `<span>${tr(`每日可用 ${money(Math.floor(left / daysLeft))}`, `${money(Math.floor(left / daysLeft))} / day`)}</span>` : ''}</div>
     ${overCats.length ? `<div class="hm-oc out">${tr('超支分类：', 'Over budget: ')}${h(overCats.join(tr('、', ', ')))}</div>` : ''}</section>`;
