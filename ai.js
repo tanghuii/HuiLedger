@@ -997,7 +997,22 @@ function aiReconcileRun(bank, account) {
   const empty = { matched: 0, bankOnly: [], ledgerOnly: [], misplaced: [], bankTotal: 0, ledgerTotal: 0, diff: 0, open: 0 };
   if (!bank.length) return empty;
   const from = Math.min(...bank.map((b) => b.date)), to = Math.max(...bank.map((b) => b.date));
-  const ledger = mine.map((tx) => ({ tx, cents: effect(account, tx) })).filter((x) => x.cents !== 0);
+  // 拆分过的几笔（同一个 splitOf）在银行账单上是一笔：合成一条，金额相加、日期用银行日期
+  const ledger = [], groups = new Map();
+  for (const tx of mine) {
+    const cents = effect(account, tx);
+    if (!cents) continue;
+    if (!(tx.splitOf > 0)) { ledger.push({ tx, cents }); continue; }
+    const g = groups.get(tx.splitOf);
+    if (g) { g.cents += cents; g.parts.push(tx); continue; }
+    const e = { tx, cents, parts: [tx] };
+    groups.set(tx.splitOf, e); ledger.push(e);
+  }
+  for (const e of groups.values()) {
+    if (e.parts.length < 2) continue;
+    const p0 = e.parts[0];
+    e.tx = { ...p0, date: p0.splitDate || p0.date, amountCents: Math.abs(e.cents), currency: '', origCents: 0, note: tr(`拆分为 ${e.parts.length} 笔`, `Split into ${e.parts.length}`) + (p0.note ? ' · ' + p0.note : '') };
+  }
   const bankUsed = bank.map(() => false), ledgerUsed = ledger.map(() => false), byCents = new Map();
   bank.forEach((b, i) => { if (!byCents.has(b.cents)) byCents.set(b.cents, []); byCents.get(b.cents).push(i); });
   for (const step of [0, 1, 2, 3, 5, 8]) {
@@ -1231,8 +1246,10 @@ async function aiAction(act, v) {
     case 'rec-del': {
       const t = state.data.tx.get(Number(v));
       if (!t) return true;
-      if (!await uiConfirm(tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true, detail: h(`${dayISO(t.date)}  ${money(t.amountCents)}`) })) return true;
-      try { await deleteRecord('tx', t.id); } catch (e) { state.error = e.message; }
+      // 拆分过的：整组一起删（银行账单上是一笔）
+      const list = typeof spGroup === 'function' ? spGroup(t) : [t], sumC = list.reduce((s, x) => s + x.amountCents, 0);
+      if (!await uiConfirm(list.length > 1 ? tr(`确定删除这 ${list.length} 笔拆分的账单？`, `Delete these ${list.length} split parts?`) : tr('确定删除该笔账单？', 'Delete this entry?'), { ok: tr('删除', 'Delete'), danger: true, detail: h(`${dayISO(t.splitDate || t.date)}  ${money(sumC)}`) })) return true;
+      try { for (const x of list) await deleteRecord('tx', x.id); } catch (e) { state.error = e.message; }
       break;
     }
     default: return false;

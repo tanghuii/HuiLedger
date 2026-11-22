@@ -169,7 +169,8 @@ function tdDuplicates(txs, skip) {
     for (const later of [...group].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))) {
       if (used.has(later.id)) continue;
       const earlier = tdMinBy(group.filter((e) => !used.has(e.id) && e.id !== later.id && Math.abs(e.date - later.date) <= 3 && (later.createdAt ?? 0) - (e.createdAt ?? 0) > 60000 &&
-        (later.kind !== KIND.TRANSFER || e.accountId === later.accountId || e.toAccountId === later.toAccountId)), (e) => Math.abs(e.date - later.date));
+        (later.kind !== KIND.TRANSFER || e.accountId === later.accountId || e.toAccountId === later.toAccountId) &&
+        !(later.splitOf > 0 && e.splitOf === later.splitOf)), (e) => Math.abs(e.date - later.date));
       if (!earlier) continue;
       used.add(later.id); used.add(earlier.id);
       pairs.push([later, earlier]);

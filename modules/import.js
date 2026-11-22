@@ -1276,8 +1276,18 @@ function impToDrafts(result) {
   const cats = impCats(), tops = cats.filter((c) => !c.parentId), accounts = impAccounts();
   const known = new Set(accounts.map((a) => a.name));
   // 查重用内存里的全部账单一次比对
-  const byAmount = new Map();
-  for (const t of allTxs().sort(byNewest)) { if (!byAmount.has(t.amountCents)) byAmount.set(t.amountCents, []); byAmount.get(t.amountCents).push(t); }
+  const byAmount = new Map(), put = (t) => { if (!byAmount.has(t.amountCents)) byAmount.set(t.amountCents, []); byAmount.get(t.amountCents).push(t); };
+  // 拆分过的几笔在银行账单上是一笔：按合计金额、银行日期去比，单独的几笔不拿来比
+  const splits = new Map();
+  for (const t of allTxs().sort(byNewest)) {
+    if (!(t.splitOf > 0)) { put(t); continue; }
+    if (!splits.has(t.splitOf)) splits.set(t.splitOf, []);
+    splits.get(t.splitOf).push(t);
+  }
+  for (const g of splits.values()) {
+    const p0 = g.find((x) => x.id === x.splitOf) ?? g[0];
+    put(g.length > 1 ? { ...p0, amountCents: g.reduce((s, x) => s + x.amountCents, 0), date: p0.splitDate || p0.date, _split: true } : p0);
+  }
   const matched = new Set();
   // 按 IBAN 认银行：对上名单里同一家银行的账户
   const accountOf = (iban) => {
@@ -1319,6 +1329,8 @@ function impToDrafts(result) {
     const match = tx.currency === HOME ? impFindMatch(tx, byAmount.get(tx.amountCents) ?? [], matched) : null;
     if (match) matched.add(match.id);
     // 对上了已有账单：银行流水默认合并进去（补备注、转账来源）；表格重复导入的默认不动
+    // 对上拆分过的一组：已经记过了，默认不导入，也不往里合并
+    if (match?._split) return { tx, selected: false, duplicate: true, matchId: match.id, merge: false };
     return { tx, selected: !match || tx.fromAi, duplicate: !!match, matchId: match?.id ?? 0, merge: !!match };
   });
 }
@@ -1493,6 +1505,8 @@ async function impImport() {
       if (!d.selected) continue;
       const p = d.tx;
       const e = d.merge && d.matchId ? state.data.tx.get(d.matchId) : null;
+      // 拆分过的不往里合并（会改掉其中一笔的金额）
+      if (e?.splitOf > 0) { d.selected = false; step(); continue; }
       if (e) {
         // 草稿里认不出的那头记 0，不拿默认账户去填
         const fromId = p.account ? (await account(p.account)) ?? 0 : 0, toId = p.toAccount ? (await account(p.toAccount)) ?? 0 : 0;

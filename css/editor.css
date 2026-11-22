@@ -86,3 +86,20 @@
 .ed-recv .small { margin-left: auto; }
 .ed-recv svg { width: 14px; height: 14px; opacity: .6; }
 .ed-recv.bad { border-color: var(--red, #e5484d); }
+
+/* 拆分（modules/split.js） */
+.sp-head { display: grid; gap: 4px; }
+.sp-total { font-size: 28px; font-weight: 700; }
+.sp-part { display: grid; gap: 8px; }
+.sp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sp-row .f, .sp-part .f { min-width: 0; }
+.sp-row input, .sp-part select, .sp-part input { width: 100%; min-width: 0; box-sizing: border-box; }
+.sp-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sp .dt-foot { display: grid; gap: 8px; }
+.sp-left { text-align: center; font-weight: 600; }
+.sp-save { height: 48px; }
+.sp-go { display: grid; gap: 2px; text-align: left; border: 0; cursor: pointer; color: var(--primary); font-size: 15px; font-weight: 600; }
+.sp-go .muted { font-weight: 400; }
+.sp-box { display: grid; gap: 4px; }
+.sp-box .sp-me { border-radius: 12px; background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.sp-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }

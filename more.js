@@ -142,6 +142,8 @@ function assetsAccounts() {
 function detailView() {
   const t = state.data.tx.get(state.view);
   if (!t) return '';
+  // 拆分页盖在这笔的详情上（modules/split.js）
+  if (typeof SP !== 'undefined' && SP.open && SP.view === state.view) return spView();
   const L = computeLookup(), acc = state.data.account, leaf = catOf(t), top = L.top(t.categoryId);
   const transfer = t.kind === KIND.TRANSFER, from = acc.get(t.accountId), to = acc.get(t.toAccountId);
   const foreign = t.currency && t.origCents > 0 && t.currency !== HOME;
@@ -175,6 +177,7 @@ function detailView() {
     </div>
     <div class="cell"><div class="muted">${tr('备注', 'Note')}</div><div class="note ${t.note ? '' : 'muted'}">${h(t.note) || tr('无', 'None')}</div></div>
     <div class="cells">${cells}</div>
+    ${typeof spDetailBox === 'function' ? spDetailBox(t, L) : ''}
     ${t.kind === KIND.EXPENSE && typeof moodRater === 'function' ? `<div class="cell mood-cell"><div class="muted">${tr('这笔花得值吗？', 'Worth it?')}</div>${moodRater(txScore(t), 'tx', t.id)}</div>` : ''}
     ${typeof lkExpenseBox === 'function' ? (t.kind === KIND.EXPENSE ? lkExpenseBox(t, L, false) : t.kind === KIND.INCOME ? lkIncomeBox(t, L) : '') : `
     ${linked.length ? `<div><div class="muted small">${tr('该笔抵扣的支出', 'Expenses it offsets')}</div>${rowsOf(linked, L)}</div>` : ''}

@@ -720,7 +720,7 @@ function txRow(t, L, showDate = false, viewAccount = null) {
   return `<div class="row click ed-tx${state.sel?.has(t.id) ? ' sel-on' : ''}" data-act="view" data-v="${t.id}">
     <span class="ed-check" aria-hidden="true"></span>
     ${transfer ? accountTile(incoming ? from : to) : iconTile(leaf?.icon ?? 'tag')}
-    <div class="main"><div class="title">${title}${t.kind === KIND.EXPENSE && typeof moodBadge === 'function' ? moodBadge(txScore(t)) : ''}${t.excluded ? `<span class="badge gray">${tr('不计', 'Not counted')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To claim')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}</div>
+    <div class="main"><div class="title">${title}${t.kind === KIND.EXPENSE && typeof moodBadge === 'function' ? moodBadge(txScore(t)) : ''}${t.excluded ? `<span class="badge gray">${tr('不计', 'Not counted')}</span>` : ''}${t.reimburse === 1 ? `<span class="badge">${tr('待报销', 'To claim')}</span>` : t.reimburse === 2 ? `<span class="badge gray">${tr('已报销', 'Reimbursed')}</span>` : ''}${t.splitOf > 0 ? `<span class="badge gray">${tr('拆分', 'Split')}</span>` : ''}</div>
       ${details || payer ? `<div class="sub">${payer}${details}</div>` : ''}</div>
     <div class="right"><div class="num ${cls}">${sign}${amount}</div>${extra}</div>
   </div>`;
@@ -735,7 +735,7 @@ async function edRemove(t) {
 }
 /** 复制一笔到今天（抵扣关系不带，报销回到"待报销"），可撤销。 */
 async function edCopy(t) {
-  const copy = { ...t, id: newId(), date: today(), createdAt: Date.now(), offsetOf: 0, offsetParts: '', reimburse: t.reimburse ? 1 : 0 };
+  const copy = { ...t, id: newId(), date: today(), createdAt: Date.now(), offsetOf: 0, offsetParts: '', reimburse: t.reimburse ? 1 : 0, splitOf: 0, splitDate: 0 };
   try { await saveRecord('tx', copy); } catch (e) { state.error = e.message; render(); return; }
   render();
   edToast(tr('已复制至今天', 'Copied to today'), async () => { await deleteRecord('tx', copy.id); });
