@@ -306,7 +306,8 @@ addEventListener('online', () => outbox.flush());
 
 // ---------------------------------------------------------------- 实时同步
 // 主屏幕 App 和 Safari 各存各的数据，别的设备也会改。什么时候问云端"上次之后改过什么"：
-//   任何操作（点、滑、滚动、打字）、自己刚保存完、切回这个页面、联网时，都马上补传没传上去的、再问一次；
+//   任何操作（点、滑、滚动、打字）、自己刚保存完时，马上补传没传上去的、再问一次；
+//   切回这个页面、联网时，整个重新读一遍（liveFullRefresh）；
 //   另外页面开着时每 30 秒问一次兜底（两台设备并排开着时也能跟上）。只取改过的那几行，很快。
 const LIVE_EVERY = 30000;
 const live = { cursor: '', wrote: new Map(), busy: false, timer: 0, soon: 0, waiting: false, okAt: 0 };
@@ -372,7 +373,20 @@ function liveStart() {
   live.timer = setInterval(() => { livePull(); if (live.waiting) liveRender(); }, LIVE_EVERY);
 }
 liveStart();
-for (const ev of ['focus', 'pageshow', 'online']) addEventListener(ev, () => livePull());
+/**
+ * 切到这个页面（比如在 Safari 里改完，回到主屏幕 App）：把云端的全部数据整个重新读一遍，账单、账户、分类、
+ * 账本和各项设置全部换成最新的，再跑一遍各模块的"读完数据"（周期账单、提醒等）。三秒内只做一次。
+ * 正在记账、导入时不整个换（会打断），只取改过的那几行。
+ */
+function liveFullRefresh() {
+  if (!state.session || hm.syncing) return;
+  if (Date.now() - (loadAll.at ?? 0) < 3000) return;
+  const busy = state.editing || (typeof IMP !== 'undefined' && IMP.phase && IMP.phase !== 'idle') || (typeof ob !== 'undefined' && ob.open);
+  if (busy || !live.cursor) { livePull(); return; }
+  loadAll.at = Date.now();
+  loadAll();
+}
+for (const ev of ['focus', 'pageshow', 'online']) addEventListener(ev, () => liveFullRefresh());
 
 // ---------------------------------------------------------------- 统计口径（和手机端的 Lookup 一致）
 
@@ -1526,5 +1540,5 @@ if ('serviceWorker' in navigator) {
 // 切回来：马上问一次云端改了什么（很久没打开过的，整个重新读一遍）
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !state.session) return;
-  if (!live.cursor || Date.now() - live.okAt > 6 * 3600 * 1000) { if (!state.editing) { loadAll.at = Date.now(); loadAll(); } } else livePull();
+  liveFullRefresh();
 });
