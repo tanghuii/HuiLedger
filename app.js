@@ -957,6 +957,7 @@ function loginView() {
         : `<button class="btn link" data-act="mode" data-v="login" ${dis}>${tr('返回登录', 'Back to sign in')}</button>`}
     </div>
     ${IS_ANDROID ? `<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">${tr('App 中打开', 'Open in app')}</a>` : ''}
+    ${STANDALONE && !IS_ANDROID ? '' : `<a class="btn link open-app dl-app" href="download/">${tr('下载 App', 'Get the app')}</a>`}
   </div></div>`;
 }
 
