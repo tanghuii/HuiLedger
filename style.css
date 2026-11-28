@@ -410,7 +410,7 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .ed-amt { font-size: 34px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
 .ed-amt.long { font-size: 26px; } .ed-amt.zero { color: var(--muted); opacity: .55; } .ed-amt.bad { color: var(--amber); }
 .ed-amt-sub { font-size: 13px; color: var(--muted); font-family: var(--num-font); }
-.ed-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: grid; gap: 10px; align-content: start; margin: 0 -4px; padding: 2px 4px; }
+.ed-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: grid; gap: 10px; align-content: start; margin: 0 -4px; padding: 2px 4px; }
 .ed-box { border-radius: 20px; padding: 8px; background: var(--card); border: 1px solid var(--stroke); }
 .ed-move { padding: 12px; display: grid; gap: 8px; }
 /* 记一笔要一屏放完：分类格的列数由 editor.js 给（--cols，够宽 7 列），每格的高度固定（--ch，矮屏幕上会小一点），这样三行就放得下 20 个分类 */
@@ -463,8 +463,9 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .ed-note { display: flex; align-items: flex-start; gap: 10px; padding: 7px 14px; border-radius: 16px; background: var(--field); border: 1px solid var(--line); cursor: text; }
 .ed-note .ed-ic { margin-top: 3px; }
 .ed-note textarea { flex: 1; border: 0; background: none; padding: 0; min-height: 0; resize: none; outline: none !important; font-size: 16px; line-height: 22px; border-radius: 0; field-sizing: content; max-height: 110px; }
-.ed-keys { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
-.ed-key { height: clamp(40px, 5.2vh, 50px); border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); font: 400 22px var(--num-font); cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: background .12s, transform .12s; }
+/* 上面的内容多高就多高，剩下的地方都给数字键（每个键最高 62），备注和键盘之间不留空 */
+.ed-keys { --kh: clamp(40px, 5.2vh, 50px); flex: 1 1 auto; max-height: calc(4 * 62px + 21px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(var(--kh), 1fr)); gap: 7px; }
+.ed-key { min-height: var(--kh); border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); font: 400 22px var(--num-font); cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: background .12s, transform .12s; }
 .ed-key:active { background: color-mix(in srgb, var(--primary) 24%, transparent); transform: scale(.96); }
 .ed-key.op { background: color-mix(in srgb, var(--primary) 11%, transparent); color: var(--primary); font-weight: 500; }
 .ed-key.txt { font: 500 15px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
@@ -484,14 +485,14 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
   .ed-grid3 { gap: 6px; }
   .ed-grid3 .chip { height: 33px; }
   .ed-note { padding: 5px 14px; }
-  .ed-keys { gap: 6px; }
-  .ed-key { height: 39px; font-size: 20px; }
+  .ed-keys { --kh: 39px; gap: 6px; }
+  .ed-key { font-size: 20px; }
 }
 /* 更矮的（高度不到 650 的旧安卓机） */
 @media (max-height: 650px) {
   .ed-modal .card.ed-sheet { gap: 6px; }
   .ed-amount { padding: 4px 14px; }
-  .ed-key { height: 36px; }
+  .ed-keys { --kh: 36px; }
   .ed-note { padding: 4px 14px; }
 }
 .ed-sheet > .ed-pop { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; background: rgba(10, 12, 30, .35); border-radius: inherit; }
