@@ -7,7 +7,7 @@ const AP_STYLES = [
   ['glass', () => tr('液态玻璃', 'Liquid glass'), () => tr('半透明卡片，柔和光晕', 'Translucent cards, soft glow')],
   ['bento', () => tr('便当格', 'Bento'), () => tr('黑白底配彩色方块', 'Monochrome with color tiles')],
   ['dark', () => tr('深色金融', 'Dark finance'), () => tr('近黑底，亮绿强调', 'Near-black, bright green')],
-  ['cartoon', () => tr('卡通', 'Cartoon'), () => tr('粗描边，糖果色', 'Bold outlines, candy colors')],
+  ['cartoon', () => tr('卡通', 'Cartoon'), () => tr('圆润软萌，糖果色', 'Soft and round, candy colors')],
   ['paper', () => tr('手账纸', 'Paper'), () => tr('米色纸张，点阵底纹', 'Cream paper, dot grid')],
 ];
 /** 账本颜色可选的十种（和手机端 LedgersScreen 的 LEDGER_COLORS 一样）。 */

@@ -55,18 +55,18 @@ html[data-style="dark"] {
   --t1: color-mix(in srgb, var(--primary) 65%, #fff); --t2: color-mix(in srgb, #ff5c9a 65%, #fff); --t3: color-mix(in srgb, #4fa8f0 65%, #fff);
 }
 
-/* ---------------------------------------------------------------- 卡通：奶油底撒波点、粗黑描边、往右下错开的硬投影、糖果粉 */
+/* ---------------------------------------------------------------- 卡通（可爱风）：奶油底撒波点；卡片像软糖——圆圆的角、细细的粉色边、底下一条糖果色的"厚度"和一团粉色的软影，不用黑色描边 */
 html[data-style="cartoon"] {
   color-scheme: light;
   --bg: #fff3d4; --blob1: transparent; --blob2: transparent; --blob3: transparent;
-  --card: #fffdf6; --stroke: var(--ink); --bw: 2.5px;
+  --card: #fffdf8; --stroke: #ffc4d6; --bw: 1.5px; --candy: #ffd3e1; --candy-deep: #ec4a7c;
   --text: #2b2140; --muted: #6b5f85; --primary: #ff5c8a; --on-primary: #fff;
   --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: #fff9e8; --line: #e2d3a8;
   --edge1: var(--stroke); --edge2: var(--stroke); --edge3: var(--stroke); --shine: transparent; --shine2: transparent;
   --card-tint: #ff5c8a;
   --nav-bg: rgba(255, 253, 246, .96);
   --pg-surface: rgba(255, 253, 246, .96); --pg-dot: #fffdf6;
-  --card-shadow: 4px 4px 0 var(--ink); --nav-shadow: 4px 4px 0 var(--ink);
+  --card-shadow: inset 0 2px 0 #fff, 0 4px 0 var(--candy), 0 16px 26px -16px rgba(255, 92, 138, .5); --nav-shadow: inset 0 2px 0 #fff, 0 4px 0 var(--candy), 0 14px 24px -14px rgba(255, 92, 138, .55);
   --art: radial-gradient(circle at 14px 14px, #ffe2a0 3px, transparent 3.6px), radial-gradient(circle at 14px 14px, #ffe2a0 3px, transparent 3.6px);
   --art-size: 28px 56px, 28px 56px; --art-pos: 0 0, 14px 28px;
 }
@@ -125,9 +125,17 @@ html.ap-solid .fab { box-shadow: var(--nav-shadow); }
    :where 让它不高过 home.css 里"非首页标题不要流光"那条 */
 :where(html[data-style]) .top h1 { background-image: linear-gradient(100deg, var(--t1), var(--t2), var(--t3), var(--t1)); }
 
-/* 卡通：主按钮也描粗边；彩色卡片和手机端一样不加边 */
-html[data-style="cartoon"] .btn.primary { border: var(--bw) solid var(--ink); }
-html[data-style="cartoon"] .ed-box { box-shadow: 3px 3px 0 var(--ink); }
+/* 卡通（可爱风）：卡片的角更圆；主按钮是一颗糖——没有描边，底下一条深一点的粉色当厚度，按下去会瘪一点；彩色卡片和手机端一样不加边 */
+html[data-style="cartoon"] .card:not(.cc) { border-radius: 26px; }
+/* 彩色卡片也是一颗糖：右下角不压黑，底下一条浅一号的同色当厚度 */
+html[data-style="cartoon"] .card.cc { border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .22), transparent 46%),
+    linear-gradient(135deg, color-mix(in oklab, var(--cc) 76%, #fff), var(--cc) 58%, color-mix(in oklab, var(--cc) 86%, #6d2a55));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .38), 0 5px 0 color-mix(in srgb, var(--cc) 55%, #fff), 0 18px 26px -16px color-mix(in srgb, var(--cc) 75%, transparent); }
+html[data-style="cartoon"] .btn.primary { border: 0; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), 0 3px 0 var(--candy-deep), 0 10px 18px -10px rgba(255, 92, 138, .7); }
+html[data-style="cartoon"] .btn.primary:active { transform: translateY(2px) scale(.98); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), 0 1px 0 var(--candy-deep); }
+html[data-style="cartoon"] .btn:not(.link):not(.primary), html[data-style="cartoon"] .round, html[data-style="cartoon"] .hm-ib { box-shadow: inset 0 2px 0 #fff, 0 2px 0 var(--candy); }
+html[data-style="cartoon"] .ed-box { box-shadow: inset 0 2px 0 #fff, 0 3px 0 var(--candy); }
 
 /* 手账纸：卡片上叠一层很淡的纸纹（放在内容下面） */
 html[data-style="paper"] .card:not(.cc)::before {
@@ -172,7 +180,7 @@ html[data-style="bento"]:not(.line-icons) .tile.ap-ic svg { stroke: color-mix(in
 html[data-style="dark"]:not(.line-icons) .tile.ap-ic { background: #23262d !important; }
 html[data-style="dark"]:not(.line-icons) .tile.ap-ic svg { stroke: color-mix(in srgb, var(--tc) 65%, #fff); }
 /* 卡通：糖果色实底加粗描边 */
-html[data-style="cartoon"]:not(.line-icons) .tile.ap-ic { background: color-mix(in srgb, var(--tc) 85%, #fff) !important; border: 2px solid var(--ink); }
+html[data-style="cartoon"]:not(.line-icons) .tile.ap-ic { background: color-mix(in srgb, var(--tc) 85%, #fff) !important; border: 2px solid #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--tc) 55%, #fff), 0 8px 12px -8px color-mix(in srgb, var(--tc) 70%, transparent); }
 /* 线性（手账纸总是）：淡淡的同色底，同色描边和线条 */
 html.line-icons .tile.ap-ic, html[data-style="paper"] .tile.ap-ic {
   background: color-mix(in srgb, var(--tc) var(--li-bg), transparent) !important;
@@ -211,7 +219,7 @@ html.ap-solid.ap-accent {
 .ap-sw[data-p="bento"] { --sw-bg: #f2f2f0; --sw-card: #ffd9cf; --sw-dot: #171717; }
 .ap-sw[data-p="dark"] { --sw-bg: #0e0f12; --sw-card: #23262d; --sw-dot: #3ddc97; }
 .ap-sw[data-p="cartoon"] { --sw-card: #fffdf6; --sw-dot: #ff5c8a; background: radial-gradient(circle, #ffe2a0 1.5px, transparent 2px) 0 0 / 9px 9px, #fff3d4; }
-.ap-sw[data-p="cartoon"] i { border: 1.5px solid var(--ink); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.ap-sw[data-p="cartoon"] i { border: 1px solid #ffc4d6; box-shadow: 0 2px 0 #ffd3e1; }
 .ap-sw[data-p="paper"] { --sw-card: #fffcf5; --sw-dot: #c8643b; background: radial-gradient(circle, rgba(125, 106, 80, .35) .8px, transparent 1.2px) 0 0 / 6px 6px, #f6f0e4; }
 .ap-sw[data-p="paper"] i { box-shadow: 0 1px 1px rgba(107, 82, 54, .18); }
 @media (prefers-color-scheme: dark) {
