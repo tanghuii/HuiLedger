@@ -956,11 +956,11 @@ function loginView() {
     ${state.unconfirmed && mode === 'login' ? `<button class="btn" data-act="auth-resend" ${dis}>${tr('重发确认邮件', 'Resend confirmation email')}</button>` : ''}
     ${title ? `<button class="btn primary" data-act="auth" ${dis}>${state.loading ? tr('请稍候…', 'Please wait…') : title}</button>` : ''}
     <div class="between" style="justify-content:center">
-      ${mode === 'login' ? `<button class="btn link" data-act="mode" data-v="register" ${dis}>${tr('没有账号？注册', 'No account? Sign up')}</button><button class="btn link" data-act="mode" data-v="forgot" ${dis}>${tr('忘记密码', 'Forgot password')}</button>`
-        : `<button class="btn link" data-act="mode" data-v="login" ${dis}>${tr('返回登录', 'Back to sign in')}</button>`}
+      ${mode === 'login' ? `<button class="btn link plain" data-act="mode" data-v="register" ${dis}>${tr('没有账号？注册', 'No account? Sign up')}</button><button class="btn link plain" data-act="mode" data-v="forgot" ${dis}>${tr('忘记密码', 'Forgot password')}</button>`
+        : `<button class="btn link plain" data-act="mode" data-v="login" ${dis}>${tr('返回登录', 'Back to sign in')}</button>`}
     </div>
     ${IS_ANDROID ? `<a class="btn open-app" href="intent://open#Intent;scheme=huiledger;package=app.jizhang;end">${tr('App 中打开', 'Open in app')}</a>` : ''}
-    ${STANDALONE && !IS_ANDROID ? '' : `<a class="btn link open-app dl-app" href="download/">${tr('下载 App', 'Get the app')}</a>`}
+    ${STANDALONE && !IS_ANDROID ? '' : `<a class="btn link plain dl-app" href="download/">${tr('下载 App', 'Get the app')}</a>`}
   </div></div>`;
 }
 
