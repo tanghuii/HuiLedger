@@ -122,3 +122,16 @@ input.imp-ck { flex: none; width: 22px; height: 22px; margin: 0 2px; padding: 0;
 .imp-cf .wn-lead { margin: 0 0 4px; }
 .imp-cf-b { width: 100%; min-height: 46px; font-size: 16px; }
 .imp-cf-b.link { min-height: 36px; font-size: 14px; }
+
+/* 核对列表：分类按钮、分类选择（小胶囊）、一笔的详情 */
+.imp-catbtn { display: block; max-width: 100%; padding: 0; border: 0; background: none; font: inherit; font-weight: 500; color: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-main[data-act] { cursor: pointer; }
+.imp-pks { display: grid; gap: 8px; }
+.imp-pkw { display: flex; flex-wrap: wrap; gap: 6px; }
+.imp-pk { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px 5px 6px; border-radius: 999px; border: 1px solid var(--stroke); background: linear-gradient(180deg, var(--shine2), transparent 60%), var(--card); backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%); box-shadow: inset 0 1px 0 var(--shine); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.imp-pk.add { padding-left: 11px; color: var(--primary); font-weight: 600; }
+.imp-pk.on { background: var(--primary); border-color: transparent; color: var(--on-primary); font-weight: 600; }
+.imp-pk .imp-pkt { width: 20px; height: 20px; border-radius: 7px; }
+.imp-pk .imp-pkt svg { width: 14px; height: 14px; }
+.imp-dacc { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.imp-dacc select { flex: 1; min-width: 0; font-size: 16px; }

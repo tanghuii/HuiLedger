@@ -728,6 +728,9 @@ function settingsView() {
   // 语言：跟随系统 / 中文 / English
   const lang = `<div class="card hm-sc">${head('语言 / Language')}
     <div class="seg hm-seg">${[['auto', tr('跟随系统', 'System')], ['zh', '中文'], ['en', 'English']].map(([v, n]) => `<button class="${LANG_MODE === v ? 'on' : ''}" data-act="lang" data-v="${v}">${n}</button>`).join('')}</div></div>`;
+  // 首页卡片：大数字显示净收支 / 支出 / 收入
+  const homeCard = `<div class="card hm-sc">${head(tr('首页卡片', 'Home card'))}
+    <div class="seg hm-seg">${[tr('净收支', 'Net'), tr('支出', 'Expense'), tr('收入', 'Income')].map((n, i) => `<button class="${hmCardMode() === i ? 'on' : ''}" data-act="hm-card" data-v="${i}">${n}</button>`).join('')}</div></div>`;
 
   // 数据安全：立即备份（下载文件）/ 从备份恢复（备份页），上次备份是几天前
   const last = Number(store.get('hl.backupLast', 0)) || 0, ago = last ? Math.max(0, Math.floor((Date.now() - last) / 86400000)) : -1;
@@ -774,7 +777,7 @@ function settingsView() {
   const scOn = typeof scView === 'function' && IMP_SHORTCUT_URL;
   const shortcut = scOn && IS_IOS ? `<button class="card hm-sc-card" data-act="tab" data-v="shortcut">${iconTile('bolt')}<span class="hm-grow"><b>${tr('iPhone 快捷导入', 'iPhone quick import')}</b><span class="muted hm-sub2">${tr('可在分享菜单中一键导入账单', 'Import statements from the Share menu')}</span></span>${hmSvg(ICONS.forward.d, 'hm-chev')}</button>` : '';
   return `<div class="grid hm-set">
-    ${shortcut}${lang}${safety}
+    ${shortcut}${lang}${homeCard}${safety}
     ${extra(typeof lockSettingsHtml === 'function' ? lockSettingsHtml : null)}${extra(typeof remindersSettingsHtml === 'function' ? remindersSettingsHtml : null)}
     <div class="card hm-list">
       ${MOD.pages.appearance ? row('paint', tr('外观', 'Appearance'), 'data-act="tab" data-v="appearance"') : ''}
@@ -970,13 +973,40 @@ function monthBar({ planet = false } = {}) {
 
 // 账单行 txRow() 在 modules/editor.js（侧滑、多选都在那边）
 
+/** 代收（替别人收的钱）和代收转回（转给对方）：两边都不是自己的收支，选这两个分类（或其子分类）时默认不计入收支（同 App 的 Collect）。 */
+const COLLECT_NAMES = ['代收', '代收转回', 'Collected for others', 'Passed on'];
+function isCollectCat(id) {
+  const c = id ? state.data.category.get(id) : null;
+  if (!c) return false;
+  const top = c.parentId ? state.data.category.get(c.parentId) ?? c : c;
+  return COLLECT_NAMES.includes(top.name);
+}
+// 老账号补上这两个分类（同 App 启动时补"补贴""代付收回"那样，按名字认，中英文都算）
+MOD.onLoad.push(async () => {
+  const cats = [...state.data.category.values()];
+  if (!cats.length) return;
+  for (const [zh, en, income, icon] of [['代收', 'Collected for others', true, 'people'], ['代收转回', 'Passed on', false, 'transfer']]) {
+    if (cats.some((c) => !c.parentId && !!c.isIncome === income && (c.name === zh || c.name === en))) continue;
+    await saveRecord('category', { id: newId(), name: zh, icon, isIncome: income, sortOrder: cats.length, parentId: 0 });
+  }
+});
+
+/** 首页收支卡片的大数字：0 净收支、1 支出、2 收入（设置里选，只存在这个浏览器里，同 App 存在本机）。 */
+const hmCardMode = () => { const v = Number(store.get('hl.homeCard', 0)); return v === 1 || v === 2 ? v : 0; };
+
 /** 首页汇总卡片：左右滑三页（本月收支 / 预算 / 净资产），下面一排小圆点。颜色用 --card-tint（外观里换账本色时跟着变）。 */
 function summaryCard(t) {
   const reimb = (t.reimbursable || t.reimbursed ? `<div class="amber hm-rl"><span>${tr('可报销支出 ', 'Claimable ') + money(t.reimbursable)}</span><span>${tr('报销收入 ', 'Reimbursed ') + money(t.reimbursed)}</span></div>` : '')
     + (t.refund || t.excluded ? `<div class="muted hm-rl"><span>${t.refund ? tr('退款 ', 'Refunds ') + money(t.refund) : ''}</span><span>${t.excluded ? tr('不计 ', 'Not counted ') + money(t.excluded) : ''}</span></div>` : '');
+  // 大数字显示哪一项（设置里选，存在这个浏览器里）：净收支 / 支出 / 收入；另外两项放在下面两格
+  const mode = hmCardMode();
+  const bigLabel = [tr('本月结余', 'Net this month'), tr('本月支出', 'Spent this month'), tr('本月收入', 'Income this month')][mode];
+  const bigValue = [t.income - t.expense, t.expense, t.income][mode];
+  const cell = (label, v, cls) => `<div><div class="muted hm-lbl2">${label}</div><div class="num ${cls} hm-val">${money(v)}</div></div>`;
+  const cells = [mode !== 1 ? cell(tr('支出', 'Expense'), t.expense, 'out') : '', mode !== 2 ? cell(tr('收入', 'Income'), t.income, 'in') : '', mode !== 0 ? cell(tr('结余', 'Net'), t.income - t.expense, '') : ''].join('');
   const month = `<section class="hm-page">
-    <div class="hm-top1"><div class="hm-grow"><div class="muted hm-lbl">${tr('本月结余', 'Net this month')}</div><div class="hm-big num">${money(t.income - t.expense)}</div></div>${typeof plFace === 'function' ? plFace(t.income >= t.expense, 58) : typeof coinFace === 'function' ? coinFace(t.income >= t.expense, 58) : hmFace(t.income >= t.expense)}</div>
-    <div class="hm-cells"><div><div class="muted hm-lbl2">${tr('支出', 'Expense')}</div><div class="num out hm-val">${money(t.expense)}</div></div><div><div class="muted hm-lbl2">${tr('收入', 'Income')}</div><div class="num in hm-val">${money(t.income)}</div></div></div>
+    <div class="hm-top1"><div class="hm-grow"><div class="muted hm-lbl">${bigLabel}</div><div class="hm-big num">${money(bigValue)}</div></div>${typeof plFace === 'function' ? plFace(t.income >= t.expense, 58) : typeof coinFace === 'function' ? coinFace(t.income >= t.expense, 58) : hmFace(t.income >= t.expense)}</div>
+    <div class="hm-cells">${cells}</div>
     ${reimb}</section>`;
   const dots = [0, 1, 2].map((i) => `<button class="${i === (state.hmPage ?? 0) ? 'on' : ''}" data-act="hm-dot" data-v="${i}" aria-label="${i + 1} / 3"></button>`).join('');
   // 列表往下滚时卡片收成一行（本月结余 + 金额 + 小金币），回到顶上再展开；两套内容都在，CSS 负责收放
@@ -987,7 +1017,7 @@ function summaryCard(t) {
       <div class="hm-dots">${dots}</div>
     </div></div>
     <div class="hm-fold hm-mini" aria-hidden="${hm.mini ? 'false' : 'true'}"><div><div class="hm-mrow">
-      <span class="muted hm-lbl">${tr('本月结余', 'Net this month')}</span><b class="num">${money(t.income - t.expense)}</b>${face(28)}
+      <span class="muted hm-lbl">${bigLabel}</span><b class="num">${money(bigValue)}</b>${face(28)}
     </div></div></div>
   </div>`;
 }
@@ -1305,6 +1335,7 @@ app.addEventListener('click', async (ev) => {
   switch (act) {
     case 'mode': state.authEmail = document.getElementById('l-email')?.value.trim() || state.authEmail; state.authMode = v; state.authPass = null; state.error = ''; state.notice = ''; render(); break;
     case 'lang': setLang(v); break;
+    case 'hm-card': store.set('hl.homeCard', Number(v) || 0); render(); break;
     case 'pw-eye': { const inp = document.getElementById(v); if (inp) { inp.type = inp.type === 'password' ? 'text' : 'password'; el.textContent = inp.type === 'password' ? tr('显示', 'Show') : tr('隐藏', 'Hide'); } break; }
     case 'auth-resend': {
       // 重发确认邮件 / 重设邮件：发信频率有限制，失败时给出能看懂的提示

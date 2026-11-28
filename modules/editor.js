@@ -259,6 +259,14 @@ function edInit(e) {
   if (e._recv == null) e._recv = e.toCents > 0 ? edInput(e.toCents) : '';
 }
 
+/** 换了分类之后：选上代收 / 代收转回就默认不计入收支；从它们换成别的分类改回计入（同 App 记账页）。was：换之前的分类。 */
+function edCollect(e, was) {
+  const now = edCats(e).leafId;
+  if (now === was) return;
+  if (isCollectCat(now)) e.excluded = true;
+  else if (isCollectCat(was)) e.excluded = false;
+}
+
 function startEdit(t, quiet = false) {
   if (t) {
     state.editing = { ...t, _amount: edInput(edForeign(t) ? t.origCents : t.amountCents), _isNew: false, _score: typeof txScore === 'function' ? txScore(t) : 0 };
@@ -289,7 +297,7 @@ function startEditWith(o = {}) {
   const kind = typeof o.kind === 'string' ? { expense: KIND.EXPENSE, income: KIND.INCOME, transfer: KIND.TRANSFER }[o.kind.toLowerCase()] ?? Number(o.kind) : o.kind;
   if (kind != null && !Number.isNaN(kind)) e.kind = Number(kind);
   else if (cat) e.kind = cat.isIncome ? KIND.INCOME : KIND.EXPENSE;
-  if (cat) e.categoryId = cat.id;
+  if (cat) { e.categoryId = cat.id; if (isCollectCat(cat.id)) e.excluded = true; }
   if (o.accountId && state.data.account.has(Number(o.accountId))) e.accountId = Number(o.accountId);
   if (o.ledgerId && state.data.ledger.has(Number(o.ledgerId))) e.ledgerId = Number(o.ledgerId);
   if (o.offsetOf) e._offs = [[Number(o.offsetOf), '']];
@@ -1273,8 +1281,8 @@ MOD.actions.push(async (act, v, el) => {
   switch (act) {
     case 'ed-key': if (v === '⌫' && Date.now() < (sw.swallowKey ?? 0)) return true; edPress(v); return true;
     case 'ed-again': await saveEditing(true); return true;
-    case 'ed-cat': e.categoryId = Number(v); break;
-    case 'ed-sub': { const { top, leafId } = edCats(e); e.categoryId = leafId === Number(v) ? top.id : Number(v); break; }
+    case 'ed-cat': { const was = edCats(e).leafId; e.categoryId = Number(v); edCollect(e, was); break; }
+    case 'ed-sub': { const { top, leafId } = edCats(e); e.categoryId = leafId === Number(v) ? top.id : Number(v); edCollect(e, leafId); break; }
     case 'ed-pick': e._pick = v; e._q = ''; break;
     case 'ed-pick-close': e._pick = null; break; // 面板里面的点击会先碰到 data-act="noop"，到这里的只有背景
     case 'ed-pick-x': e._pick = null; break;

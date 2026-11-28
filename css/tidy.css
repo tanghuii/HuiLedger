@@ -5,8 +5,8 @@
 .subbar[data-tdp] { display: flex; align-items: center; gap: 10px; }
 .subbar[data-tdp] > b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .td-acts { display: flex; flex: none; gap: 2px; }
-.td-tb { border: 0; background: none; color: var(--primary); font: inherit; font-size: 14px; font-weight: 500; padding: 8px 8px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-.td-tb:active { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.td-tb { color: var(--primary); font: inherit; font-size: 14px; font-weight: 500; padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.td-tb:active, .td-ign:active { transform: scale(.94); }
 
 .td-empty { margin: 4px 16px; }
 .td-sum { display: flex; align-items: center; gap: 8px; padding: 0 0 6px 16px; font-size: 14px; }
@@ -33,8 +33,11 @@
 
 .td-r2 { display: flex; align-items: center; padding-left: 42px; gap: 4px; }
 .td-what { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; color: var(--primary); }
-.td-ign { flex: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); padding: 6px 8px; border-radius: 999px; cursor: pointer; }
-.td-ign:active { background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.td-ign { flex: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text); padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+/* 整理页的小按钮（全选、重新识别、不是重复…）：和 .btn 一样的毛玻璃 */
+.td-tb, .td-ign { border: 1px solid var(--stroke); background: linear-gradient(180deg, var(--shine2), transparent 60%), var(--card);
+  backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--shine), 0 4px 14px -8px rgba(40, 30, 110, .35); transition: transform .2s cubic-bezier(.2, .9, .3, 1.4); }
 
 /* 两笔账单的完整记录：日期一行，下面一条账单（点开看全部内容） */
 .td-txs { padding: 0 6px; }

@@ -377,7 +377,7 @@ function aiDraftTx(m) {
   if (!transfer && !categoryId) return null;
   return {
     id: newId(), kind: p.kind, amountCents: p.cents, categoryId, accountId: account.id, toAccountId: transfer ? to.id : 0, ledgerId: state.ledgerId, date: p.date,
-    note: p.note, tags: p.tags, reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '', project: '', fund: '',
+    note: p.note, tags: p.tags, reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: !transfer && isCollectCat(categoryId), offsetOf: 0, offsetParts: '', project: '', fund: '',
   };
 }
 
@@ -1086,10 +1086,11 @@ async function aiRecImport(p, account) {
   const d = aiRecDraft(p, account);
   if (!d) return;
   const transfer = d.kind === KIND.TRANSFER, byName = (n) => aiAccounts().find((a) => a.name === n)?.id ?? account.id;
+  const categoryId = transfer ? 0 : await aiCategoryFor(d.category, d.sub, d.kind === KIND.INCOME);
   await saveRecord('tx', {
-    id: newId(), kind: d.kind, amountCents: d.cents, categoryId: transfer ? 0 : await aiCategoryFor(d.category, d.sub, d.kind === KIND.INCOME),
+    id: newId(), kind: d.kind, amountCents: d.cents, categoryId,
     accountId: byName(d.account), toAccountId: transfer ? byName(d.toAccount) : 0, ledgerId: state.ledgerId, date: d.date, note: d.note, tags: '',
-    reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: false, offsetOf: 0, offsetParts: '', project: '', fund: '',
+    reimburse: 0, createdAt: Date.now(), currency: '', origCents: 0, excluded: !transfer && isCollectCat(categoryId), offsetOf: 0, offsetParts: '', project: '', fund: '',
   });
 }
 

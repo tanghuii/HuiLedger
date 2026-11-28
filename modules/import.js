@@ -11,7 +11,7 @@ const IMP = {
   run: null,
   drafts: [], skipped: 0, missed: 0, dropped: 0,
   /** 正在看原文、改详情的那一条（下标），-1 表示没打开 */
-  detail: -1, detailErr: '', detailForm: null,
+  detail: -1, detailErr: '', detailForm: null, edit: null, picking: -1,
   /** 手动填的汇率（币种 → 文字），没填就用汇率表里的 */
   rates: {},
   /** 缺账户的记到哪个账户；不预选（以前默认第一个，没留意就把银行流水记进了现金） */
@@ -1530,6 +1530,8 @@ async function impImport() {
         createdAt: Date.now(), currency: foreign ? p.currency : '', origCents: foreign ? p.amountCents : 0,
         excluded: false, offsetOf: 0, offsetParts: '', project: '', fund: '', loanPerson: '', loanSide: 0,
       };
+      // 代收 / 代收转回：默认不计入收支
+      if (t.categoryId && isCollectCat(t.categoryId)) t.excluded = true;
       await saveRecord('tx', t);
       rows.push(t); d.selected = false; step();
     }
@@ -1597,7 +1599,7 @@ async function impLinkSubsidies() {
 
 function impReset() {
   impTaskClear(); IMP.autoStarted = false;
-  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, dropped: 0, detail: -1, detailErr: '', detailForm: null, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
+  Object.assign(IMP, { phase: 'idle', error: '', done: 0, total: 0, found: 0, run: null, drafts: [], skipped: 0, missed: 0, dropped: 0, detail: -1, detailErr: '', detailForm: null, edit: null, picking: -1, rates: {}, account: 0, saveDone: 0, saveTotal: 0 });
   // 排着的下一份账单（导入进行中又收到的）：接着开始
   impNext();
 }
@@ -1633,9 +1635,9 @@ function impRow(d, i, accounts, tops) {
     const end = (name, key) => impDropdown(name ? h(name) + ' ▾' : `<i class="imp-need">${tr('待指定', 'to be set')} ▾</i>`, `data-imp="${key}" data-i="${i}" aria-label="${key === 'from' ? tr('转出账户', 'From account') : tr('转入账户', 'To account')}"`, accountOptions);
     title = `<div class="imp-tr">${end(p.account, 'from')}<span class="muted">→</span>${end(p.toAccount, 'to')}</div>`;
   } else {
-    const name = (p.category || impOther(income)) + (p.sub ? ' · ' + p.sub : '');
-    title = impDropdown(h(name) + ' ▾', `data-imp="cat" data-i="${i}" aria-label="${tr('分类', 'Category')}"`,
-      tops.filter((c) => !!c.isIncome === income).map((c) => `<option value="${h(c.name)}">${h(c.name)}</option>`).join(''));
+    // 点开选分类：一级、子分类都能选，也能新建
+    const name = impCatLabel(p.category || impOther(income)) + (p.sub ? ' · ' + impCatLabel(p.sub) : '');
+    title = `<button class="imp-catbtn" data-act="imp-cat" data-v="${i}" aria-label="${tr('分类', 'Category')}">${h(name)} ▾</button>`;
   }
   const detail = [dayISO(p.date), p.note, (p.tags ?? '').split(' ').filter(Boolean).map((x) => '#' + x).join(' ')].filter(Boolean).map(h).join('  ');
   // 记到哪个账户：银行标志 + 名字，点开可以换；认不出来的显示"选择账户"
@@ -1652,21 +1654,58 @@ function impRow(d, i, accounts, tops) {
   return `<div class="card imp-row${d.selected ? '' : ' off'}">
     <input type="checkbox" class="imp-ck" data-imp="sel" data-i="${i}" ${d.selected ? 'checked' : ''} aria-label="${tr('选择', 'Select')}">
     ${iconTile(impIcon(p), 'imp-tile')}
-    <div class="imp-main">${title}${accChip}<div class="imp-sub" data-act="imp-detail" data-v="${i}" role="button" tabindex="0">${detail}</div>${dup}</div>
+    <div class="imp-main" data-act="imp-detail" data-v="${i}">${title}${accChip}<div class="imp-sub" data-act="imp-detail" data-v="${i}" role="button" tabindex="0">${detail}</div>${dup}</div>
     <button class="imp-amt num ${income ? 'in' : p.kind === KIND.EXPENSE ? 'out' : ''}" data-act="imp-flip" data-v="${i}" ${transfer ? 'disabled' : ''}>${sign}${money(p.amountCents, p.currency)}</button>
   </div>`;
 }
 
+/** 分类名按当前语言显示（中文名在英文界面下换成英文）。 */
+const impCatLabel = (name) => (typeof catName === 'function' ? catName(name) : name);
+
+/**
+ * 分类选择：一级分类排成一片小胶囊，选中的那个下面列出子分类；最后各有一个"＋"新建（建好就选上）。
+ * 草稿里按名字记分类，和导入时按名字找分类一致。
+ */
+function impCatPicker(income, category, sub) {
+  const cats = impCats(), tops = cats.filter((c) => !c.parentId && !!c.isIncome === income);
+  const top = tops.find((c) => c.name === category), subs = top ? cats.filter((c) => c.parentId === top.id) : [];
+  const chip = (c, on, act, v) => `<button class="imp-pk${on ? ' on' : ''}" data-act="${act}" data-v="${h(v)}">${iconTile(c.icon ?? 'tag', 'imp-pkt')}<span>${h(impCatLabel(c.name))}</span></button>`;
+  return `<div class="imp-pks">
+    ${top || !category ? '' : `<div class="muted small">${tr('当前：', 'Now: ')}${h(impCatLabel(category))}${sub ? ' · ' + h(impCatLabel(sub)) : ''}</div>`}
+    <div class="imp-pkw">${tops.map((c) => chip(c, c === top, 'imp-pk-top', c.name)).join('')}<button class="imp-pk add" data-act="imp-pk-new" data-v="0">${tr('＋ 新建', '＋ New')}</button></div>
+    ${top ? `<div class="muted small">${h(tr(`「${impCatLabel(top.name)}」的子分类`, `Under “${impCatLabel(top.name)}”`))}</div>
+    <div class="imp-pkw">${subs.map((c) => chip(c, c.name === sub, 'imp-pk-sub', c.name)).join('')}<button class="imp-pk add" data-act="imp-pk-new" data-v="${top.id}">${tr('＋ 子分类', '＋ Sub')}</button></div>` : ''}
+  </div>`;
+}
+
+/** 列表上点分类弹出的选择框。 */
+function impCatPickView() {
+  const d = IMP.drafts[IMP.picking];
+  if (!d || IMP.edit) return '';
+  const p = d.tx;
+  return `<div class="modal imp-modal" data-act="imp-cat-x"><div class="card grid" role="dialog" aria-modal="true" aria-label="${tr('选择分类', 'Category')}" data-act="imp-noop">
+    <b style="font-size:17px">${tr('选择分类', 'Category')}</b>
+    ${impCatPicker(p.kind === KIND.INCOME, p.category, p.sub)}
+    <div class="between"><span></span><button class="btn primary" data-act="imp-cat-x">${tr('完成', 'Done')}</button></div>
+  </div></div>`;
+}
+
+/** 一笔的详情：看账单原文，改收支类型、分类、账户、日期、金额、备注、标签；保存后回到核对列表。正在改的内容在 IMP.edit。 */
 function impDetailView() {
-  const d = IMP.drafts[IMP.detail];
-  if (!d) return '';
-  const p = d.tx, f = IMP.detailForm ?? { date: dayISO(p.date), amt: (p.amountCents / 100).toFixed(2), note: p.note };
-  return `<div class="modal imp-modal" data-act="imp-detail-x"><div class="card grid" role="dialog" aria-modal="true" aria-label="${tr('核对该笔账单', 'Check this entry')}">
-    <b style="font-size:17px">${tr('核对该笔账单', 'Check this entry')}</b>
+  const d = IMP.drafts[IMP.detail], f = IMP.edit;
+  if (!d || !f) return '';
+  const p = d.tx, transfer = f.kind === KIND.TRANSFER, accounts = impAccounts();
+  const accSel = (key, name) => `<select data-imp="${key}">${name && !accounts.some((a) => a.name === name) ? `<option selected>${h(name)}</option>` : ''}<option value="" ${name ? '' : 'selected'} disabled>${tr('选择账户', 'Choose account')}</option>${accounts.map((a) => `<option value="${h(a.name)}" ${a.name === name ? 'selected' : ''}>${h(a.name)}</option>`).join('')}</select>`;
+  return `<div class="modal imp-modal" data-act="imp-detail-x"><div class="card grid imp-det" role="dialog" aria-modal="true" aria-label="${tr('账单详情', 'Entry details')}" data-act="imp-noop">
+    <b style="font-size:17px">${tr('账单详情', 'Entry details')}</b>
     ${p.source ? `<div><div class="muted small">${tr('账单原文', 'From the statement')}</div><div class="imp-src">${h(p.source)}</div></div>` : ''}
-    <div class="two"><label class="f">${tr('日期', 'Date')}<input id="imp-d-date" type="date" value="${h(f.date)}"></label>
-      <label class="f">${tr('金额', 'Amount')} ${h(p.currency)}<input id="imp-d-amt" inputmode="decimal" autocomplete="off" value="${h(f.amt)}"></label></div>
-    <label class="f">${tr('备注', 'Note')}<textarea id="imp-d-note" rows="3">${h(f.note)}</textarea></label>
+    ${transfer ? '' : `<div class="seg">${[[KIND.EXPENSE, tr('支出', 'Expense')], [KIND.INCOME, tr('收入', 'Income')]].map(([k, n]) => `<button class="${f.kind === k ? 'on' : ''}" data-act="imp-d-kind" data-v="${k}">${n}</button>`).join('')}</div>`}
+    <div class="two"><label class="f">${tr('日期', 'Date')}<input id="imp-d-date" data-impf="_date" type="date" value="${h(f._date)}"></label>
+      <label class="f">${tr('金额', 'Amount')} ${h(p.currency)}<input id="imp-d-amt" data-impf="_amt" inputmode="decimal" autocomplete="off" value="${h(f._amt)}"></label></div>
+    ${transfer ? '' : `<div><div class="muted small">${tr('分类', 'Category')}</div>${impCatPicker(f.kind === KIND.INCOME, f.category, f.sub)}</div>`}
+    <label class="f">${transfer ? tr('从 → 到', 'From → to') : tr('账户', 'Account')}<span class="imp-dacc">${accSel('d-acc', f.account)}${transfer ? `<span class="muted">→</span>${accSel('d-to', f.toAccount)}` : ''}</span></label>
+    <label class="f">${tr('备注', 'Note')}<textarea id="imp-d-note" data-impf="note" rows="3">${h(f.note ?? '')}</textarea></label>
+    <label class="f">${tr('标签（空格分隔）', 'Tags (space-separated)')}<input id="imp-d-tags" data-impf="tags" autocomplete="off" value="${h(f.tags ?? '')}"></label>
     ${IMP.detailErr ? `<div class="err">${h(IMP.detailErr)}</div>` : ''}
     <div class="between"><button class="btn" data-act="imp-detail-x">${tr('取消', 'Cancel')}</button><button class="btn primary" data-act="imp-detail-ok">${tr('保存', 'Save')}</button></div>
   </div></div>`;
@@ -1690,7 +1729,7 @@ function impReviewView() {
     <div class="card imp-foot">${accPick}${rates}${IMP.error ? `<div class="err">${h(IMP.error)}</div>` : ''}
       <div class="imp-btns"><button class="btn" data-act="imp-discard" ${saving ? 'disabled' : ''}>${tr('放弃', 'Discard')}</button>
         <button class="btn primary" id="imp-go" data-act="imp-go" ${st.ready && !saving ? '' : 'disabled'}>${saving ? tr(`正在导入 ${IMP.saveDone} / ${IMP.saveTotal}`, `Importing ${IMP.saveDone} / ${IMP.saveTotal}`) : tr(`导入 ${st.selected.length} 笔`, `Import ${st.selected.length}`)}</button></div></div>
-    ${impDetailView()}`;
+    ${impDetailView()}${impCatPickView()}`;
 }
 
 /**
@@ -1849,18 +1888,58 @@ MOD.actions.push(async (act, v, el) => {
       if (d && d.tx.kind !== KIND.TRANSFER) { const kind = d.tx.kind === KIND.INCOME ? KIND.EXPENSE : KIND.INCOME; d.tx = { ...d.tx, kind, category: impOther(kind === KIND.INCOME), sub: '' }; }
       break;
     case 'imp-merge': if (d) d.merge = !d.merge; break;
-    case 'imp-detail': IMP.detail = i; IMP.detailErr = ''; IMP.detailForm = null; break;
-    case 'imp-detail-x': if (el.classList.contains('modal') && lastClickTarget !== el) return true; IMP.detail = -1; IMP.detailErr = ''; IMP.detailForm = null; break;
+    case 'imp-detail': {
+      // 点在分类、账户、合并这些自己会响应的地方，不打开详情
+      if (el !== lastClickTarget && lastClickTarget?.closest?.('.imp-dd, .imp-catbtn, .imp-dup, select, input, button') && !lastClickTarget.closest('.imp-sub')) return true;
+      if (!d) return true;
+      IMP.detail = i; IMP.detailErr = ''; IMP.picking = -1;
+      IMP.edit = { ...d.tx, _date: dayISO(d.tx.date), _amt: (d.tx.amountCents / 100).toFixed(2) };
+      break;
+    }
+    case 'imp-detail-x': if (el.classList.contains('modal') && lastClickTarget !== el) return true; IMP.detail = -1; IMP.detailErr = ''; IMP.edit = null; break;
     case 'imp-detail-ok': {
-      const cur = IMP.drafts[IMP.detail];
-      if (!cur) break;
-      const val = (id) => document.getElementById(id)?.value ?? '';
-      const form = { date: val('imp-d-date'), amt: val('imp-d-amt'), note: val('imp-d-note') };
-      const date = impDay(form.date), cents = parseCents(form.amt);
+      const cur = IMP.drafts[IMP.detail], f = IMP.edit;
+      if (!cur || !f) break;
+      impEditSync();
+      const date = impDay(f._date), cents = parseCents(f._amt);
       // 填错了：留着刚填的内容，只提示哪里不对
-      if (date == null || cents == null) { IMP.detailForm = form; IMP.detailErr = date == null ? tr('日期无效', 'Invalid date') : tr('金额不正确', 'Invalid amount'); break; }
-      cur.tx = { ...cur.tx, date, amountCents: cents, note: form.note.trim() };
-      IMP.detail = -1; IMP.detailErr = ''; IMP.detailForm = null;
+      if (date == null || cents == null) { IMP.detailErr = date == null ? tr('日期无效', 'Invalid date') : tr('金额不正确', 'Invalid amount'); break; }
+      const { _date, _amt, ...tx } = f;
+      cur.tx = { ...tx, date, amountCents: cents, note: String(f.note ?? '').trim(), tags: String(f.tags ?? '').split(/[\s#,，]+/).filter(Boolean).join(' ') };
+      IMP.detail = -1; IMP.detailErr = ''; IMP.edit = null;
+      break;
+    }
+    case 'imp-d-kind': {
+      // 换了收支类型，原来的分类不再适用
+      const f = IMP.edit, k = Number(v);
+      if (f && f.kind !== k) { impEditSync(); f.kind = k; f.category = impOther(k === KIND.INCOME); f.sub = ''; }
+      break;
+    }
+    case 'imp-cat': IMP.picking = i; break;
+    case 'imp-cat-x': if (el.classList.contains('modal') && lastClickTarget !== el) return true; IMP.picking = -1; break;
+    case 'imp-pk-top': case 'imp-pk-sub': {
+      const t = impPickTarget();
+      if (!t) return true;
+      impEditSync();
+      if (act === 'imp-pk-top') { t.category = v; t.sub = ''; } else t.sub = t.sub === v ? '' : v; // 再点一次已选中的子分类 = 取消
+      // 列表上选了子分类，或这个一级分类没有子分类：选完就关
+      if (!IMP.edit) { const top = impCats().find((c) => !c.parentId && c.name === t.category && !!c.isIncome === (t.kind === KIND.INCOME)); if (act === 'imp-pk-sub' ? t.sub : !impCats().some((c) => c.parentId === top?.id)) IMP.picking = -1; }
+      break;
+    }
+    case 'imp-pk-new': {
+      const t = impPickTarget();
+      if (!t) return true;
+      impEditSync();
+      const income = t.kind === KIND.INCOME, parent = Number(v) || 0, cats = impCats();
+      const name = (await uiPrompt(parent ? tr('新建子分类', 'New subcategory') : tr('新建分类', 'New category'), '', { ok: tr('添加', 'Add') }))?.trim();
+      if (!name) return true;
+      const top = parent ? state.data.category.get(parent) : null;
+      if (!cats.some((c) => (c.parentId || 0) === parent && !!c.isIncome === income && c.name === name)) {
+        const k = iconKey(name);
+        await saveRecord('category', { id: newId(), name, icon: k !== 'tag' ? k : top?.icon ?? 'tag', isIncome: income, sortOrder: cats.length, parentId: parent });
+      }
+      if (top) { t.category = top.name; t.sub = name; } else { t.category = name; t.sub = ''; }
+      if (!IMP.edit) IMP.picking = -1;
       break;
     }
     case 'imp-discard': impReset(); break;
@@ -1892,6 +1971,8 @@ MOD.changes.push(async (ev) => {
   // 汇率框不重画：输入时已经更新过按钮；离开输入框时重画会吞掉紧接着的那一下点击
   if (k === 'rate') { IMP.rates[t.dataset.c] = t.value; return true; }
   if (k === 'acct') { IMP.account = Number(t.value); render(); return true; }
+  // 详情里换账户：记到正在改的那份里（不重画，免得刚输的内容丢了）
+  if ((k === 'd-acc' || k === 'd-to') && IMP.edit) { IMP.edit[k === 'd-acc' ? 'account' : 'toAccount'] = t.value; return true; }
   const d = IMP.drafts[Number(t.dataset.i)];
   if (!d || IMP.phase !== 'review') return true;
   if (k === 'sel') d.selected = t.checked;
@@ -1908,6 +1989,24 @@ document.addEventListener('input', (ev) => {
   IMP.rates[ev.target.dataset.c] = ev.target.value;
   const go = document.getElementById('imp-go');
   if (go && IMP.phase === 'review') go.disabled = !impStatus().ready;
+});
+
+/** 选分类改的是哪一份：详情开着时改详情里的，否则改列表上那一笔。 */
+function impPickTarget() {
+  if (IMP.edit) return IMP.edit;
+  const d = IMP.drafts[IMP.picking];
+  if (!d) return null;
+  d.tx = { ...d.tx };
+  return d.tx;
+}
+/** 详情里输入框的内容先记下来（重画前调用，免得选分类、换类型时刚输的内容丢了）。 */
+function impEditSync() {
+  if (!IMP.edit) return;
+  document.querySelectorAll('[data-impf]').forEach((x) => { IMP.edit[x.dataset.impf] = x.value; });
+}
+document.addEventListener('input', (ev) => {
+  const k = ev.target.dataset?.impf;
+  if (k && IMP.edit) IMP.edit[k] = ev.target.value;
 });
 
 // 详情行用键盘也能打开

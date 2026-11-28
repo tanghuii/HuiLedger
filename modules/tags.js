@@ -76,7 +76,7 @@ const CATEGORY_EN = {
   '宠物': 'Pets', '孩子': 'Kids', '保险': 'Insurance', '税费': 'Taxes', '工作': 'Work', '其他': 'Other',
   '会议': 'Conferences', '注册费': 'Registration',
   '工资': 'Salary', '奖金': 'Bonus', '外快兼职': 'Side income', '投资收益': 'Investments', '利息': 'Interest',
-  '补贴': 'Subsidy', '消费返现': 'Cashback', '代付收回': 'Paid back', '代付还款': 'Repayments', '报销': 'Reimbursement', '退款': 'Refunds', '礼金': 'Gift money', '生活费': 'Allowance',
+  '补贴': 'Subsidy', '消费返现': 'Cashback', '代付收回': 'Paid back', '代付还款': 'Repayments', '代收': 'Collected for others', '代收转回': 'Passed on', '报销': 'Reimbursement', '退款': 'Refunds', '礼金': 'Gift money', '生活费': 'Allowance',
 };
 
 /** 分类的显示名：英文界面下把预置的中文名换成英文。传分类对象（也可以直接传名字）；没有名字时返回 null。 */
