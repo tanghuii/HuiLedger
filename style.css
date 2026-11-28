@@ -27,7 +27,8 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
+/* overflow-anchor: none：首页卡片收起、页面变矮时，不让浏览器为了"稳住"下面的内容去改滚动位置（会让卡片收了又弹开） */
+html, body { margin: 0; min-height: 100%; overflow-anchor: none; }
 body {
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--text); background: var(--bg); background-attachment: fixed;
@@ -396,6 +397,9 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .ed-modal .card.ed-sheet { display: flex; flex-direction: column; gap: 10px; padding: 14px; width: min(520px, 100%); height: min(800px, calc(100vh - 32px)); max-height: none; overflow: hidden; }
 .ed-head { flex: none; display: flex; align-items: center; gap: 8px; }
 .ed-head b { font-size: 17px; white-space: nowrap; }
+/* 修改时的删除：标题旁边的小圆钮（不和账户、日期那些选项挤在一起，选项才能两行放完） */
+.ed-del { display: grid; place-items: center; background: color-mix(in srgb, var(--expense) 12%, transparent); }
+.ed-del .ed-ic { width: 16px; height: 16px; stroke: var(--expense); }
 .ed-head .seg { margin-left: auto; flex: 0 1 210px; flex-wrap: nowrap; }
 .ed-head .seg button { padding: 5px 4px; white-space: nowrap; }
 .ed-x { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); cursor: pointer; font-size: 13px; }
@@ -409,35 +413,87 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 .ed-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: grid; gap: 10px; align-content: start; margin: 0 -4px; padding: 2px 4px; }
 .ed-box { border-radius: 20px; padding: 8px; background: var(--card); border: 1px solid var(--stroke); }
 .ed-move { padding: 12px; display: grid; gap: 8px; }
-.ed-cats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px 0; }
-.ed-cat { border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 0 4px; border-radius: 14px; cursor: pointer; color: var(--text); font-size: 10.5px; min-width: 0; touch-action: manipulation; }
-.ed-cat .tile { width: 34px; height: 34px; border-radius: 11px; }
-.ed-cat span { max-width: 100%; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 记一笔要一屏放完：分类格的列数由 editor.js 给（--cols，够宽 7 列），每格的高度固定（--ch，矮屏幕上会小一点），这样三行就放得下 20 个分类 */
+.ed-cats { --ch: clamp(50px, 6.4vh, 56px); --ts: calc(var(--ch) - 20px); --cy: calc(var(--ch) / 2 - 6px); display: grid; grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); gap: 2px 0; }
+.ed-cat { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; position: relative; height: var(--ch); padding: 4px 0 0; border-radius: 14px; cursor: pointer; color: var(--text); font-size: 10.5px; line-height: 14px; min-width: 0; touch-action: manipulation; }
+.ed-cat .tile { width: var(--ts); height: var(--ts); border-radius: 11px; flex: none; }
+/* 选了子分类的那一格：名字换成子分类的，图标右上角一个小圆点（不占名字的地方，四个字的名字在窄屏上也放得下） */
+.ed-cat.sub::after { content: ""; position: absolute; top: 2px; left: calc(50% + var(--ts) / 2 - 7px); width: 7px; height: 7px; border-radius: 50%; background: var(--primary); border: 2px solid var(--bg); }
+.ed-cat span { max-width: 100%; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-cat.on { background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); font-weight: 600; }
-.ed-subs { display: flex; gap: 6px; overflow-x: auto; padding: 6px 4px 2px; scrollbar-width: none; }
-.ed-subs::-webkit-scrollbar { display: none; }
-.ed-sub { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--stroke); background: var(--field); border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text); touch-action: manipulation; }
-.ed-sub .ed-ic { width: 14px; height: 14px; }
-.ed-sub.on { background: var(--primary); color: var(--on-primary); border-color: transparent; }
-.ed-sub.on .ed-ic { stroke: var(--on-primary); }
+/* 子分类的圆弧：点一个一级分类，子分类从它的图标周围弹出来（位置由 editor.js 的 edArc 算好放在 --x / --y 里） */
+.ed-cats { position: relative; }
+.ed-arc { position: absolute; inset: 0; z-index: 6; }
+/* 弹出来时整张记账页都压暗（这一层铺满整页），子分类可以伸到分类格外面去 */
+.ed-scroll.arc { overflow: visible; }
+.ed-arc-bg { position: fixed; inset: 0; border: 0; padding: 0; border-radius: inherit; background: color-mix(in srgb, var(--bg) 74%, transparent); cursor: default; animation: ed-arc-fade .18s ease-out both; }
+.ed-arc-c, .ed-arc-b { position: absolute; left: var(--cx); top: calc(var(--row) * (var(--ch) + 2px) + var(--cy, 20px)); }
+.ed-arc-c { transform: translate(-50%, -50%); pointer-events: none; border-radius: 13px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 55%, transparent), 0 6px 14px -6px rgba(40, 30, 110, .5); animation: ed-arc-pop .22s cubic-bezier(.2, .9, .3, 1.4) both; }
+.ed-arc-c .tile { width: var(--ts); height: var(--ts); border-radius: 11px; display: grid; }
+.ed-arc-b {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; width: 58px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--text); font-size: 10.5px; line-height: 14px; font-weight: 600; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transform: translate(calc(-50% + var(--x)), calc(-21px + var(--y)));
+  animation: ed-arc-out .34s cubic-bezier(.2, .9, .3, 1.35) var(--d) both;
+}
+.ed-arc-b .tile { width: 42px; height: 42px; border-radius: 50%; box-shadow: 0 6px 14px -6px rgba(40, 30, 110, .45), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.ed-arc-b span:last-child { max-width: 64px; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 82%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-arc-b.on .tile { box-shadow: 0 0 0 3px var(--primary), 0 6px 14px -6px rgba(40, 30, 110, .45); }
+.ed-arc-b.on span:last-child { background: var(--primary); color: var(--on-primary); }
+.ed-arc-b:active .tile { transform: scale(.9); }
+@keyframes ed-arc-out { from { transform: translate(-50%, -21px) scale(.3); opacity: 0; } }
+@keyframes ed-arc-pop { from { transform: translate(-50%, -50%) scale(.7); } }
+@keyframes ed-arc-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ed-arc-b, .ed-arc-c, .ed-arc-bg { animation: none; } }
 .ed-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 账户、日期、标签这些选项：固定三列、一样宽，两行放完，不用滑 */
+.ed-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.ed-grid3 .chip { justify-content: center; min-width: 0; height: 36px; padding: 0 8px; }
+.ed-grid3 .chip.lead { padding-left: 6px; }
+/* 备注占一整行；修改支出时右边让出一格给“退款 · 报销” */
+.ed-noterow { align-items: start; }
+.ed-noterow .ed-note { grid-column: span 3; }
+.ed-noterow.two .ed-note { grid-column: span 2; }
 .ed-chips .chip { color: var(--text); touch-action: manipulation; max-width: 100%; }
 .ed-chips .chip > span:not(.tile) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.on { background: color-mix(in srgb, var(--primary) 14%, transparent); border-color: color-mix(in srgb, var(--primary) 50%, transparent); }
 .chip.danger { color: var(--expense); border-color: color-mix(in srgb, var(--expense) 45%, transparent); }
 .ed-datechip { position: relative; overflow: hidden; }
 .ed-datechip input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; border: 0; font-size: 16px; cursor: pointer; }
-.ed-note { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 16px; background: var(--field); border: 1px solid var(--line); cursor: text; }
+.ed-note { display: flex; align-items: flex-start; gap: 10px; padding: 7px 14px; border-radius: 16px; background: var(--field); border: 1px solid var(--line); cursor: text; }
 .ed-note .ed-ic { margin-top: 3px; }
 .ed-note textarea { flex: 1; border: 0; background: none; padding: 0; min-height: 0; resize: none; outline: none !important; font-size: 16px; line-height: 22px; border-radius: 0; field-sizing: content; max-height: 110px; }
 .ed-keys { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
-.ed-key { height: 48px; border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); font: 400 22px var(--num-font); cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: background .12s, transform .12s; }
+.ed-key { height: clamp(40px, 5.2vh, 50px); border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); font: 400 22px var(--num-font); cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: background .12s, transform .12s; }
 .ed-key:active { background: color-mix(in srgb, var(--primary) 24%, transparent); transform: scale(.96); }
 .ed-key.op { background: color-mix(in srgb, var(--primary) 11%, transparent); color: var(--primary); font-weight: 500; }
 .ed-key.txt { font: 500 15px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
 .ed-key.save { background: var(--primary); color: var(--on-primary); font: 600 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
 .ed-key.save.dim { opacity: .45; }
 .ed-sheet.typing .ed-keys { display: none; }
+/* 矮屏幕（iPhone SE、8 这一类，高度不到 700）：各处都收紧一点，记一笔仍然一屏放完、不用滑 */
+@media (max-height: 700px) {
+  .ed-modal .card.ed-sheet { gap: 7px; }
+  .ed-amount { padding: 6px 14px; }
+  .ed-amt { font-size: 30px; }
+  .ed-scroll { gap: 7px; }
+  .ed-box { padding: 6px 8px; }
+  .ed-cats { --ch: 47px; --ts: 29px; --cy: 18px; }
+  .ed-cat { padding-top: 3px; gap: 1px; }
+  .ed-cat .tile, .ed-arc-c .tile { border-radius: 10px; }
+  .ed-grid3 { gap: 6px; }
+  .ed-grid3 .chip { height: 33px; }
+  .ed-note { padding: 5px 14px; }
+  .ed-keys { gap: 6px; }
+  .ed-key { height: 39px; font-size: 20px; }
+}
+/* 更矮的（高度不到 650 的旧安卓机） */
+@media (max-height: 650px) {
+  .ed-modal .card.ed-sheet { gap: 6px; }
+  .ed-amount { padding: 4px 14px; }
+  .ed-key { height: 36px; }
+  .ed-note { padding: 4px 14px; }
+}
 .ed-sheet > .ed-pop { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; background: rgba(10, 12, 30, .35); border-radius: inherit; }
 .ed-popcard { width: 100%; max-height: 72%; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); border-radius: 22px; padding: 14px; display: grid; gap: 10px; align-content: start; box-shadow: 0 -10px 30px -12px rgba(20, 16, 60, .4); }
 .ed-opts { display: grid; gap: 2px; }

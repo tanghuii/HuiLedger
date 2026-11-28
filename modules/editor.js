@@ -225,6 +225,75 @@ function edCats(e) {
   const leafId = ok && chosen.parentId && top && chosen.parentId === top.id ? chosen.id : top?.id ?? 0;
   return { tops, top, leafId, subs: top ? cats.filter((c) => c.parentId === top.id) : [] };
 }
+/**
+ * 点一个一级分类，它的子分类从这个图标周围弹出来，排成一道圆弧（和 App 一样）：点哪个选哪个，点别处收起。
+ * 圆弧朝哪边开、每圈放几个，按图标在第几行第几列算：上两行往下开，其余往上开；靠边的列往里偏，保证都在屏幕里。
+ * 一圈放不下就再往外加一圈。位置用 --x / --y（相对图标中心的像素）交给 CSS，弹出的动画也在 CSS 里（.ed-arc）。
+ */
+/** 分类格排几列：够宽（一格不小于 44 像素，放得下四个字的名字）就排 7 列，很窄的屏幕排 6 列。CSS 用同一个数（.ed-cats 的 --cols）。 */
+const edSheetW = () => Math.min(window.innerWidth || 390, 520);
+const edCols = () => (edSheetW() >= 350 ? 7 : 6);
+/**
+ * 子分类弹出来的位置：以一级分类的图标为圆心，朝一边（far：下或上）排成弧。
+ * 每个位置都要整个落在屏幕里（左右留边 EDGE，朝外不超过 room，往回不超过 14 像素）——之前只管了左右，往回翘的那个会被上面切掉。
+ * 一圈（半径不超过 102）放不下就分成里外两圈、三圈，而不是把一圈撑得很大。返回 [[x, y], …]，y 是朝 far 方向的距离。
+ */
+function edArcSpots(n, xmin, xmax, room) {
+  const GAP = 60, DEG = Math.PI / 180;
+  const ring = (R) => {
+    // 这一圈上能放的最长的一段角度（0° 朝右，90° 朝外），一度一度地扫
+    let best = null, from = null;
+    for (let t = -12; t <= 193; t++) {
+      const x = R * Math.cos(t * DEG), y = R * Math.sin(t * DEG), ok = t <= 192 && x >= xmin && x <= xmax && y >= -14 && y <= room;
+      if (ok && from == null) from = t;
+      if (!ok && from != null) { if (!best || t - 1 - from > best[1] - best[0]) best = [from, t - 1]; from = null; }
+    }
+    const step = 2 * Math.asin(Math.min(1, GAP / 2 / R)) / DEG;
+    return { R, a: best?.[0] ?? 90, b: best?.[1] ?? 90, step, cap: best ? Math.floor((best[1] - best[0]) / step + 0.001) + 1 : 0 };
+  };
+  let rings = [];
+  for (let R = 78; R <= 102 && !rings.length; R += 6) { const r = ring(R); if (r.cap >= n) rings = [{ ...r, n }]; }
+  if (!rings.length) {
+    let total = 0;
+    for (let R = 78; total < n && R <= 78 + 66 * 4; R += 66) { const r = ring(R); if (r.cap) { rings.push({ ...r, n: 0 }); total += r.cap; } }
+    if (total < n) return null;
+    // 按各圈放得下的数目摊开（6 个、里圈放得下 4 个外圈 6 个 → 里 3 外 3），零头给里圈（离手指近）
+    let left = n, caps = total;
+    for (const r of rings) { r.n = Math.min(r.cap, left, Math.ceil(left * r.cap / caps)); left -= r.n; caps -= r.cap; }
+    rings = rings.filter((r) => r.n);
+  }
+  const spots = [];
+  // 居中排；地方宽裕就比最小间距松一点。分成几圈时各圈张开的角度尽量一样大（外圈跟着里圈张开），看上去才是同心的扇面
+  const ext = Math.max(...rings.map((r) => Math.min((r.n - 1) * r.step * 1.22, r.b - r.a)));
+  for (const r of rings) {
+    const gap = r.n > 1 ? Math.min(Math.max(r.step * 1.22, ext / (r.n - 1)), (r.b - r.a) / (r.n - 1)) : 0, start = (r.a + r.b) / 2 - (r.n - 1) * gap / 2;
+    // 从左到右：角度从大到小
+    for (let k = r.n - 1; k >= 0; k--) { const t = (start + k * gap) * DEG; spots.push([Math.round(r.R * Math.cos(t)), Math.round(r.R * Math.sin(t))]); }
+  }
+  return Object.assign(spots, { rings: rings.length });
+}
+function edArc(e, tops, top, subs, leafId) {
+  if (!top || e._arc !== top.id || !subs.length) return '';
+  const cols = edCols(), i = tops.indexOf(top), col = i % cols, row = Math.floor(i / cols), rows = Math.ceil(tops.length / cols);
+  const W = edSheetW(), H = window.innerHeight || 720, gridW = W - 40, cx = 20 + (col + 0.5) * gridW / cols, EDGE = 36;
+  // 圆心在分类格里的高度（和 CSS 的 --ch 一个算法），以及朝下、朝上各有多少地方：
+  // 朝下可以盖到选项、备注和键盘上（整页都压暗了），留出标签的高度；朝上最多盖到金额那一栏
+  const ch = H <= 700 ? 47 : Math.min(56, Math.max(50, H * 0.064)), cy = row * (ch + 2) + (H <= 700 ? 18 : ch / 2 - 6);
+  const roomDown = Math.max(150, H - 262 - cy - 48), roomUp = cy + 62;
+  // 最下面一行先试往上开，其余往下开；哪边圈数少用哪边，都放不下就往下开、不限距离
+  const upFirst = rows >= 2 && row === rows - 1;
+  const dn = edArcSpots(subs.length, EDGE - cx, W - EDGE - cx, roomDown), up = edArcSpots(subs.length, EDGE - cx, W - EDGE - cx, roomUp);
+  const down = dn && up ? (dn.rings !== up.rings ? dn.rings < up.rings : !upFirst) : !up;
+  const spots = (down ? dn : up) ?? edArcSpots(subs.length, EDGE - cx, W - EDGE - cx, 9999) ?? [];
+  if (!down) for (const p of spots) p[1] = -p[1];
+  const bubbles = subs.slice(0, spots.length).map((c, k) => {
+    const [x, y] = spots[k];
+    return `<button class="ed-arc-b${c.id === leafId ? ' on' : ''}" data-act="ed-sub" data-v="${c.id}" style="--x:${x}px;--y:${y}px;--d:${k * 28}ms">${iconTile(c.icon ?? top.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`;
+  }).join('');
+  return `<div class="ed-arc" style="--cx:${((col + 0.5) / cols * 100).toFixed(2)}%;--row:${row}">
+    <button class="ed-arc-bg" data-act="ed-arc-x" aria-label="${tr('收起', 'Close')}"></button>
+    <span class="ed-arc-c">${iconTile(top.icon ?? 'tag')}</span>${bubbles}</div>`;
+}
 function edDayName(day) {
   const t = today();
   if (day === t) return tr('今天', 'Today');
@@ -377,11 +446,14 @@ function edOffsetCard(e, L) {
       <div class="ed-offline"><label class="ed-offamt ${bad ? 'bad' : ''}"><span>${h(edSym(HOME))}</span><input class="ed-offin" data-i="${i}" value="${h(text)}" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="${tr('留空 = 剩余全部', 'Empty = the rest')}" aria-label="${tr('抵扣金额', 'Amount')}"></label>
         <button class="btn link muted" data-act="ed-off-rm" data-v="${i}">${tr('移除', 'Remove')}</button></div></div>`;
   }).join('');
-  // "选择"打开面板：智能推荐 + 搜索全部（links.js）；有推荐时按钮上带个数
-  const n = typeof lkSuggest === 'function' ? lkSuggest(lkFromEditing(e), 'exp', new Set((e._offs ?? []).map(([id]) => id))).length : 0;
   return `<div class="ed-box ed-offs"><div class="muted small">${tr('关联支出', 'Linked expenses')}</div>${rows}
     <div class="small ed-offsum">${edOffSum(e)}</div>
-    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再添加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}${n ? `<span class="lk-n">${n}</span>` : ''}</button></div>`;
+    <button class="btn link ed-offadd" data-act="ed-pick" data-v="offset">${(e._offs ?? []).length ? tr('＋ 再添加一笔支出', '＋ Another expense') : tr('选择一笔支出', 'Choose an expense')}${edOffHint(e)}</button></div>`;
+}
+/** "选择"打开面板：智能推荐 + 搜索全部（links.js）；有推荐时按钮上带个数。 */
+function edOffHint(e) {
+  const n = typeof lkSuggest === 'function' ? lkSuggest(lkFromEditing(e), 'exp', new Set((e._offs ?? []).map(([id]) => id))).length : 0;
+  return n ? `<span class="lk-n">${n}</span>` : '';
 }
 /** 记账页里这笔收入是"报销"（关联的支出不抵扣，只标已报销）。 */
 const edIsClaim = (e) => e.kind === KIND.INCOME && edCats(e).top?.name === '报销';
@@ -409,8 +481,12 @@ function editorView() {
   const accChip = (a, which) => `<button class="chip lead" data-act="ed-pick" data-v="${which}">${a ? accountTile(a) : ''}<span>${h(a?.name ?? tr('选择账户', 'Choose account'))}</span></button>`;
   const head = transfer
     ? `<div class="ed-box ed-move"><div class="muted small">${tr('从 → 到', 'From → To')}</div><div class="ed-chips">${accChip(from, 'acc')}${edSvg('forward')}${accChip(to, 'to')}</div>${edAccounts().length < 2 ? `<div class="err">${tr('需至少两个账户', 'Needs two accounts')}</div>` : ''}${edRecvLine(e)}</div>`
-    : `<div class="ed-box">${tops.length ? `<div class="ed-cats">${tops.map((c) => `<button class="ed-cat ${c.id === top?.id ? 'on' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(c))}</span></button>`).join('')}</div>` : `<div class="muted small">${tr('暂无分类', 'No categories yet')}</div>`}
-      ${subs.length ? `<div class="ed-subs">${subs.map((s) => `<button class="ed-sub ${s.id === leafId ? 'on' : ''}" data-act="ed-sub" data-v="${s.id}">${edSvg(s.icon ?? 'tag', s.id === leafId ? '' : (ICONS[s.icon] ?? ICONS.tag).c)}${h(edCatName(s))}</button>`).join('')}</div>` : ''}</div>`;
+    // 一屏放完、不用左右滑：分类排成一个格子（屏幕够宽排 7 列，20 个分类正好 3 行）；子分类点一级分类时在它周围弹出来选（edArc），
+    // 选了以后这一格下面的名字换成子分类的名字（前面带个小点，表示它下面还有子分类可选）
+    : `<div class="ed-box">${tops.length ? `<div class="ed-cats" style="--cols:${edCols()}">${tops.map((c) => {
+        const on = c.id === top?.id, sub = on && leafId !== c.id ? subs.find((x) => x.id === leafId) : null;
+        return `<button class="ed-cat ${on ? 'on' : ''}${sub ? ' sub' : ''}" data-act="ed-cat" data-v="${c.id}">${iconTile(c.icon ?? 'tag')}<span>${h(edCatName(sub ?? c))}</span></button>`;
+      }).join('')}${edArc(e, tops, top, subs, leafId)}</div>` : `<div class="muted small">${tr('暂无分类', 'No categories yet')}</div>`}</div>`;
   // 可报销的支出、报销收入才问项目和资金来源（已经填了的照样显示）
   const pf = !transfer && (e.kind === KIND.EXPENSE && e.reimburse || e.kind === KIND.INCOME && top?.name === '报销' || e.project || e.fund);
   const tagLabel = tags.length ? tags.map((x) => { const logo = edTagLogo(x, 18); return logo ? `<span class="ed-tagin">${logo}${h(x)}</span>` : '#' + h(x); }).join(' ') : tr('标签', 'Tags');
@@ -424,10 +500,14 @@ function editorView() {
     pf ? `<button class="chip ${e.project ? 'on' : ''}" data-act="ed-pick" data-v="project">${edSvg('target')}<span>${e.project ? tr('项目 · ', 'Project · ') + h(e.project) : tr('项目', 'Project')}</span></button>` : '',
     pf ? `<button class="chip ${e.fund ? 'on' : ''}" data-act="ed-pick" data-v="fund">${edSvg('coins')}<span>${e.fund ? tr('资金 · ', 'Funding · ') + h(e.fund) : tr('资金来源', 'Funding')}</span></button>` : '',
     transfer ? '' : `<button class="chip ${e.excluded ? 'on' : ''}" data-act="ed-pick" data-v="excluded"><span>${e.excluded ? tr('不计入收支', 'Not counted') : tr('计入收支', 'Counted')}</span></button>`,
-    e._isNew ? '' : `<button class="chip danger" data-act="delete"><span>${tr('删除', 'Delete')}</span></button>`,
+    // 收入还没关联支出时，"关联支出"只是一个选项（和账户、日期排在一起，不另占一张卡片）；关联了以后下面才出现那张卡片
+    e.kind === KIND.INCOME && !(e._offs ?? []).length ? `<button class="chip" data-act="ed-pick" data-v="offset">${edSvg('refund')}<span>${tr('关联支出', 'Link expense')}</span>${edOffHint(e)}</button>` : '',
   ].filter(Boolean).join('');
   const L = e.kind === KIND.INCOME || (!e._isNew && e._origKind === KIND.EXPENSE && e.kind === KIND.EXPENSE) ? computeLookup() : null;
-  const extra = e.kind === KIND.INCOME ? edOffsetCard(e, L) : L ? edLinkedCard(e, L) : '';
+  const extra = e.kind === KIND.INCOME && (e._offs ?? []).length ? edOffsetCard(e, L) : '';
+  // 修改一笔支出时的“退款 · 报销 · 代付收回”：收成备注右边的一个选项，点开是面板（edPop 的 'lkbox'），不再在备注下面另占一张卡片
+  const lkChip = e.kind !== KIND.INCOME && L && edLinkedCard(e, L)
+    ? `<button class="chip ${(L.offsets.get(e.id) ?? 0) > 0 ? 'on' : ''}" data-act="ed-pick" data-v="lkbox">${edSvg('refund')}<span>${tr('退款 · 报销', 'Refunds')}</span></button>` : '';
   const valid = edCheck(e).ok;
   const key = (k) => k === 'SAVE' ? `<button class="ed-key save ${valid ? '' : 'dim'}" data-act="save">${tr('保存', 'Save')}</button>`
     : k === 'AGAIN' ? `<button class="ed-key op txt" data-act="ed-again">${tr('再记', 'Next')}</button>`
@@ -436,12 +516,12 @@ function editorView() {
   const keys = ['1', '2', '3', '⌫', '4', '5', '6', '+', '7', '8', '9', '−', e._isNew ? 'AGAIN' : 'C', '0', '.', 'SAVE'];
   const heading = e._isNew ? tr('记一笔', 'New') : tr('修改', 'Edit');
   return `<div class="modal ed-modal" data-act="close-backdrop"><div class="card ed-sheet" role="dialog" aria-label="${heading}">
-    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${seg('e-kind', [[0, tr('支出', 'Out')], [1, tr('收入', 'In')], [2, tr('转账', 'Move')]], e.kind)}</div>
+    <div class="ed-head"><button class="ed-x" data-act="close" aria-label="${tr('关闭', 'Close')}">✕</button><b>${heading}</b>${e._isNew ? '' : `<button class="ed-x ed-del" data-act="delete" aria-label="${tr('删除', 'Delete')}">${edSvg('trash')}</button>`}${seg('e-kind', [[0, tr('支出', 'Out')], [1, tr('收入', 'In')], [2, tr('转账', 'Move')]], e.kind)}</div>
     ${edImportStrip(e)}${edAmountCard(e)}
-    <div class="ed-scroll">
+    <div class="ed-scroll${e._arc ? ' arc' : ''}">
       ${head}
-      <div class="ed-chips">${chips}</div>
-      <label class="ed-note">${edSvg('pencil')}<textarea id="e-note" rows="${Math.min(4, String(e.note ?? '').split('\n').length)}" placeholder="${tr('备注', 'Note')}">${h(e.note)}</textarea></label>
+      <div class="ed-chips ed-grid3">${chips}</div>
+      <div class="ed-chips ed-grid3 ed-noterow${lkChip ? ' two' : ''}"><label class="ed-note">${edSvg('pencil')}<textarea id="e-note" rows="${Math.min(4, String(e.note ?? '').split('\n').length)}" placeholder="${tr('备注', 'Note')}">${h(e.note)}</textarea></label>${lkChip}</div>
       ${extra}
       ${state.error ? `<p class="err" style="margin:0">${h(state.error)}</p>` : ''}
     </div>
@@ -495,6 +575,8 @@ function edPop(e) {
   } else if (p === 'offset' || p === 'links') {
     // 推荐在上、搜索框在中间、结果在下面（搜索框不放标题栏）
     title = p === 'offset' ? tr('关联支出', 'Linked expenses') : tr('退款 · 报销 · 代付收回', 'Refund · claim · paid back'); cls = 'tall lk-pop'; body = edPopList(e);
+  } else if (p === 'lkbox') {
+    title = tr('关联收入', 'Linked income'); body = edLinkedCard(e, computeLookup());
   } else if (p === 'equiv') {
     // 折合主货币：留空就按账单那天的汇率算；没有汇率时必须自己填
     const cents = edCalc(e._amount), cur = edCur(e), r = edRate(cur, edRatesOn(e.date));
@@ -1281,8 +1363,16 @@ MOD.actions.push(async (act, v, el) => {
   switch (act) {
     case 'ed-key': if (v === '⌫' && Date.now() < (sw.swallowKey ?? 0)) return true; edPress(v); return true;
     case 'ed-again': await saveEditing(true); return true;
-    case 'ed-cat': { const was = edCats(e).leafId; e.categoryId = Number(v); edCollect(e, was); break; }
-    case 'ed-sub': { const { top, leafId } = edCats(e); e.categoryId = leafId === Number(v) ? top.id : Number(v); edCollect(e, leafId); break; }
+    case 'ed-cat': {
+      const was = edCats(e).leafId, id = Number(v), same = edCats(e).top?.id === id;
+      // 换了一级分类才改；再点一次已经选中的只是把子分类弹出来 / 收起，不清掉已经选的子分类
+      if (!same) { e.categoryId = id; edCollect(e, was); }
+      e._arc = e._arc === id ? null : (edCats(e).subs.length ? id : null);
+      break;
+    }
+    // 再点一次已选中的子分类 = 取消，只记到一级分类
+    case 'ed-sub': { const { top, leafId } = edCats(e); e.categoryId = leafId === Number(v) ? top.id : Number(v); e._arc = null; edCollect(e, leafId); break; }
+    case 'ed-arc-x': e._arc = null; break;
     case 'ed-pick': e._pick = v; e._q = ''; break;
     case 'ed-pick-close': e._pick = null; break; // 面板里面的点击会先碰到 data-act="noop"，到这里的只有背景
     case 'ed-pick-x': e._pick = null; break;

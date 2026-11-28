@@ -3,7 +3,7 @@
 // 只有打开页面时才拿 index.html 兜底；图片、脚本连不上就报错，不能拿网页冒充（否则图片显示成裂图）。
 // 云端数据（Supabase）和汇率不经过这里，离线时由页面自己的快照顶上。
 // 发布脚本每次把 huiledger-v… 换成时间戳：旧缓存整个清掉，图片重新下载（logo 是直接用缓存的）
-const CACHE = 'huiledger-20261128155709';
+const CACHE = 'huiledger-20261128172924';
 const SHELL = ['./', 'index.html', 'style.css', 'config.js', 'shared.js', 'planets.js', 'flags.js', 'icons.js', 'more.js', 'ai.js', 'app.js', 'modules/budget.js', 'modules/monthly.js', 'modules/mood.js', 'modules/loans.js', 'modules/schedules.js', 'modules/backup.js', 'modules/manage.js', 'modules/editor.js', 'css/home.css', 'css/stats.css', 'css/themes.css', 'css/tags.css', 'css/import.css', 'css/tidy.css', 'css/extras.css', 'css/editor.css', 'css/ai.css', 'css/cosmos.css', 'modules/appearance.js', 'modules/art.js', 'modules/cosmos.js', 'modules/tags.js', 'modules/import.js', 'modules/aikey.js', 'css/aikey.css', 'modules/tidy.js', 'modules/lock.js', 'modules/reminders.js', 'modules/voice.js', 'modules/onboard.js', 'css/onboard.css', 'modules/links.js', 'modules/split.js', 'css/links.css', 'modules/intro.js', 'css/intro.css', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   ...['brand', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'].map((k) => `icons/planets/${k}-180.png`)];
 
