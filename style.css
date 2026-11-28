@@ -11,8 +11,8 @@
   --income: #22a66e; --expense: #e5484d; --amber: #e08a00; --field: rgba(255, 255, 255, .7); --line: #d6daea;
   --edge1: rgba(255, 255, 255, .95); --edge2: rgba(255, 255, 255, .2); --edge3: rgba(255, 255, 255, .6); --shine: rgba(255, 255, 255, .7); --shine2: rgba(255, 255, 255, .22);
   /* 液态玻璃的边：内侧柔光（厚度）、侧边和下沿的反光、折射圈上的两道高光 */
-  --rim-glow: rgba(255, 255, 255, .85); --rim-glow2: rgba(255, 255, 255, .4); --rim-side: rgba(255, 255, 255, .5); --rim-low: rgba(255, 255, 255, .32);
-  --rim-hi: rgba(255, 255, 255, .55); --rim-hi2: rgba(255, 255, 255, .28); --rim-cool: rgba(120, 200, 255, .22); --rim-warm: rgba(255, 150, 215, .12);
+  /* 液态玻璃的边：光从左上来——左上角最亮（--rim-a），对角的右下是一段弱一些的反光（--rim-b），亮段的尾巴上带一点冷色、暖色、紫色的色边；面上两处柔光是玻璃的厚度 */
+  --rim-a: rgba(255, 255, 255, .8); --rim-b: rgba(255, 255, 255, .42); --rim-cool: rgba(120, 200, 255, .13); --rim-warm: rgba(255, 150, 215, .12); --rim-violet: rgba(160, 140, 255, .16); --rim-glow: rgba(255, 255, 255, .5); --rim-glow2: rgba(255, 255, 255, .22);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -21,8 +21,7 @@
     --text: #f1f2f8; --muted: #a6abc4; --primary: #a394ff; --on-primary: #14102e;
     --income: #3ddc97; --expense: #ff7b80; --amber: #f0a93a; --field: rgba(255, 255, 255, .06); --line: #34384f;
     --edge1: rgba(255, 255, 255, .34); --edge2: rgba(255, 255, 255, .05); --edge3: rgba(255, 255, 255, .18); --shine: rgba(255, 255, 255, .16); --shine2: rgba(255, 255, 255, .05);
-    --rim-glow: rgba(255, 255, 255, .2); --rim-glow2: rgba(255, 255, 255, .08); --rim-side: rgba(255, 255, 255, .12); --rim-low: rgba(255, 255, 255, .07);
-    --rim-hi: rgba(255, 255, 255, .2); --rim-hi2: rgba(255, 255, 255, .09); --rim-cool: rgba(120, 200, 255, .16); --rim-warm: rgba(255, 150, 215, .09);
+    --rim-a: rgba(255, 255, 255, .3); --rim-b: rgba(255, 255, 255, .15); --rim-cool: rgba(120, 200, 255, .12); --rim-warm: rgba(255, 150, 215, .09); --rim-violet: rgba(160, 140, 255, .12); --rim-glow: rgba(255, 255, 255, .12); --rim-glow2: rgba(255, 255, 255, .05);
     /* 深色下主题色很浅，彩色卡片用深一点的同色，白字才看得清 */
     --card-tint: #6a5ad8;
   }
@@ -44,33 +43,36 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); border: 1px solid var(--stroke); }
 .tabs button { border: 0; background: none; padding: 7px 16px; border-radius: 999px; cursor: pointer; color: var(--muted); }
 .tabs button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
-/* 液态玻璃：一块有厚度的玻璃。半透明的面，背后的颜色被模糊并提亮；
-   边：一圈由亮到暗再到亮的细边，左上、右下各一道高光，边上一圈淡淡的冷暖色边（折射）；再往里一圈柔光是玻璃的厚度 */
+/* 液态玻璃：一块有厚度的玻璃。半透明的面，背后的颜色被模糊并提亮。
+   光从左上来，所以边上的高光和折射是不均匀的：左上角最亮、最宽，沿着上边和左边慢慢暗下去；右上、左下几乎没有；
+   右下角是一段弱一些的反光；亮段的尾巴上带一点冷色、暖色的色边（光穿过玻璃边分出来的颜色）。面上左上、右下各一团柔光是玻璃的厚度 */
 .card {
   position: relative; border-radius: 22px; padding: 14px; border: 1px solid transparent;
   background: linear-gradient(var(--card), var(--card)) padding-box,
     linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box;
   backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
-  box-shadow: inset 0 1px 0 var(--shine), inset 1px 0 0 var(--rim-side), inset 0 -1px 0 var(--rim-low),
-    inset 0 14px 22px -16px var(--rim-glow), inset 0 -16px 24px -20px var(--rim-glow2), inset 14px 0 22px -20px var(--rim-glow2),
-    0 10px 30px -12px rgba(40, 30, 110, .28);
+  box-shadow: 0 10px 30px -12px rgba(40, 30, 110, .28);
   transition: transform .25s cubic-bezier(.2, .9, .3, 1.3), box-shadow .25s;
+  /* 面上的两团柔光：左上一团大的，右下一团小的 */
+  --glass-hot: radial-gradient(130% 84px at 10% 0%, var(--rim-glow), transparent 72%), radial-gradient(64% 52px at 94% 100%, var(--rim-glow2), transparent 72%);
 }
-.card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, var(--shine2), transparent 42%); }
-/* 折射的那一圈：贴着边的十来像素里，左上、右下各一道斜的高光，外面套一圈很淡的冷暖两色（光穿过玻璃边时分出来的色边），往里渐渐没有。
-   只用渐变画，不再叠第二层背景模糊：有的内核里遮罩管不住背景模糊，会把整张卡片的内容都糊掉 */
+.card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--glass-hot), linear-gradient(180deg, var(--shine2), transparent 42%); }
+/* 边上的那一圈：绕着卡片走一周，亮度和颜色一路在变（见上面的说明）；宽度也不一样——上边、左边宽，右边、下边窄。
+   只用渐变画，不叠第二层背景模糊：有的内核里遮罩管不住背景模糊，会把整张卡片的内容都糊掉 */
 .card::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(135deg, var(--rim-hi), transparent 26%, transparent 72%, var(--rim-hi2));
-  box-shadow: inset 0 0 0 1px var(--rim-cool), inset 0 0 0 2.5px var(--rim-warm);
-  -webkit-mask: linear-gradient(to right, #000, transparent 11px), linear-gradient(to left, #000, transparent 11px), linear-gradient(to bottom, #000, transparent 11px), linear-gradient(to top, #000, transparent 11px);
-  mask: linear-gradient(to right, #000, transparent 11px), linear-gradient(to left, #000, transparent 11px), linear-gradient(to bottom, #000, transparent 11px), linear-gradient(to top, #000, transparent 11px);
+  /* 角度从正上方顺时针数：左上角（约 285°）最亮，沿上边往右暗下去，尾巴带一点冷色；右下角（约 108°）一段弱反光，沿下边带一点暖色；右上、左下是空的 */
+  background: conic-gradient(from 0deg at 50% 50%, var(--rim-glow2) 0deg, var(--rim-cool) 14deg, transparent 40deg, transparent 84deg,
+    var(--rim-b) 104deg, var(--rim-b) 112deg, var(--rim-warm) 132deg, transparent 160deg, transparent 248deg,
+    var(--rim-violet) 266deg, var(--rim-a) 282deg, var(--rim-a) 292deg, var(--rim-b) 330deg, var(--rim-glow2) 360deg);
+  -webkit-mask: linear-gradient(to bottom, #000, transparent 15px), linear-gradient(to right, #000, transparent 12px), linear-gradient(to left, rgba(0, 0, 0, .75), transparent 7px), linear-gradient(to top, rgba(0, 0, 0, .9), transparent 9px);
+  mask: linear-gradient(to bottom, #000, transparent 15px), linear-gradient(to right, #000, transparent 12px), linear-gradient(to left, rgba(0, 0, 0, .75), transparent 7px), linear-gradient(to top, rgba(0, 0, 0, .9), transparent 9px);
 }
 /* 从底下升上来的面板、弹窗是实心的，不画这一圈 */
 .modal .card::after { display: none; }
 .card > * { position: relative; }
 .card.click { cursor: pointer; }
-.card.click:hover { transform: translateY(-3px) scale(1.01); box-shadow: inset 0 1px 0 var(--shine), 0 18px 40px -14px rgba(40, 30, 110, .4); }
+.card.click:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 18px 40px -14px rgba(40, 30, 110, .4); }
 .grid { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 /* 网格里的每一块都不许被一行不换行的长文字撑宽，否则整列会冲出屏幕，金额被挤到外面 */
 .grid > *, .cols > * { min-width: 0; }
@@ -179,7 +181,7 @@ select.mini { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 999
 
 /* 浅色下的磨砂：卡片更透，上面撒一层极细的颗粒（和上沿的反光叠在同一层）；深色不变 */
 @media (prefers-color-scheme: light) {
-  .card::before { background: linear-gradient(180deg, var(--shine2), transparent 42%),
+  .card::before { background: var(--glass-hot), linear-gradient(180deg, var(--shine2), transparent 42%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.09'/%3E%3C/svg%3E"); }
   .modal .card { background: linear-gradient(rgba(244, 245, 253, .92), rgba(244, 245, 253, .92)) padding-box, linear-gradient(135deg, var(--edge1), var(--edge2) 42%, var(--edge3)) border-box; }
 }
