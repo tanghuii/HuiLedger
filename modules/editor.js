@@ -236,7 +236,8 @@ const edCols = () => (edSheetW() >= 350 ? 7 : 6);
 /**
  * 子分类弹出来的位置：以一级分类的图标为圆心，朝一边（far：下或上）排成弧。
  * 每个位置都要整个落在屏幕里（左右留边 EDGE，朝外不超过 room，往回不超过 14 像素）——之前只管了左右，往回翘的那个会被上面切掉。
- * 一圈（半径不超过 102）放不下就分成里外两圈、三圈，而不是把一圈撑得很大。返回 [[x, y], …]，y 是朝 far 方向的距离。
+ * 一圈（半径不超过 102）放不下就分成里外两圈——最多两圈：两圈还放不下就把两圈一起往外放大（不再往里面多塞一圈，三圈挤在一起很乱）。
+ * 返回 [[x, y], …]，y 是朝 far 方向的距离。
  */
 function edArcSpots(n, xmin, xmax, room) {
   const GAP = 60, DEG = Math.PI / 180;
@@ -254,11 +255,14 @@ function edArcSpots(n, xmin, xmax, room) {
   let rings = [];
   for (let R = 78; R <= 102 && !rings.length; R += 6) { const r = ring(R); if (r.cap >= n) rings = [{ ...r, n }]; }
   if (!rings.length) {
-    let total = 0;
-    for (let R = 78; total < n && R <= 78 + 66 * 4; R += 66) { const r = ring(R); if (r.cap) { rings.push({ ...r, n: 0 }); total += r.cap; } }
-    if (total < n) return null;
+    // 两圈：里圈从 78 起，放不下就两圈一起往外挪，直到放得下
+    for (let R = 78; R <= 420 && !rings.length; R += 12) {
+      const a = ring(R), b = ring(R + 66);
+      if (a.cap + b.cap >= n && b.cap) rings = [{ ...a, n: 0 }, { ...b, n: 0 }];
+    }
+    if (!rings.length) return null;
     // 按各圈放得下的数目摊开（6 个、里圈放得下 4 个外圈 6 个 → 里 3 外 3），零头给里圈（离手指近）
-    let left = n, caps = total;
+    let left = n, caps = rings[0].cap + rings[1].cap;
     for (const r of rings) { r.n = Math.min(r.cap, left, Math.ceil(left * r.cap / caps)); left -= r.n; caps -= r.cap; }
     rings = rings.filter((r) => r.n);
   }
